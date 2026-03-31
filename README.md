@@ -1,4 +1,6 @@
-# Briklab
+<p align="center">
+  <img src="assets/briklab.svg" alt="Brik">
+</p>
 
 Local Docker environment for testing the full Brik cycle: write `brik.yml` → compile → render → run on real CI platforms.
 
