@@ -1,0 +1,12 @@
+# Persistent volumes
+data/
+
+# Environment variables (contains secrets)
+.env
+
+# Temporary files
+*.tmp
+*.bak
+
+# macOS
+.DS_Store

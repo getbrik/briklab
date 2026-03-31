@@ -1,0 +1,72 @@
+# Briklab - Level 2 (Full)
+# Extension: Gitea + Jenkins
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.level2.yml up -d
+
+services:
+  # --- Gitea ---
+  gitea:
+    image: gitea/gitea:1.25.5
+    container_name: brik-gitea
+    hostname: ${GITEA_HOSTNAME:-gitea.briklab.local}
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__server__DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.local}
+      - GITEA__server__SSH_DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.local}
+      - GITEA__server__ROOT_URL=http://${GITEA_HOSTNAME:-gitea.briklab.local}:${GITEA_HTTP_PORT:-3000}/
+      - GITEA__server__HTTP_PORT=${GITEA_HTTP_PORT:-3000}
+      - GITEA__server__SSH_PORT=${GITEA_SSH_PORT:-222}
+      - GITEA__server__SSH_LISTEN_PORT=22
+    ports:
+      - "${GITEA_HTTP_PORT:-3000}:${GITEA_HTTP_PORT:-3000}"
+      - "${GITEA_SSH_PORT:-222}:22"
+    volumes:
+      - ./data/gitea:/data
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.20
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_HTTP_PORT:-3000}/api/v1/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # --- Jenkins ---
+  jenkins:
+    image: jenkins/jenkins:2.541.3-lts-jdk21
+    container_name: brik-jenkins
+    hostname: ${JENKINS_HOSTNAME:-jenkins.briklab.local}
+    restart: unless-stopped
+    environment:
+      - JENKINS_OPTS=--httpPort=${JENKINS_HTTP_PORT:-9090}
+      - CASC_JENKINS_CONFIG=/var/jenkins_casc/casc.yaml
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-changeme_jenkins_admin}
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx512m
+    ports:
+      - "${JENKINS_HTTP_PORT:-9090}:${JENKINS_HTTP_PORT:-9090}"
+      - "${JENKINS_AGENT_PORT:-50000}:50000"
+    volumes:
+      - ./data/jenkins:/var/jenkins_home
+      - ./config/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
+      - ./config/jenkins/plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.21
+    extra_hosts:
+      - "${GITLAB_HOSTNAME:-gitlab.briklab.local}:172.20.0.10"
+      - "registry.briklab.local:172.20.0.12"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${JENKINS_HTTP_PORT:-9090}/login"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+networks:
+  brik-net:
+    name: ${DOCKER_NETWORK:-brik-net}
+    external: true

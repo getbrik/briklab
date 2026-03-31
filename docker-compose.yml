@@ -1,0 +1,89 @@
+# Briklab - Level 1 (MVP)
+# GitLab CE + Runner + Docker Registry
+#
+# Usage:
+#   docker compose up -d
+#   docker compose down
+
+networks:
+  brik-net:
+    name: ${DOCKER_NETWORK:-brik-net}
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.20.0.0/16}
+
+services:
+  # --- GitLab CE ---
+  gitlab:
+    image: gitlab/gitlab-ce:18.10.1-ce.0
+    container_name: brik-gitlab
+    hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.local}
+    restart: unless-stopped
+    environment:
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://${GITLAB_HOSTNAME:-gitlab.briklab.local}:${GITLAB_HTTP_PORT:-8929}'
+        gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2222}
+        # Reduce memory usage
+        puma['worker_processes'] = 2
+        sidekiq['concurrency'] = 5
+        prometheus_monitoring['enable'] = false
+        # Integrated registry disabled (using a separate registry)
+        registry['enable'] = false
+        # Disable unnecessary services
+        gitlab_kas['enable'] = false
+        sentinel['enable'] = false
+    ports:
+      - "${GITLAB_HTTP_PORT:-8929}:${GITLAB_HTTP_PORT:-8929}"
+      - "${GITLAB_SSH_PORT:-2222}:22"
+    volumes:
+      - ./data/gitlab/config:/etc/gitlab
+      - ./data/gitlab/logs:/var/log/gitlab
+      - ./data/gitlab/data:/var/opt/gitlab
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.10
+    shm_size: "256m"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:${GITLAB_HTTP_PORT:-8929}/users/sign_in"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
+
+  # --- GitLab Runner ---
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine3.21-bleeding
+    container_name: brik-runner
+    restart: unless-stopped
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/gitlab-runner:/etc/gitlab-runner
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.11
+    extra_hosts:
+      - "${GITLAB_HOSTNAME:-gitlab.briklab.local}:172.20.0.10"
+
+  # --- Docker Registry ---
+  registry:
+    image: registry:3.0
+    container_name: brik-registry
+    restart: unless-stopped
+    ports:
+      - "${REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - ./config/registry/config.yml:/etc/docker/registry/config.yml:ro
+      - ./data/registry:/var/lib/registry
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.12
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/v2/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

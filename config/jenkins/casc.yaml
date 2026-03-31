@@ -1,0 +1,29 @@
+# Jenkins Configuration-as-Code for Briklab
+jenkins:
+  systemMessage: "Briklab - Jenkins"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: "${JENKINS_ADMIN_PASSWORD:-Brik-Jenkins-2026!}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "http://jenkins.briklab.local:9090/"
+  gitLabConnectionConfig:
+    connections:
+      - name: "gitlab-briklab"
+        url: "http://gitlab.briklab.local:8929"
+        apiTokenId: "gitlab-api-token"
+
+tool:
+  git:
+    installations:
+      - name: Default
+        home: git

@@ -1,0 +1,13 @@
+# Required Jenkins plugins for Briklab
+configuration-as-code:latest
+git:latest
+workflow-aggregator:latest
+pipeline-stage-view:latest
+docker-workflow:latest
+docker-plugin:latest
+gitlab-plugin:latest
+credentials-binding:latest
+job-dsl:latest
+ansicolor:latest
+timestamper:latest
+ws-cleanup:latest
