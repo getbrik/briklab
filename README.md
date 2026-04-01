@@ -2,7 +2,7 @@
   <img src="assets/briklab.svg" alt="Brik">
 </p>
 
-Local Docker environment for testing the full Brik cycle: write `brik.yml` → compile → render → run on real CI platforms.
+Local Docker environment for testing the full Brik cycle: write `brik.yml` -> push to GitLab -> pipeline executed via Bash runtime on real CI platforms. Managed by a Bash CLI (`scripts/briklab.sh`).
 
 ## Architecture
 
@@ -101,7 +101,7 @@ This command automatically chains the following 5 steps:
 cp .env.example .env
 # Modify passwords in .env if desired
 
-# 2. Start the MVP
+# 2. Start the MVP (waits for GitLab health, sets root password)
 ./scripts/briklab.sh start
 
 # 3. Configure GitLab and the runner
@@ -113,9 +113,9 @@ cp .env.example .env
 
 ## What `briklab.sh setup` does
 
-The `setup` command orchestrates the initial configuration by calling two scripts.
+The `setup` command orchestrates the initial configuration by calling scripts from `scripts/lib/setup/`.
 
-### `setup-gitlab.sh` - GitLab configuration
+### `lib/setup/gitlab.sh` - GitLab configuration
 
 1. **Wait for GitLab** - polls `/users/sign_in` until HTTP 200 (the `/-/readiness` endpoint no longer exists in GitLab 18.x)
 2. **Root password configuration** - via `gitlab-rails runner`, applies the password defined in `GITLAB_ROOT_PASSWORD`, disables forced password change on first login (`password_automatically_set = false`, `password_expires_at = nil`). GitLab 18.x requires a strong password (the default `Briklab-2026!` meets this requirement)
@@ -123,7 +123,7 @@ The `setup` command orchestrates the initial configuration by calling two script
 4. **`brik-test` project creation** - REST API call `POST /api/v4/projects` with the PAT, public project initialized with a README
 5. **Runner registration token retrieval** - via `gitlab-rails runner` (reads `runners_registration_token` from settings). Saved in `.env` as `GITLAB_RUNNER_TOKEN`
 
-### `setup-runner.sh` - Runner registration
+### `lib/setup/runner.sh` - Runner registration
 
 1. **Registration** - `gitlab-runner register` in non-interactive mode with:
    - Executor: `docker`
@@ -134,29 +134,61 @@ The `setup` command orchestrates the initial configuration by calling two script
 2. **Adding `helper_image`** - the bleeding edge runner (pre-release) attempts to pull an unpublished helper (`arm64-v18.11.0`). The script injects `helper_image = "gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding"` into `config.toml` via `sed` to force a compatible image
 3. **Verification** - checks that `config.toml` contains the `helper_image`
 
-### `setup-jenkins.sh` - Jenkins configuration (Level 2)
+### `lib/setup/jenkins.sh` - Jenkins configuration (Level 2)
 
 Called only if Jenkins is running (`--full`). Installs plugins listed in `config/jenkins/plugins.txt` via `jenkins-plugin-cli`.
 
 ## Commands
 
+### Lifecycle
+
 | Command | Description |
 |---------|-------------|
-| `briklab.sh init [--full]` | Automated first launch (start + setup + smoke-test) |
-| `briklab.sh start [--full]` | Start the briklab (MVP or full) |
+| `briklab.sh init [--full]` | First launch (runs: start + setup + smoke-test) |
+| `briklab.sh start [--full]` | Start containers (+ set root password when GitLab is healthy) |
 | `briklab.sh stop` | Stop all containers |
-| `briklab.sh restart [--full]` | Restart |
-| `briklab.sh status` | Service status and URLs |
-| `briklab.sh logs <service>` | Service logs (gitlab, runner, registry, gitea, jenkins) |
-| `briklab.sh setup` | GitLab + Runner configuration (idempotent) |
-| `briklab.sh k3d-start` | k3d cluster + ArgoCD |
+| `briklab.sh restart [--full]` | Stop + start |
+| `briklab.sh clean` | Delete all data and volumes (irreversible, requires confirmation) |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `briklab.sh setup` | Re-run GitLab/Runner/Jenkins configuration (only needed if setup failed during init) |
+| `briklab.sh smoke-test` | Verify that each component is reachable |
+
+### Testing
+
+| Command | Description |
+|---------|-------------|
+| `briklab.sh test` | Push Brik repos to GitLab and run E2E pipeline (requires init first) |
+
+### Monitoring
+
+| Command | Description |
+|---------|-------------|
+| `briklab.sh status` | Show container health and access URLs |
+| `briklab.sh logs <service>` | Tail logs (gitlab, runner, registry, gitea, jenkins) |
+
+### Kubernetes (optional)
+
+| Command | Description |
+|---------|-------------|
+| `briklab.sh k3d-start` | Create k3d cluster + install ArgoCD |
 | `briklab.sh k3d-stop` | Destroy the k3d cluster |
-| `briklab.sh clean` | Delete all data (irreversible, requires confirmation) |
-| `briklab.sh smoke-test` | Verify each component |
+
+### Typical workflow
+
+```bash
+./scripts/briklab.sh init            # First time setup (5 min)
+./scripts/briklab.sh test            # Run E2E pipeline test
+./scripts/briklab.sh stop            # Done for the day
+./scripts/briklab.sh start           # Next day, just start
+```
 
 ## Smoke tests
 
-The `smoke-test.sh` script checks each component and displays a PASS / FAIL / SKIP result:
+The `lib/setup/smoke-test.sh` script checks each component and displays a PASS / FAIL / SKIP result:
 
 | Test | Method | Expected |
 |------|--------|----------|
@@ -172,12 +204,14 @@ The `smoke-test.sh` script checks each component and displays a PASS / FAIL / SK
 
 ## Mapping to Brik milestones
 
-| Milestone | Infrastructure used |
-|-----------|---------------------|
-| M1–M4 | Local Rust only |
-| **M5 - GitLab adapter** | **GitLab CE + Runner: push `.gitlab-ci.yml` → pipeline executed** |
-| M6 - Bash Runtime | Runner Docker executor with bash 5+, jq, yq |
-| Phase 5 - GitOps | k3d + ArgoCD + Gitea manifest repo |
+| Milestone | Objective | Briklab infrastructure |
+|-----------|-----------|------------------------|
+| M0 - Foundation + Schema | `brik.yml` v1 schema, CLI scaffold, examples | None (local only) |
+| M1 - Runtime + brik-lib Phase 1 | `stage.run`, `build.node`, `test.*`, ShellSpec | None (local only) |
+| M2 - GitLab Shared Library MVP | First end-to-end pipeline on GitLab | GitLab CE + Runner + Registry |
+| M3 - brik-lib Phase 2 | `build.java`, `build.python`, `quality.*`, `security.*` | GitLab CE + Runner + Registry |
+| M4 - CLI complete + Jenkins | `brik init`, `brik doctor`, Jenkins Shared Library | + Jenkins (docker-compose level2) |
+| M5+ - Completion | GitHub Actions, Azure DevOps, full brik-lib | + Gitea, k3d + ArgoCD |
 
 ## Structure
 
@@ -187,12 +221,18 @@ briklab/
 ├── docker-compose.level2.yml   # Extension (Jenkins + Gitea)
 ├── .env.example                # Variables template
 ├── scripts/
-│   ├── briklab.sh              # Main CLI (init, start, stop, setup, ...)
-│   ├── setup-gitlab.sh         # PAT + project + runner token via rails runner
-│   ├── setup-runner.sh         # Runner registration + helper_image
-│   ├── setup-jenkins.sh        # Jenkins plugins via CLI
-│   ├── setup-k3d.sh            # k3d cluster + ArgoCD
-│   └── smoke-test.sh           # Component verification
+│   ├── briklab.sh              # Main CLI (init, start, stop, setup, test, ...)
+│   └── lib/
+│       ├── setup/              # Setup scripts (called by 'setup' command)
+│       │   ├── gitlab.sh       # PAT + project + runner token via rails runner
+│       │   ├── runner.sh       # Runner registration + helper_image
+│       │   ├── jenkins.sh      # Jenkins plugins via CLI
+│       │   ├── k3d.sh          # k3d cluster + ArgoCD
+│       │   └── smoke-test.sh   # Component verification
+│       └── e2e/                # E2E test scripts (called by 'test' command)
+│           ├── push-test-project.sh  # Push brik repos to briklab GitLab
+│           └── e2e-pipeline-test.sh  # Trigger and verify CI pipeline
+├── test-projects/              # Test project fixtures for E2E
 ├── config/
 │   ├── registry/config.yml     # Registry HTTP config
 │   └── jenkins/
