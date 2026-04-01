@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/briklab.svg" alt="Brik">
+  <img src="assets/briklab.jpg" alt="Brik">
 </p>
 
 Local Docker environment for testing the full Brik cycle: write `brik.yml` -> push to GitLab -> pipeline executed via Bash runtime on real CI platforms. Managed by a Bash CLI (`scripts/briklab.sh`).
