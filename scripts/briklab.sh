@@ -5,6 +5,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRIKLAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LIB_SETUP="${SCRIPT_DIR}/lib/setup"
+LIB_E2E="${SCRIPT_DIR}/lib/e2e"
 COMPOSE_FILE="${BRIKLAB_DIR}/docker-compose.yml"
 COMPOSE_LEVEL2="${BRIKLAB_DIR}/docker-compose.level2.yml"
 ENV_FILE="${BRIKLAB_DIR}/.env"
@@ -80,8 +82,63 @@ cmd_start() {
 
     log_ok "Containers started"
     log_info "GitLab may take 3-5 min on first start"
+
+    # Ensure root password is set after GitLab becomes healthy
+    if docker ps --format '{{.Names}}' | grep -q "^brik-gitlab$"; then
+        _ensure_gitlab_password
+    fi
+
     echo ""
     cmd_status
+}
+
+# Wait for GitLab to be healthy and set the root password.
+# This ensures the documented password always works, even after a simple 'start'.
+_ensure_gitlab_password() {
+    local max_attempts=60
+    local attempt=0
+
+    log_info "Waiting for GitLab to be healthy..."
+    while [[ $attempt -lt $max_attempts ]]; do
+        local health
+        health=$(docker inspect --format='{{.State.Health.Status}}' brik-gitlab 2>/dev/null || echo "unknown")
+        if [[ "$health" == "healthy" ]]; then
+            break
+        fi
+        attempt=$((attempt + 1))
+        printf "."
+        sleep 5
+    done
+    echo ""
+
+    if [[ $attempt -ge $max_attempts ]]; then
+        log_warn "GitLab not healthy after $((max_attempts * 5))s - skipping password setup"
+        return 0
+    fi
+
+    local password="${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}"
+    log_info "Ensuring root password is set..."
+
+    local result
+    result=$(cat <<RUBY | docker exec -i brik-gitlab gitlab-rails runner - 2>/dev/null | tail -1
+user = User.find_by_username("root")
+user.password = "${password}"
+user.password_confirmation = "${password}"
+user.password_automatically_set = false
+user.password_expires_at = nil
+if user.save
+  puts "OK"
+else
+  puts "FAIL: #{user.errors.full_messages.join(', ')}"
+end
+RUBY
+)
+
+    if [[ "$result" == "OK" ]]; then
+        log_ok "Root password configured"
+    else
+        log_warn "Password setup: ${result:-no output}"
+    fi
 }
 
 cmd_stop() {
@@ -159,7 +216,7 @@ cmd_setup() {
     # GitLab setup
     if docker ps --format '{{.Names}}' | grep -q "^brik-gitlab$"; then
         log_info "Configuring GitLab..."
-        bash "${SCRIPT_DIR}/setup-gitlab.sh"
+        bash "${LIB_SETUP}/gitlab.sh"
     else
         log_warn "GitLab is not running - skipping"
     fi
@@ -167,7 +224,7 @@ cmd_setup() {
     # Runner setup
     if docker ps --format '{{.Names}}' | grep -q "^brik-runner$"; then
         log_info "Registering runner..."
-        bash "${SCRIPT_DIR}/setup-runner.sh"
+        bash "${LIB_SETUP}/runner.sh"
     else
         log_warn "Runner is not running - skipping"
     fi
@@ -175,7 +232,7 @@ cmd_setup() {
     # Jenkins setup (if level 2)
     if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$"; then
         log_info "Configuring Jenkins..."
-        bash "${SCRIPT_DIR}/setup-jenkins.sh"
+        bash "${LIB_SETUP}/jenkins.sh"
     fi
 
     echo ""
@@ -191,7 +248,7 @@ cmd_k3d_start() {
     fi
 
     log_info "Starting k3d cluster + ArgoCD..."
-    bash "${SCRIPT_DIR}/setup-k3d.sh"
+    bash "${LIB_SETUP}/k3d.sh"
     log_ok "k3d cluster ready"
 }
 
@@ -227,7 +284,24 @@ cmd_smoke_test() {
     check_prereqs
     load_env
     log_info "Running smoke tests..."
-    bash "${SCRIPT_DIR}/smoke-test.sh"
+    bash "${LIB_SETUP}/smoke-test.sh"
+}
+
+cmd_test() {
+    check_prereqs
+    load_env
+
+    echo -e "${BLUE}=== Brik E2E Pipeline Test ===${NC}"
+    echo ""
+
+    # 1. Push repos to briklab GitLab
+    log_info "Step 1/2 - Pushing repos to briklab..."
+    bash "${LIB_E2E}/push-test-project.sh"
+    echo ""
+
+    # 2. Run E2E pipeline test
+    log_info "Step 2/2 - Running E2E pipeline test..."
+    bash "${LIB_E2E}/e2e-pipeline-test.sh"
 }
 
 cmd_init() {
@@ -277,29 +351,49 @@ cmd_init() {
 
 cmd_help() {
     cat <<EOF
-Briklab - CLI
+Briklab - Local CI/CD test infrastructure for Brik
 
 Usage: ./scripts/briklab.sh <command> [options]
 
-Commands:
-  init [--full]      Automated first launch (start + setup + smoke-test)
-  start [--full]     Start the briklab (MVP or full)
+Getting started:
+  First time? Run 'init'. It does everything automatically:
+  starts containers, configures GitLab + Runner, and runs smoke tests.
+
+  Already initialized? Use 'start' to restart the containers.
+
+Lifecycle:
+  init [--full]      First launch (runs: start + setup + smoke-test)
+  start [--full]     Start containers (+ set root password)
   stop               Stop all containers
-  restart [--full]   Restart
-  status             Service status and URLs
-  logs <service>     Service logs
-  setup              Configuration (PAT, project, runner)
-  k3d-start          Start k3d cluster + ArgoCD
+  restart [--full]   Stop + start
+  clean              Delete all data and volumes (irreversible)
+
+Configuration:
+  setup              Re-run GitLab/Runner/Jenkins configuration
+                     (only needed if setup failed during init)
+  smoke-test         Verify that each component is reachable
+
+Testing:
+  test               Push Brik repos to GitLab and run E2E pipeline
+                     (requires init or setup to have been run first)
+
+Monitoring:
+  status             Show container health and access URLs
+  logs <service>     Tail logs (gitlab, runner, registry, gitea, jenkins)
+
+Kubernetes (optional):
+  k3d-start          Create k3d cluster + install ArgoCD
   k3d-stop           Destroy the k3d cluster
-  clean              Delete all data (irreversible)
-  smoke-test         Verify each component
+
+Options:
+  --full             Also start Level 2 services (Gitea + Jenkins)
   help               Show this help
 
-Examples:
-  ./scripts/briklab.sh init            # Automated full first launch
-  ./scripts/briklab.sh init --full     # Same with Gitea + Jenkins
-  ./scripts/briklab.sh start           # MVP (GitLab + Runner + Registry)
-  ./scripts/briklab.sh smoke-test      # Verification
+Typical workflow:
+  ./scripts/briklab.sh init            # First time setup (5 min)
+  ./scripts/briklab.sh test            # Run E2E pipeline test
+  ./scripts/briklab.sh stop            # Done for the day
+  ./scripts/briklab.sh start           # Next day, just start
 EOF
 }
 
@@ -313,6 +407,7 @@ case "${1:-help}" in
     status)      cmd_status ;;
     logs)        cmd_logs "${2:-}" ;;
     setup)       cmd_setup ;;
+    test)        cmd_test ;;
     k3d-start)   cmd_k3d_start ;;
     k3d-stop)    cmd_k3d_stop ;;
     clean)       cmd_clean ;;
