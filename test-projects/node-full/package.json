@@ -1,0 +1,15 @@
+{
+  "name": "node-full",
+  "version": "1.0.0",
+  "description": "Full-featured Node.js project for Brik E2E testing",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "test": "node test/index.test.js",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0"
+  },
+  "license": "MIT"
+}

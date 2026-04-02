@@ -3,3 +3,6 @@ version: 1
 project:
   name: node-minimal
   stack: node
+
+test:
+  framework: npm

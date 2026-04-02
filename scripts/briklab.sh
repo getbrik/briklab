@@ -291,17 +291,41 @@ cmd_test() {
     check_prereqs
     load_env
 
-    echo -e "${BLUE}=== Brik E2E Pipeline Test ===${NC}"
-    echo ""
+    local mode=""
+    local project=""
 
-    # 1. Push repos to briklab GitLab
-    log_info "Step 1/2 - Pushing repos to briklab..."
-    bash "${LIB_E2E}/push-test-project.sh"
-    echo ""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all)    mode="all"; shift ;;
+            --list)   mode="list"; shift ;;
+            --project)
+                mode="project"
+                project="${2:-}"
+                if [[ -z "$project" ]]; then
+                    log_error "Usage: briklab.sh test --project <name>"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            *) shift ;;
+        esac
+    done
 
-    # 2. Run E2E pipeline test
-    log_info "Step 2/2 - Running E2E pipeline test..."
-    bash "${LIB_E2E}/e2e-pipeline-test.sh"
+    case "$mode" in
+        list)
+            bash "${LIB_E2E}/e2e-run-suite.sh" --list
+            ;;
+        all)
+            bash "${LIB_E2E}/e2e-run-suite.sh"
+            ;;
+        project)
+            bash "${LIB_E2E}/e2e-run-suite.sh" --only "$project"
+            ;;
+        *)
+            # Default: run node-minimal scenario via the suite orchestrator
+            bash "${LIB_E2E}/e2e-run-suite.sh" --only node-minimal
+            ;;
+    esac
 }
 
 cmd_init() {
@@ -374,8 +398,10 @@ Configuration:
   smoke-test         Verify that each component is reachable
 
 Testing:
-  test               Push Brik repos to GitLab and run E2E pipeline
-                     (requires init or setup to have been run first)
+  test               Push Brik repos to GitLab and run E2E pipeline (node-minimal)
+  test --all         Run full E2E test suite (all scenarios)
+  test --project X   Run a single E2E scenario by name
+  test --list        List available E2E scenarios
 
 Monitoring:
   status             Show container health and access URLs
@@ -407,7 +433,7 @@ case "${1:-help}" in
     status)      cmd_status ;;
     logs)        cmd_logs "${2:-}" ;;
     setup)       cmd_setup ;;
-    test)        cmd_test ;;
+    test)        cmd_test "${@:2}" ;;
     k3d-start)   cmd_k3d_start ;;
     k3d-stop)    cmd_k3d_stop ;;
     clean)       cmd_clean ;;

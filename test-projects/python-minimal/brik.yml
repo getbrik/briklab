@@ -1,0 +1,8 @@
+version: 1
+
+project:
+  name: python-minimal
+  stack: python
+
+test:
+  framework: pytest

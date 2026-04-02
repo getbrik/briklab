@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Push the Brik repos and test project to briklab GitLab.
+# Push the Brik repos and test projects to briklab GitLab.
 #
-# Creates three GitLab projects:
+# Always pushes:
 #   1. brik/brik           - The Brik runtime and brik-lib
 #   2. brik/gitlab-templates - The GitLab shared library templates
-#   3. brik/node-minimal   - A minimal test project with brik.yml
+#
+# Then pushes test projects from test-projects/ directory:
+#   E2E_TEST_PROJECTS - Comma-separated list (default: node-minimal)
 #
 # Each repo is tagged with v0.1.0.
 #
@@ -38,6 +40,9 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 GITLAB_URL="http://localhost:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PAT="${GITLAB_PAT:-}"
 TAG_NAME="v0.1.0"
+
+# Test projects to push (comma-separated, default: node-minimal)
+TEST_PROJECTS="${E2E_TEST_PROJECTS:-node-minimal}"
 
 if [[ -z "$GITLAB_PAT" ]]; then
     log_error "GITLAB_PAT is not set. Run setup-gitlab.sh first."
@@ -128,9 +133,10 @@ push_directory() {
     local remote_path="$2"   # e.g. brik/brik
     local tag="$3"
 
+    local original_dir="$PWD"
     local tmp_dir
     tmp_dir=$(mktemp -d)
-    trap "rm -rf '$tmp_dir'" RETURN
+    trap "cd '$original_dir'; rm -rf '$tmp_dir'" RETURN
 
     log_info "Pushing ${source_dir} -> ${remote_path}..."
 
@@ -145,19 +151,29 @@ push_directory() {
     # Tag
     git tag "$tag" >/dev/null 2>&1
 
-    # Push
-    local remote_url="http://root:${GITLAB_PAT}@localhost:${GITLAB_HTTP_PORT:-8929}/${remote_path}.git"
+    # Push using GIT_ASKPASS to avoid embedding PAT in process list
+    local remote_url="http://localhost:${GITLAB_HTTP_PORT:-8929}/${remote_path}.git"
     git remote add origin "$remote_url" >/dev/null 2>&1
 
-    if git push -u origin main --tags --force >/dev/null 2>&1; then
+    local askpass_script
+    askpass_script=$(mktemp)
+    printf '#!/bin/sh\necho "%s"' "$GITLAB_PAT" > "$askpass_script"
+    chmod +x "$askpass_script"
+
+    # Unprotect main branch to allow force push (GitLab protects it by default)
+    curl -s -o /dev/null -X DELETE \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+        "${GITLAB_URL}/api/v4/projects/$(python3 -c "import urllib.parse; print(urllib.parse.quote('${remote_path}', safe=''))")/protected_branches/main" 2>/dev/null || true
+
+    if GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+        git -c credential.username=root push -u origin main --tags --force >/dev/null 2>&1; then
         log_ok "Pushed ${remote_path} with tag ${tag}"
     else
         log_error "Failed to push ${remote_path}"
-        cd "$OLDPWD"
+        rm -f "$askpass_script"
         return 1
     fi
-
-    cd "$OLDPWD"
+    rm -f "$askpass_script"
 }
 
 # ---------------------------------------------------------------------------
@@ -182,15 +198,32 @@ create_project "brik" "gitlab-templates"
 push_directory "$BRIK_ROOT/shared-libs/gitlab" "brik/gitlab-templates" "$TAG_NAME"
 echo ""
 
-# 4. Create and push brik/node-minimal (test project)
-log_info "--- brik/node-minimal (test project) ---"
-create_project "brik" "node-minimal"
-push_directory "$PROJECT_ROOT/test-projects/node-minimal" "brik/node-minimal" "$TAG_NAME"
-echo ""
+# 4. Create and push test projects
+PUSHED_PROJECTS=()
+
+IFS=',' read -ra PROJECTS_ARRAY <<< "$TEST_PROJECTS"
+for proj in "${PROJECTS_ARRAY[@]}"; do
+    proj="$(echo "$proj" | tr -d '[:space:]')"
+    [[ -z "$proj" ]] && continue
+
+    local_dir="${PROJECT_ROOT}/test-projects/${proj}"
+    if [[ ! -d "$local_dir" ]]; then
+        log_warn "Test project directory not found: ${local_dir} -- skipping"
+        continue
+    fi
+
+    log_info "--- brik/${proj} (test project) ---"
+    create_project "brik" "$proj"
+    push_directory "$local_dir" "brik/${proj}" "$TAG_NAME"
+    PUSHED_PROJECTS+=("$proj")
+    echo ""
+done
 
 log_ok "=== All repos pushed successfully ==="
 echo ""
 echo -e "${BLUE}Projects on briklab:${NC}"
 echo "  ${GITLAB_URL}/brik/brik"
 echo "  ${GITLAB_URL}/brik/gitlab-templates"
-echo "  ${GITLAB_URL}/brik/node-minimal"
+for proj in "${PUSHED_PROJECTS[@]}"; do
+    echo "  ${GITLAB_URL}/brik/${proj}"
+done
