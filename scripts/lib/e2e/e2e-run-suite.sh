@@ -34,19 +34,19 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 # Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job
 
 SCENARIOS=(
-    # --- Minimal stack coverage ---
-    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-notify||300"
-    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-notify||300"
-    "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-notify||600"
-    "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-notify||600"
-    "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-notify||600"
-    # --- Full pipelines ---
-    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality|600"
-    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|600"
-    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality|600"
+    # --- Minimal stack coverage (branch push: no release, no package) ---
+    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||300"
+    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||300"
+    "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    # --- Full pipelines (tag push: all stages) ---
+    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality|600"
+    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality,brik-security|600"
+    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality|600"
     # --- Security and Deploy ---
-    "node-security|node-security|main|brik-init,brik-build,brik-test,brik-notify|brik-security|300"
-    "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-deploy|600"
+    "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-security|300"
+    "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     # --- Error scenarios (expect pipeline failure) ---
     "error-build|node-error-build|main|brik-init||300|brik-build"
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test"
