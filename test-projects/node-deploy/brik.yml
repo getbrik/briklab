@@ -1,0 +1,17 @@
+version: 1
+
+project:
+  name: node-deploy
+  stack: node
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+test:
+  framework: npm
+
+package:
+  docker:
+    image: brik-registry:5050/brik/node-deploy
+    dockerfile: Dockerfile

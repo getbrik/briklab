@@ -1,0 +1,11 @@
+{
+  "name": "node-error-build",
+  "version": "1.0.0",
+  "description": "Node.js project with intentionally broken build for E2E error testing",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Build failed intentionally' && exit 1",
+    "test": "node test/index.test.js"
+  },
+  "license": "MIT"
+}

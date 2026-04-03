@@ -131,23 +131,60 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 
 Each E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
 
-### Scenarios
+### Scenarios (13 total)
 
-| Scenario | Stack | Trigger | Validated stages |
-|----------|-------|---------|-----------------|
-| `node-minimal` | Node.js | push `main` | init, build, test, notify |
-| `node-full` | Node.js | push tag `v0.1.0` | init, release, build, quality, test, package, notify |
-| `python-minimal` | Python | push `main` | init, build, test, notify |
+#### Minimal stack coverage
+
+| Scenario | Stack | Trigger | Validated stages | Expected |
+|----------|-------|---------|-----------------|----------|
+| `node-minimal` | Node.js | push `main` | init, build, test, notify | pass |
+| `python-minimal` | Python | push `main` | init, build, test, notify | pass |
+| `java-minimal` | Java | push `main` | init, build, test, notify | pass |
+| `rust-minimal` | Rust | push `main` | init, build, test, notify | pass |
+| `dotnet-minimal` | .NET | push `main` | init, build, test, notify | pass |
+
+#### Full pipelines
+
+| Scenario | Stack | Trigger | Validated stages | Expected |
+|----------|-------|---------|-----------------|----------|
+| `node-full` | Node.js | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
+| `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, notify | pass |
+| `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
+
+#### Security and Deploy
+
+| Scenario | Stack | Trigger | Validated stages | Expected |
+|----------|-------|---------|-----------------|----------|
+| `node-security` | Node.js | push `main` | init, build, security, test, notify | pass |
+| `node-deploy` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+
+#### Error scenarios
+
+| Scenario | Stack | Trigger | Expected failure | Expected |
+|----------|-------|---------|-----------------|----------|
+| `error-build` | Node.js | push `main` | brik-build job fails | fail |
+| `error-test` | Node.js | push `main` | brik-test job fails | fail |
+| `error-config` | Node.js | push `main` | brik-init job fails (invalid brik.yml) | fail |
 
 ### Test projects
 
 Test project fixtures live in `test-projects/`. Each has a `brik.yml` and a `.gitlab-ci.yml` that includes the Brik shared library.
 
-| Project | Purpose |
-|---------|---------|
-| `node-minimal` | Basic Node.js flow (init, build, test) |
-| `node-full` | All testable features (release, quality, package) |
-| `python-minimal` | Python stack validation (pytest) |
+| Project | Stack | CI Image | Purpose |
+|---------|-------|----------|---------|
+| `node-minimal` | Node.js | alpine:3.21 (default) | Basic flow (init, build, test) |
+| `node-full` | Node.js | alpine:3.21 (default) | All stages (release, quality, package) |
+| `node-security` | Node.js | alpine:3.21 (default) | Security stage (npm audit) |
+| `node-deploy` | Node.js | alpine:3.21 (default) | Deploy stage validation |
+| `python-minimal` | Python | alpine:3.21 (default) | Python stack (pytest) |
+| `python-full` | Python | alpine:3.21 (default) | Full Python pipeline (ruff, pip-audit, Docker) |
+| `java-minimal` | Java | maven:3.9-eclipse-temurin-21-alpine | Java stack (JUnit 5) |
+| `java-full` | Java | maven:3.9-eclipse-temurin-21-alpine | Full Java pipeline (checkstyle, Docker) |
+| `rust-minimal` | Rust | rust:1-alpine3.21 | Rust stack (cargo test) |
+| `dotnet-minimal` | .NET | mcr.microsoft.com/dotnet/sdk:9.0-alpine3.21 | .NET stack (xUnit) |
+| `node-error-build` | Node.js | alpine:3.21 (default) | Intentionally broken build |
+| `node-error-test` | Node.js | alpine:3.21 (default) | Intentionally failing tests |
+| `invalid-config` | Node.js | alpine:3.21 (default) | Invalid brik.yml (version: 99) |
 
 ## Troubleshooting
 
@@ -179,11 +216,12 @@ docker network rm brik-net 2>/dev/null
 
 - [x] GitLab CE + Runner + Registry (MVP)
 - [x] Automated init with smoke tests
-- [x] E2E pipeline testing (node, python)
+- [x] E2E pipeline testing (13 scenarios: node, python, java, rust, dotnet)
 - [x] Gitea + Jenkins (Level 2)
+- [x] Security stage E2E
+- [x] Deploy stage E2E
+- [x] Error scenario E2E (build fail, test fail, invalid config)
 - [ ] k3d + ArgoCD integration
-- [ ] Security stage E2E
-- [ ] Deploy stage E2E
 
 ## Related
 

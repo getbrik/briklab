@@ -1,0 +1,8 @@
+version: 1
+
+project:
+  name: node-error-test
+  stack: node
+
+test:
+  framework: npm

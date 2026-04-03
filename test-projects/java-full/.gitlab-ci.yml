@@ -1,0 +1,7 @@
+variables:
+  BRIK_CI_IMAGE: maven:3.9-eclipse-temurin-21-alpine
+
+include:
+  - project: 'brik/gitlab-templates'
+    ref: v0.1.0
+    file: '/templates/pipeline.yml'

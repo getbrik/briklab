@@ -1,0 +1,5 @@
+version: 99
+
+project:
+  name: invalid-config
+  stack: node

@@ -1,0 +1,10 @@
+{
+  "name": "invalid-config",
+  "version": "1.0.0",
+  "description": "Project with invalid brik.yml for E2E error testing",
+  "scripts": {
+    "build": "echo 'Build OK'",
+    "test": "echo 'Test OK'"
+  },
+  "license": "MIT"
+}

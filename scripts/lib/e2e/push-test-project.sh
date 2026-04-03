@@ -22,7 +22,10 @@ ENV_FILE="${PROJECT_ROOT}/.env"
 
 # Load .env
 if [[ -f "$ENV_FILE" ]]; then
-    set -a; source "$ENV_FILE"; set +a
+    set -a
+    # shellcheck source=/dev/null
+    source "$ENV_FILE"
+    set +a
 fi
 
 # Colors
@@ -136,6 +139,7 @@ push_directory() {
     local original_dir="$PWD"
     local tmp_dir
     tmp_dir=$(mktemp -d)
+    # shellcheck disable=SC2064  # Intentional: capture current values of original_dir and tmp_dir
     trap "cd '$original_dir'; rm -rf '$tmp_dir'" RETURN
 
     log_info "Pushing ${source_dir} -> ${remote_path}..."

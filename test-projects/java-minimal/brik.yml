@@ -1,0 +1,8 @@
+version: 1
+
+project:
+  name: java-minimal
+  stack: java
+
+test:
+  framework: maven

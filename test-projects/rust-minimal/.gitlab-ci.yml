@@ -1,0 +1,7 @@
+variables:
+  BRIK_CI_IMAGE: rust:1-alpine3.21
+
+include:
+  - project: 'brik/gitlab-templates'
+    ref: v0.1.0
+    file: '/templates/pipeline.yml'

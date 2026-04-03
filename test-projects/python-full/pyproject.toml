@@ -1,0 +1,20 @@
+[project]
+name = "python-full"
+version = "0.1.0"
+description = "Full-featured Python project for Brik E2E testing"
+requires-python = ">=3.10"
+dependencies = ["pytest"]
+
+[project.optional-dependencies]
+dev = ["ruff", "pip-audit"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120

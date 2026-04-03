@@ -53,6 +53,8 @@ services:
       start_period: 300s
 
   # --- GitLab Runner ---
+  # The runner itself is lightweight; CI jobs run as sibling containers.
+  # Memory limit covers the runner process only, not the spawned job containers.
   gitlab-runner:
     image: gitlab/gitlab-runner:alpine3.21-bleeding
     container_name: brik-runner
@@ -63,6 +65,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/gitlab-runner:/etc/gitlab-runner
+    mem_limit: 512m
     networks:
       brik-net:
         ipv4_address: 172.20.0.11

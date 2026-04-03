@@ -1,0 +1,22 @@
+version: 1
+
+project:
+  name: java-full
+  stack: java
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+test:
+  framework: maven
+
+quality:
+  enabled: true
+  lint:
+    tool: checkstyle
+
+package:
+  docker:
+    image: brik-registry:5050/brik/java-full
+    dockerfile: Dockerfile

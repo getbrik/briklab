@@ -110,9 +110,15 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.local` to 172.20.0.10. This
    - Extra hosts: `gitlab.briklab.local:172.20.0.10`
    - Tags: `docker`, `brik`
 
-2. **Helper image injection** -- the bleeding edge runner tries to pull an unpublished helper (`arm64-v18.11.0`). The script injects `helper_image = "gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding"` into `config.toml` via `sed`.
+2. **Concurrent jobs** -- `gitlab-runner register` always defaults to `concurrent = 1`. The script patches `config.toml` via `sed` to set `concurrent` to the value of `GITLAB_RUNNER_CONCURRENT` (default: 4). This allows multiple jobs to run in parallel within a pipeline and across pipelines.
 
-3. **Verification** -- confirms the `helper_image` entry exists in `config.toml`.
+3. **Request concurrency** -- controls how many jobs the runner requests from GitLab simultaneously. Set via `GITLAB_RUNNER_REQUEST_CONCURRENCY` (defaults to `GITLAB_RUNNER_CONCURRENT`). Without this, the runner fetches one job at a time, delaying parallel execution even when `concurrent` allows it.
+
+4. **Job memory limit** -- each CI job container is capped at `GITLAB_RUNNER_JOB_MEMORY` (default: `512m`) to prevent OOM kills when running multiple jobs concurrently. Adjust based on available host RAM.
+
+5. **Helper image injection** -- the bleeding edge runner tries to pull an unpublished helper (`arm64-v18.11.0`). The script injects `helper_image = "gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding"` into `config.toml` via `sed`.
+
+6. **Verification** -- confirms the `helper_image`, `concurrent`, `request_concurrency`, and `memory` entries exist in `config.toml`.
 
 ### jenkins.sh - Jenkins configuration (Level 2)
 
@@ -168,10 +174,20 @@ briklab/
 │           ├── push-test-project.sh   # Push repos to briklab GitLab
 │           ├── e2e-pipeline-test.sh   # Trigger + validate one pipeline
 │           └── e2e-run-suite.sh       # Orchestrate all scenarios
-├── test-projects/                # E2E fixtures
-│   ├── node-minimal/             # Basic Node.js (init, build, test)
-│   ├── node-full/                # Full features (release, quality, package)
-│   └── python-minimal/           # Python stack (init, build, test)
+├── test-projects/                # E2E fixtures (13 scenarios)
+│   ├── node-minimal/             # Node.js minimal (init, build, test)
+│   ├── node-full/                # Node.js full (release, quality, package)
+│   ├── node-security/            # Node.js security stage (npm audit)
+│   ├── node-deploy/              # Node.js deploy stage
+│   ├── python-minimal/           # Python minimal (pytest)
+│   ├── python-full/              # Python full (ruff, pip-audit, Docker)
+│   ├── java-minimal/             # Java minimal (JUnit 5) - maven CI image
+│   ├── java-full/                # Java full (checkstyle, Docker) - maven CI image
+│   ├── rust-minimal/             # Rust minimal (cargo test) - rust CI image
+│   ├── dotnet-minimal/           # .NET minimal (xUnit) - dotnet SDK CI image
+│   ├── node-error-build/         # Error: intentionally broken build
+│   ├── node-error-test/          # Error: intentionally failing tests
+│   └── invalid-config/           # Error: invalid brik.yml (version: 99)
 ├── config/
 │   ├── registry/config.yml       # Registry HTTP config
 │   └── jenkins/
@@ -197,6 +213,9 @@ briklab/
 | `GITLAB_HTTP_PORT` | `8929` | HTTP port |
 | `GITLAB_SSH_PORT` | `2222` | SSH port |
 | `GITLAB_HOSTNAME` | `gitlab.briklab.local` | Hostname |
+| `GITLAB_RUNNER_CONCURRENT` | `4` | Max parallel jobs on the runner |
+| `GITLAB_RUNNER_REQUEST_CONCURRENCY` | *(same as concurrent)* | How many jobs the runner requests simultaneously |
+| `GITLAB_RUNNER_JOB_MEMORY` | `512m` | Memory limit per CI job container |
 | `GITLAB_PAT` | *(auto-generated)* | Personal Access Token |
 | `GITLAB_RUNNER_TOKEN` | *(auto-generated)* | Runner registration token |
 
@@ -267,14 +286,30 @@ To add a new E2E test scenario:
    ```bash
    SCENARIOS=(
        # ...existing scenarios...
+       # Normal scenario (pipeline must succeed):
        "my-scenario|my-project|main|brik-init,brik-build,brik-test,brik-notify||300"
+       # Error scenario (pipeline must fail at specific job):
+       "my-error|my-project|main|brik-init||300|brik-build"
    )
    ```
-   Format: `name|project|trigger_ref|required_jobs|optional_jobs|timeout`
+   Format: `name|project|trigger_ref|required_jobs|optional_jobs|timeout|expect_failed_job`
 
-4. **Define required and optional jobs** -- required jobs must all succeed for the scenario to pass. Optional jobs are checked but do not cause failure.
+   The 7th field is optional. When set, the E2E test expects the pipeline to fail and verifies that the specified job has `failed` status.
 
-5. **Run it**: `./scripts/briklab.sh test --project <name>`
+4. **Define required and optional jobs** -- required jobs must all succeed for the scenario to pass (in normal mode). Optional jobs are checked but do not cause failure.
+
+5. **Override CI image** -- for non-Alpine stacks (Java, Rust, .NET), override `BRIK_CI_IMAGE` in the project's `.gitlab-ci.yml`:
+   ```yaml
+   variables:
+     BRIK_CI_IMAGE: maven:3.9-eclipse-temurin-21-alpine
+
+   include:
+     - project: 'brik/gitlab-templates'
+       ref: v0.1.0
+       file: '/templates/pipeline.yml'
+   ```
+
+6. **Run it**: `./scripts/briklab.sh test --project <name>`
 
 ---
 

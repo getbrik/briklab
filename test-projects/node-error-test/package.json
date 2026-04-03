@@ -1,0 +1,11 @@
+{
+  "name": "node-error-test",
+  "version": "1.0.0",
+  "description": "Node.js project with intentionally failing tests for E2E error testing",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Build OK'",
+    "test": "node test/index.test.js"
+  },
+  "license": "MIT"
+}

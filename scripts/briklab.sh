@@ -169,10 +169,12 @@ cmd_status() {
     for container in brik-gitlab brik-runner brik-registry brik-gitea brik-jenkins; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
             local health
-            health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "n/a")
+            health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null | tr -d '[:space:]')
+            health="${health:-none}"
             case "$health" in
                 healthy)   echo -e "  ${GREEN}●${NC} ${container} (healthy)" ;;
                 starting)  echo -e "  ${YELLOW}●${NC} ${container} (starting...)" ;;
+                none)      echo -e "  ${GREEN}●${NC} ${container} (running)" ;;
                 *)         echo -e "  ${YELLOW}●${NC} ${container} (running, health: ${health})" ;;
             esac
         else

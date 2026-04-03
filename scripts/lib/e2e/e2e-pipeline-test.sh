@@ -5,11 +5,13 @@
 # Validates that required and optional jobs reach expected statuses.
 #
 # Configuration (env vars with backward-compatible defaults):
-#   E2E_PROJECT_PATH  - URL-encoded GitLab project path (default: brik%2Fnode-minimal)
-#   E2E_REQUIRED_JOBS - Comma-separated jobs that must succeed (default: brik-init,brik-build,brik-test)
-#   E2E_OPTIONAL_JOBS - Comma-separated jobs checked but not blocking (default: empty)
-#   E2E_TRIGGER_REF   - Git ref to trigger pipeline on (default: main)
-#   E2E_TIMEOUT        - Pipeline timeout in seconds (default: 300)
+#   E2E_PROJECT_PATH    - URL-encoded GitLab project path (default: brik%2Fnode-minimal)
+#   E2E_REQUIRED_JOBS   - Comma-separated jobs that must succeed (default: brik-init,brik-build,brik-test)
+#   E2E_OPTIONAL_JOBS   - Comma-separated jobs checked but not blocking (default: empty)
+#   E2E_TRIGGER_REF     - Git ref to trigger pipeline on (default: main)
+#   E2E_TIMEOUT          - Pipeline timeout in seconds (default: 300)
+#   E2E_EXPECT_FAILURE   - Set to "true" to expect the pipeline to fail (default: false)
+#   E2E_EXPECT_FAILED_JOB - Job name that must have "failed" status (used with E2E_EXPECT_FAILURE)
 #
 # Prerequisites:
 #   - briklab GitLab must be running
@@ -22,7 +24,10 @@ ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
 # Load .env
 if [[ -f "$ENV_FILE" ]]; then
-    set -a; source "$ENV_FILE"; set +a
+    set -a
+    # shellcheck source=/dev/null
+    source "$ENV_FILE"
+    set +a
 fi
 
 # Colors
@@ -43,6 +48,8 @@ PROJECT_PATH="${E2E_PROJECT_PATH:-brik%2Fnode-minimal}"
 TRIGGER_REF="${E2E_TRIGGER_REF:-main}"
 TIMEOUT_SECONDS="${E2E_TIMEOUT:-300}"
 POLL_INTERVAL=10
+EXPECT_FAILURE="${E2E_EXPECT_FAILURE:-false}"
+EXPECT_FAILED_JOB="${E2E_EXPECT_FAILED_JOB:-}"
 
 # Parse comma-separated job lists into arrays
 IFS=',' read -ra REQUIRED_JOBS <<< "${E2E_REQUIRED_JOBS:-brik-init,brik-build,brik-test}"
@@ -130,6 +137,10 @@ log_info "Ref: ${TRIGGER_REF}"
 log_info "Required jobs: ${REQUIRED_JOBS[*]}"
 if [[ ${#OPTIONAL_JOBS[@]} -gt 0 && -n "${OPTIONAL_JOBS[0]}" ]]; then
     log_info "Optional jobs: ${OPTIONAL_JOBS[*]}"
+fi
+if [[ "$EXPECT_FAILURE" == "true" ]]; then
+    log_warn "Mode: EXPECT FAILURE (pipeline should fail)"
+    [[ -n "$EXPECT_FAILED_JOB" ]] && log_warn "Expected failed job: ${EXPECT_FAILED_JOB}"
 fi
 echo ""
 
@@ -248,6 +259,30 @@ done
 echo ""
 
 # 7. Final result
+if [[ "$EXPECT_FAILURE" == "true" ]]; then
+    # --- Expect-failure mode ---
+    if [[ "$FINAL_STATUS" != "failed" ]]; then
+        log_error "Expected pipeline to fail, but status is: ${FINAL_STATUS}"
+        log_error "=== E2E TEST FAILED (expected failure did not occur) ==="
+        exit 1
+    fi
+
+    if [[ -n "$EXPECT_FAILED_JOB" ]]; then
+        FAILED_JOB_STATUS=$(get_job_status "$JOBS" "$EXPECT_FAILED_JOB")
+        if [[ "$FAILED_JOB_STATUS" == "failed" ]]; then
+            log_ok "${EXPECT_FAILED_JOB}: correctly failed"
+        else
+            log_error "${EXPECT_FAILED_JOB}: expected 'failed' but got '${FAILED_JOB_STATUS}'"
+            log_error "=== E2E TEST FAILED (wrong job failed) ==="
+            exit 1
+        fi
+    fi
+
+    log_ok "=== E2E TEST PASSED (expected failure confirmed) ==="
+    exit 0
+fi
+
+# --- Normal mode ---
 if [[ "$ALL_PASSED" == "true" && "$FINAL_STATUS" == "success" ]]; then
     log_ok "=== E2E TEST PASSED ==="
     exit 0

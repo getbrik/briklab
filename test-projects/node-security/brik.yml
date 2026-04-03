@@ -1,0 +1,11 @@
+version: 1
+
+project:
+  name: node-security
+  stack: node
+
+test:
+  framework: npm
+
+security:
+  enabled: true
