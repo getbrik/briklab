@@ -29,7 +29,7 @@ The MVP level covers daily development: push code, run a pipeline, validate resu
 
 ### 2. Static IP networking
 
-The GitLab Runner spawns CI jobs as sibling Docker containers on the host. These containers must resolve `gitlab.briklab.local` to clone repositories. A static IP network (`brik-net`, 172.20.0.0/16) with `extra_hosts` entries ensures hostname resolution works consistently, regardless of container start order.
+The GitLab Runner spawns CI jobs as sibling Docker containers on the host. These containers must resolve `gitlab.briklab.test` to clone repositories. A static IP network (`brik-net`, 172.20.0.0/16) with `extra_hosts` entries ensures hostname resolution works consistently, regardless of container start order.
 
 ### 3. Automated setup via Rails runner
 
@@ -72,7 +72,7 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 | Gitea | `gitea/gitea` | 172.20.0.20 | Full | 3000, 222 |
 | Jenkins | `jenkins/jenkins` | 172.20.0.21 | Full | 9090, 50000 |
 
-The Runner uses `extra_hosts` to map `gitlab.briklab.local` to 172.20.0.10. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve the GitLab hostname to clone repositories over HTTP.
+The Runner uses `extra_hosts` to map `gitlab.briklab.test` to 172.20.0.10. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve the GitLab hostname to clone repositories over HTTP.
 
 ---
 
@@ -107,7 +107,7 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.local` to 172.20.0.10. This
    - Executor: `docker`
    - Default image: `alpine:3.21`
    - Network: `brik-net`
-   - Extra hosts: `gitlab.briklab.local:172.20.0.10`
+   - Extra hosts: `gitlab.briklab.test:172.20.0.10`
    - Tags: `docker`, `brik`
 
 2. **Concurrent jobs** -- `gitlab-runner register` always defaults to `concurrent = 1`. The script patches `config.toml` via `sed` to set `concurrent` to the value of `GITLAB_RUNNER_CONCURRENT` (default: 4). This allows multiple jobs to run in parallel within a pipeline and across pipelines.
@@ -212,7 +212,7 @@ briklab/
 | `GITLAB_ROOT_PASSWORD` | `Briklab-2026!` | Root password (must be strong) |
 | `GITLAB_HTTP_PORT` | `8929` | HTTP port |
 | `GITLAB_SSH_PORT` | `2222` | SSH port |
-| `GITLAB_HOSTNAME` | `gitlab.briklab.local` | Hostname |
+| `GITLAB_HOSTNAME` | `gitlab.briklab.test` | Hostname |
 | `GITLAB_RUNNER_CONCURRENT` | `4` | Max parallel jobs on the runner |
 | `GITLAB_RUNNER_REQUEST_CONCURRENCY` | *(same as concurrent)* | How many jobs the runner requests simultaneously |
 | `GITLAB_RUNNER_JOB_MEMORY` | `512m` | Memory limit per CI job container |
@@ -231,7 +231,7 @@ briklab/
 |----------|---------|-------------|
 | `GITEA_HTTP_PORT` | `3000` | HTTP port |
 | `GITEA_SSH_PORT` | `222` | SSH port |
-| `GITEA_HOSTNAME` | `gitea.briklab.local` | Hostname |
+| `GITEA_HOSTNAME` | `gitea.briklab.test` | Hostname |
 
 ### Jenkins (Level 2)
 
@@ -239,7 +239,7 @@ briklab/
 |----------|---------|-------------|
 | `JENKINS_HTTP_PORT` | `9090` | HTTP port |
 | `JENKINS_AGENT_PORT` | `50000` | Agent port |
-| `JENKINS_HOSTNAME` | `jenkins.briklab.local` | Hostname |
+| `JENKINS_HOSTNAME` | `jenkins.briklab.test` | Hostname |
 | `JENKINS_ADMIN_PASSWORD` | `Brik-Jenkins-2026!` | Admin password |
 
 ### k3d / ArgoCD (Level 2)
@@ -249,7 +249,7 @@ briklab/
 | `K3D_API_PORT` | `6443` | Kubernetes API port |
 | `K3D_HTTP_PORT` | `8080` | HTTP ingress port |
 | `ARGOCD_PORT` | `9080` | ArgoCD UI port |
-| `ARGOCD_HOSTNAME` | `argocd.briklab.local` | Hostname |
+| `ARGOCD_HOSTNAME` | `argocd.briklab.test` | Hostname |
 
 ### Docker Network
 

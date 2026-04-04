@@ -18,10 +18,10 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
-GITEA_URL="http://localhost:${GITEA_HTTP_PORT:-3000}"
+GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-brik}"
 GITEA_ADMIN_PASSWORD="${GITEA_ADMIN_PASSWORD:-}"
-GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-brik@briklab.local}"
+GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-brik@briklab.test}"
 
 if [[ -z "$GITEA_ADMIN_PASSWORD" ]]; then
     log_error "GITEA_ADMIN_PASSWORD is not set in .env"
@@ -46,10 +46,10 @@ run_initial_install() {
         -d "repo_root_path=/data/git/repositories" \
         -d "lfs_root_path=/data/git/lfs" \
         -d "run_user=git" \
-        -d "domain=${GITEA_HOSTNAME:-gitea.briklab.local}" \
+        -d "domain=${GITEA_HOSTNAME:-gitea.briklab.test}" \
         -d "ssh_port=22" \
         -d "http_port=${GITEA_HTTP_PORT:-3000}" \
-        -d "app_url=http://${GITEA_HOSTNAME:-gitea.briklab.local}:${GITEA_HTTP_PORT:-3000}/" \
+        -d "app_url=http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/" \
         -d "log_root_path=/data/gitea/log" \
         -d "smtp_addr=" \
         -d "smtp_port=" \
@@ -61,7 +61,7 @@ run_initial_install() {
         -d "enable_open_id_sign_up=off" \
         -d "default_allow_create_organization=on" \
         -d "default_enable_timetracking=on" \
-        -d "no_reply_address=noreply.${GITEA_HOSTNAME:-gitea.briklab.local}" \
+        -d "no_reply_address=noreply.${GITEA_HOSTNAME:-gitea.briklab.test}" \
         -d "admin_name=${GITEA_ADMIN_USER}" \
         -d "admin_passwd=${GITEA_ADMIN_PASSWORD}" \
         -d "admin_confirm_passwd=${GITEA_ADMIN_PASSWORD}" \

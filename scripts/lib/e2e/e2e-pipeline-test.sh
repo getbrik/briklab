@@ -42,7 +42,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-GITLAB_URL="http://localhost:${GITLAB_HTTP_PORT:-8929}"
+GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PAT="${GITLAB_PAT:-}"
 PROJECT_PATH="${E2E_PROJECT_PATH:-brik%2Fnode-minimal}"
 TRIGGER_REF="${E2E_TRIGGER_REF:-main}"
@@ -102,7 +102,7 @@ else:
 # Args: $1 = image path (e.g. brik/node-full)
 validate_registry_image() {
     local image_path="$1"
-    local registry_url="http://localhost:${REGISTRY_PORT:-5050}"
+    local registry_url="http://${REGISTRY_HOSTNAME:-registry.briklab.test}:${REGISTRY_PORT:-5050}"
     local result
     result=$(curl -sf "${registry_url}/v2/${image_path}/tags/list" 2>/dev/null) || {
         log_warn "Registry unreachable or image not found: ${registry_url}/v2/${image_path}"

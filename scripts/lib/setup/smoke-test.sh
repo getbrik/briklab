@@ -56,8 +56,9 @@ echo ""
 echo -e "${BLUE}GitLab:${NC}"
 if is_running "brik-gitlab"; then
     GITLAB_PORT="${GITLAB_HTTP_PORT:-8929}"
-    check "GitLab HTTP" "curl -sf -o /dev/null http://localhost:${GITLAB_PORT}/users/sign_in"
-    check "GitLab API v4" "test \$(curl -so /dev/null -w '%{http_code}' http://localhost:${GITLAB_PORT}/api/v4/version) -ne 000"
+    GITLAB_HOST="${GITLAB_HOSTNAME:-gitlab.briklab.test}"
+    check "GitLab HTTP" "curl -sf -o /dev/null http://${GITLAB_HOST}:${GITLAB_PORT}/users/sign_in"
+    check "GitLab API v4" "test \$(curl -so /dev/null -w '%{http_code}' http://${GITLAB_HOST}:${GITLAB_PORT}/api/v4/version) -ne 000"
 else
     skip "GitLab"
 fi
@@ -85,8 +86,9 @@ echo ""
 echo -e "${BLUE}Docker Registry:${NC}"
 if is_running "brik-registry"; then
     REGISTRY_PORT="${REGISTRY_PORT:-5000}"
-    check "Registry v2 API" "curl -sf http://localhost:${REGISTRY_PORT}/v2/"
-    check "Registry catalog" "curl -sf http://localhost:${REGISTRY_PORT}/v2/_catalog"
+    REGISTRY_HOST="${REGISTRY_HOSTNAME:-registry.briklab.test}"
+    check "Registry v2 API" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/"
+    check "Registry catalog" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/_catalog"
 else
     skip "Docker Registry"
 fi
@@ -96,8 +98,9 @@ echo ""
 echo -e "${BLUE}Gitea:${NC}"
 if is_running "brik-gitea"; then
     GITEA_PORT="${GITEA_HTTP_PORT:-3000}"
-    check "Gitea HTTP" "curl -sf http://localhost:${GITEA_PORT}/"
-    check "Gitea API" "curl -sf http://localhost:${GITEA_PORT}/api/v1/version"
+    GITEA_HOST="${GITEA_HOSTNAME:-gitea.briklab.test}"
+    check "Gitea HTTP" "curl -sf http://${GITEA_HOST}:${GITEA_PORT}/"
+    check "Gitea API" "curl -sf http://${GITEA_HOST}:${GITEA_PORT}/api/v1/version"
 else
     skip "Gitea"
 fi
@@ -107,7 +110,8 @@ echo ""
 echo -e "${BLUE}Jenkins:${NC}"
 if is_running "brik-jenkins"; then
     JENKINS_PORT="${JENKINS_HTTP_PORT:-9090}"
-    check "Jenkins HTTP" "curl -sf http://localhost:${JENKINS_PORT}/login"
+    JENKINS_HOST="${JENKINS_HOSTNAME:-jenkins.briklab.test}"
+    check "Jenkins HTTP" "curl -sf http://${JENKINS_HOST}:${JENKINS_PORT}/login"
 else
     skip "Jenkins"
 fi

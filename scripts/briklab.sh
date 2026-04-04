@@ -164,6 +164,10 @@ cmd_status() {
     local registry_port="${REGISTRY_PORT:-5000}"
     local gitea_port="${GITEA_HTTP_PORT:-3000}"
     local jenkins_port="${JENKINS_HTTP_PORT:-9090}"
+    local gitlab_host="${GITLAB_HOSTNAME:-gitlab.briklab.test}"
+    local registry_host="${REGISTRY_HOSTNAME:-registry.briklab.test}"
+    local gitea_host="${GITEA_HOSTNAME:-gitea.briklab.test}"
+    local jenkins_host="${JENKINS_HOSTNAME:-jenkins.briklab.test}"
 
     # Check each container
     for container in brik-gitlab brik-runner brik-registry brik-gitea brik-jenkins; do
@@ -184,10 +188,10 @@ cmd_status() {
 
     echo ""
     echo -e "${BLUE}Access URLs:${NC}"
-    echo "  GitLab   : http://localhost:${gitlab_port}"
-    echo "  Registry : http://localhost:${registry_port}/v2/_catalog"
-    echo "  Gitea    : http://localhost:${gitea_port}"
-    echo "  Jenkins  : http://localhost:${jenkins_port}"
+    echo "  GitLab   : http://${gitlab_host}:${gitlab_port}"
+    echo "  Registry : http://${registry_host}:${registry_port}/v2/_catalog"
+    echo "  Gitea    : http://${gitea_host}:${gitea_port}"
+    echo "  Jenkins  : http://${jenkins_host}:${jenkins_port}"
     echo ""
 }
 

@@ -23,7 +23,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-GITLAB_URL="http://localhost:${GITLAB_HTTP_PORT:-8929}"
+GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}"
 
 # Save a variable to .env (add or update)
@@ -43,7 +43,7 @@ wait_for_gitlab() {
     local max_attempts=60
     local attempt=0
     while [[ $attempt -lt $max_attempts ]]; do
-        if curl -sf -o /dev/null "http://localhost:${GITLAB_HTTP_PORT:-8929}/users/sign_in"; then
+        if curl -sf -o /dev/null "${GITLAB_URL}/users/sign_in"; then
             log_ok "GitLab is ready"
             return 0
         fi

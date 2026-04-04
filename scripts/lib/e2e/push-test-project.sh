@@ -40,7 +40,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-GITLAB_URL="http://localhost:${GITLAB_HTTP_PORT:-8929}"
+GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PAT="${GITLAB_PAT:-}"
 TAG_NAME="v0.1.0"
 
@@ -156,7 +156,7 @@ push_directory() {
     git tag "$tag" >/dev/null 2>&1
 
     # Push using GIT_ASKPASS to avoid embedding PAT in process list
-    local remote_url="http://localhost:${GITLAB_HTTP_PORT:-8929}/${remote_path}.git"
+    local remote_url="${GITLAB_URL}/${remote_path}.git"
     git remote add origin "$remote_url" >/dev/null 2>&1
 
     local askpass_script

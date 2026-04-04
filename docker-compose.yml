@@ -18,12 +18,12 @@ services:
   gitlab:
     image: gitlab/gitlab-ce:18.10.1-ce.0
     container_name: brik-gitlab
-    hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.local}
+    hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.test}
     restart: unless-stopped
     environment:
       GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://${GITLAB_HOSTNAME:-gitlab.briklab.local}:${GITLAB_HTTP_PORT:-8929}'
+        external_url 'http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}'
         gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2222}
         # Reduce memory usage
         puma['worker_processes'] = 2
@@ -70,7 +70,7 @@ services:
       brik-net:
         ipv4_address: 172.20.0.11
     extra_hosts:
-      - "${GITLAB_HOSTNAME:-gitlab.briklab.local}:172.20.0.10"
+      - "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10"
 
   # --- Docker Registry ---
   registry:

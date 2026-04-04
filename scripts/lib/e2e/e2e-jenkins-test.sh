@@ -38,7 +38,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-JENKINS_URL="http://localhost:${JENKINS_HTTP_PORT:-9090}"
+JENKINS_URL="http://${JENKINS_HOSTNAME:-jenkins.briklab.test}:${JENKINS_HTTP_PORT:-9090}"
 JENKINS_USER="admin"
 JENKINS_PASSWORD="${JENKINS_ADMIN_PASSWORD:-}"
 JOB_NAME="${E2E_JENKINS_JOB:-node-minimal}"

@@ -28,15 +28,15 @@ For internal architecture details, see [docs/architecture.md](docs/architecture.
 Add to `/etc/hosts`:
 
 ```
-127.0.0.1  gitlab.briklab.local registry.briklab.local
-127.0.0.1  gitea.briklab.local jenkins.briklab.local argocd.briklab.local
+127.0.0.1  gitlab.briklab.test registry.briklab.test
+127.0.0.1  gitea.briklab.test jenkins.briklab.test argocd.briklab.test
 ```
 
 Add to Docker Desktop (Settings > Docker Engine):
 
 ```json
 {
-  "insecure-registries": ["localhost:5050"]
+  "insecure-registries": ["registry.briklab.test:5050"]
 }
 ```
 
@@ -56,7 +56,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 
 | Service | Port(s) | Credentials |
 |---------|---------|-------------|
-| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Briklab-2026` |
+| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Briklab-2026!` |
 | GitLab Runner | - | - |
 | Docker Registry | 5050 | - |
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
@@ -72,11 +72,11 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 
 | Service | URL |
 |---------|-----|
-| GitLab UI | http://localhost:8929 |
-| GitLab SSH | `ssh://git@localhost:2222` |
-| Docker Registry | http://localhost:5050/v2/_catalog |
-| Gitea UI | http://localhost:3000 |
-| Jenkins UI | http://localhost:9090 |
+| GitLab UI | http://gitlab.briklab.test:8929 |
+| GitLab SSH | `ssh://git@gitlab.briklab.test:2222` |
+| Docker Registry | http://registry.briklab.test:5050/v2/_catalog |
+| Gitea UI | http://gitea.briklab.test:3000 |
+| Jenkins UI | http://jenkins.briklab.test:9090 |
 
 ## CLI Commands
 
@@ -228,7 +228,7 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 
 **Port 5000 already in use (macOS)** -- AirPlay Receiver occupies port 5000. Briklab uses 5050 by default. To free 5000: Settings > General > AirDrop & Handoff > AirPlay Receiver, uncheck.
 
-**Registry unreachable** -- Verify `"insecure-registries": ["localhost:5050"]` in Docker Desktop settings. Test: `curl http://localhost:5050/v2/`
+**Registry unreachable** -- Verify `"insecure-registries": ["registry.briklab.test:5050"]` in Docker Desktop settings. Test: `curl http://registry.briklab.test:5050/v2/`
 
 **Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `images/jenkins/plugins.txt` includes all required plugins.
 

@@ -15,7 +15,7 @@ jenkins:
 
 unclassified:
   location:
-    url: "http://jenkins.briklab.local:9090/"
+    url: "http://jenkins.briklab.test:9090/"
   globalLibraries:
     libraries:
       - name: "brik"
@@ -24,7 +24,7 @@ unclassified:
           modernSCM:
             scm:
               git:
-                remote: "http://gitea.briklab.local:3000/brik/brik.git"
+                remote: "http://gitea.briklab.test:3000/brik/brik.git"
 
 tool:
   git:
@@ -40,7 +40,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.local:3000/brik/node-minimal.git')
+                  url('http://gitea.briklab.test:3000/brik/node-minimal.git')
                 }
                 branches('*/main')
               }

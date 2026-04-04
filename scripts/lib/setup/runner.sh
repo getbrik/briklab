@@ -25,7 +25,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-GITLAB_INTERNAL_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.local}:${GITLAB_HTTP_PORT:-8929}"
+GITLAB_INTERNAL_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 RUNNER_TOKEN="${GITLAB_RUNNER_TOKEN:-}"
 HELPER_IMAGE="${GITLAB_RUNNER_HELPER_IMAGE:-gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding}"
 RUNNER_CONCURRENT="${GITLAB_RUNNER_CONCURRENT:-4}"
@@ -56,7 +56,7 @@ docker exec brik-runner gitlab-runner register \
     --docker-privileged=false \
     --docker-network-mode "brik-net" \
     --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
-    --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.local}:172.20.0.10" \
+    --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
     --description "brik-docker-runner" \
     --tag-list "docker,brik" \
     --run-untagged=true \

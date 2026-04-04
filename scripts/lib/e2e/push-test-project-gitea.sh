@@ -39,7 +39,7 @@ log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-GITEA_URL="http://localhost:${GITEA_HTTP_PORT:-3000}"
+GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 GITEA_PAT="${GITEA_PAT:-}"
 TAG_NAME="v0.1.0"
 
@@ -114,7 +114,7 @@ push_brik_as_shared_library() {
     git commit -m "Initial commit" >/dev/null 2>&1
     git tag "$tag" >/dev/null 2>&1
 
-    local remote_url="http://localhost:${GITEA_HTTP_PORT:-3000}/${remote_path}.git"
+    local remote_url="${GITEA_URL}/${remote_path}.git"
     git remote add origin "$remote_url" >/dev/null 2>&1
 
     printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$GITEA_PAT" > "$askpass_script"
@@ -157,7 +157,7 @@ push_directory() {
     git tag "$tag" >/dev/null 2>&1
 
     # Push using GIT_ASKPASS to avoid embedding PAT in process list
-    local remote_url="http://localhost:${GITEA_HTTP_PORT:-3000}/${remote_path}.git"
+    local remote_url="${GITEA_URL}/${remote_path}.git"
     git remote add origin "$remote_url" >/dev/null 2>&1
 
     local askpass_script
