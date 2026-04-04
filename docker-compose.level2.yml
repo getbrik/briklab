@@ -36,7 +36,9 @@ services:
 
   # --- Jenkins ---
   jenkins:
-    image: jenkins/jenkins:2.541.3-lts-jdk21
+    build:
+      context: .
+      dockerfile: images/jenkins/Dockerfile
     container_name: brik-jenkins
     hostname: ${JENKINS_HOSTNAME:-jenkins.briklab.local}
     restart: unless-stopped
@@ -51,13 +53,14 @@ services:
     volumes:
       - ./data/jenkins:/var/jenkins_home
       - ./config/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
-      - ./config/jenkins/plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro
+      # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       brik-net:
         ipv4_address: 172.20.0.21
     extra_hosts:
       - "${GITLAB_HOSTNAME:-gitlab.briklab.local}:172.20.0.10"
+      - "${GITEA_HOSTNAME:-gitea.briklab.local}:172.20.0.20"
       - "registry.briklab.local:172.20.0.12"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${JENKINS_HTTP_PORT:-9090}/login"]

@@ -11,3 +11,4 @@ job-dsl:latest
 ansicolor:latest
 timestamper:latest
 ws-cleanup:latest
+pipeline-groovy-lib:latest

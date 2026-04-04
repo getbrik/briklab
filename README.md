@@ -2,15 +2,16 @@
   <img src="docs/briklab.jpg" alt="Briklab">
 </p>
 
-Local Docker infrastructure for testing [Brik](https://github.com/getbrik/brik) pipelines end-to-end: write `brik.yml`, push to GitLab, watch the pipeline run on real CI platforms.
+Local Docker infrastructure for testing [Brik](https://github.com/getbrik/brik) pipelines end-to-end: write `brik.yml`, push to GitLab or Gitea, watch the pipeline run on real CI platforms.
 
 ## What is Briklab
 
 Brik needs real CI/CD platforms to validate its shared libraries and runtime. Briklab provides that infrastructure locally via Docker Compose -- no cloud accounts, no shared servers.
 
 - One command to set up everything (`init`)
-- Two levels: MVP (~4 GB) for daily work, Full (~8 GB) for multi-platform testing
-- E2E pipeline testing with automated scenario validation
+- GitLab CE + Runner + Registry for GitLab CI pipelines
+- Gitea + Jenkins for Jenkins pipelines
+- E2E pipeline testing with automated scenario validation on both platforms
 - Managed by a Bash CLI (`scripts/briklab.sh`)
 
 For internal architecture details, see [docs/architecture.md](docs/architecture.md).
@@ -19,7 +20,7 @@ For internal architecture details, see [docs/architecture.md](docs/architecture.
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (4 GB RAM minimum)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (4 GB RAM minimum, 8 GB for full setup)
 - `jq` (`brew install jq`)
 
 ### Network configuration
@@ -42,34 +43,40 @@ Add to Docker Desktop (Settings > Docker Engine):
 ### Initialize
 
 ```bash
+# GitLab only (MVP)
 ./scripts/briklab.sh init
+
+# GitLab + Gitea + Jenkins (full)
+./scripts/briklab.sh init --full
 ```
 
-> GitLab takes 3-5 minutes on first start. The script waits automatically.
-
-### Access URLs (MVP)
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| GitLab UI | http://localhost:8929 | `root` / `Briklab-2026!` |
-| GitLab SSH | `ssh://git@localhost:2222` | SSH key |
-| Docker Registry | http://localhost:5050/v2/_catalog | - |
+> GitLab takes 3-5 minutes on first start. Jenkins builds a custom Docker image on first start. The script waits automatically.
 
 ## Services
 
-| Service | Port | Level |
-|---------|------|-------|
-| GitLab CE | 8929, 2222 | MVP |
-| GitLab Runner | - | MVP |
-| Docker Registry | 5050 | MVP |
-| Gitea | 3000, 222 | Full |
-| Jenkins | 9090, 50000 | Full |
-| k3d (k3s) | 6443, 8080 | Full |
-| ArgoCD | 9080 | Full |
+| Service | Port(s) | Credentials |
+|---------|---------|-------------|
+| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Briklab-2026` |
+| GitLab Runner | - | - |
+| Docker Registry | 5050 | - |
+| Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
+| Jenkins | 9090 (HTTP), 50000 (agent) | `admin` / `Brik-Jenkins-2026` |
+| k3d (k3s) | 6443, 8080 | - |
+| ArgoCD | 9080 | - |
 
 > **macOS note:** the registry uses port 5050 because AirPlay Receiver occupies port 5000.
 
 Default credentials are defined in `.env`. Modify them **before** the first `init`.
+
+### Access URLs
+
+| Service | URL |
+|---------|-----|
+| GitLab UI | http://localhost:8929 |
+| GitLab SSH | `ssh://git@localhost:2222` |
+| Docker Registry | http://localhost:5050/v2/_catalog |
+| Gitea UI | http://localhost:3000 |
+| Jenkins UI | http://localhost:9090 |
 
 ## CLI Commands
 
@@ -87,17 +94,18 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh setup` | Re-run GitLab/Runner/Jenkins configuration |
+| `briklab.sh setup` | Re-run GitLab/Runner/Gitea/Jenkins configuration |
 | `briklab.sh smoke-test` | Verify that each component is reachable |
 
 ### Testing
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh test` | Run E2E pipeline for `node-minimal` |
-| `briklab.sh test --all` | Run the full E2E test suite |
-| `briklab.sh test --project <name>` | Run a single E2E scenario |
+| `briklab.sh test` | Run E2E pipeline for `node-minimal` on GitLab |
+| `briklab.sh test --all` | Run the full E2E test suite (GitLab) |
+| `briklab.sh test --project <name>` | Run a single E2E scenario (GitLab) |
 | `briklab.sh test --list` | List available E2E scenarios |
+| `briklab.sh test --jenkins [job]` | Run Jenkins E2E pipeline (default: `node-minimal`) |
 
 ### Monitoring
 
@@ -106,7 +114,7 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 | `briklab.sh status` | Show container health and access URLs |
 | `briklab.sh logs <service>` | Tail logs (gitlab, runner, registry, gitea, jenkins) |
 
-### Kubernetes (Level 2)
+### Kubernetes
 
 | Command | Description |
 |---------|-------------|
@@ -116,24 +124,28 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 ## Typical Workflow
 
 ```bash
-# Day 1
-./scripts/briklab.sh init            # First time setup (~5 min)
-./scripts/briklab.sh test --all      # Run E2E suite
-./scripts/briklab.sh stop            # Done for the day
+# Day 1 - Full setup (GitLab + Gitea + Jenkins)
+./scripts/briklab.sh init --full       # First time setup (~5 min)
+./scripts/briklab.sh test --all        # Run GitLab E2E suite
+./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
+./scripts/briklab.sh stop              # Done for the day
 
 # Day N
-./scripts/briklab.sh start           # Restart (fast, data preserved)
-./scripts/briklab.sh test --all      # Run E2E suite
-./scripts/briklab.sh stop            # Done
+./scripts/briklab.sh start --full      # Restart (fast, data preserved)
+./scripts/briklab.sh test --all        # Run GitLab E2E suite
+./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
+./scripts/briklab.sh stop              # Done
 ```
 
 ## E2E Testing
 
-Each E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
+### GitLab
 
-### Scenarios (13 total)
+Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
 
-#### Minimal stack coverage
+#### Scenarios (13 total)
+
+##### Minimal stack coverage
 
 | Scenario | Stack | Trigger | Validated stages | Expected |
 |----------|-------|---------|-----------------|----------|
@@ -143,7 +155,7 @@ Each E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, 
 | `rust-minimal` | Rust | push `main` | init, build, test, notify | pass |
 | `dotnet-minimal` | .NET | push `main` | init, build, test, notify | pass |
 
-#### Full pipelines
+##### Full pipelines
 
 | Scenario | Stack | Trigger | Validated stages | Expected |
 |----------|-------|---------|-----------------|----------|
@@ -151,14 +163,14 @@ Each E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, 
 | `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, notify | pass |
 | `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
 
-#### Security and Deploy
+##### Security and Deploy
 
 | Scenario | Stack | Trigger | Validated stages | Expected |
 |----------|-------|---------|-----------------|----------|
 | `node-security` | Node.js | push `main` | init, build, security, test, notify | pass |
 | `node-deploy` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
 
-#### Error scenarios
+##### Error scenarios
 
 | Scenario | Stack | Trigger | Expected failure | Expected |
 |----------|-------|---------|-----------------|----------|
@@ -166,9 +178,31 @@ Each E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, 
 | `error-test` | Node.js | push `main` | brik-test job fails | fail |
 | `error-config` | Node.js | push `main` | brik-init job fails (invalid brik.yml) | fail |
 
+### Jenkins
+
+Jenkins E2E testing pushes the Brik shared library and a test project to Gitea, then triggers a Jenkins pipeline via the REST API.
+
+The Jenkins pipeline runs the full Brik fixed flow:
+
+```
+Init -> Release -> Build -> Quality & Security -> Test -> Package -> Deploy -> Notify
+```
+
+Jenkins is configured via CasC (Configuration as Code) with:
+- The Brik Jenkins Shared Library loaded from Gitea (`brik/brik` repo)
+- A `node-minimal` pipeline job that pulls from Gitea (`brik/node-minimal` repo)
+
+```bash
+# Run the Jenkins E2E pipeline
+./scripts/briklab.sh test --jenkins
+
+# Run a specific job (default: node-minimal)
+./scripts/briklab.sh test --jenkins node-minimal
+```
+
 ### Test projects
 
-Test project fixtures live in `test-projects/`. Each has a `brik.yml` and a `.gitlab-ci.yml` that includes the Brik shared library.
+Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platform-specific CI config (`.gitlab-ci.yml` for GitLab, `Jenkinsfile` for Jenkins).
 
 | Project | Stack | CI Image | Purpose |
 |---------|-------|----------|---------|
@@ -196,6 +230,12 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and a `.gi
 
 **Registry unreachable** -- Verify `"insecure-registries": ["localhost:5050"]` in Docker Desktop settings. Test: `curl http://localhost:5050/v2/`
 
+**Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `images/jenkins/plugins.txt` includes all required plugins.
+
+**Jenkins pipeline can't find Brik library** -- The Brik shared library must be pushed to Gitea before triggering a pipeline. Run `./scripts/briklab.sh setup` to ensure Gitea is configured, then push repos with the E2E test command.
+
+**Gitea shows install page** -- On first start, Gitea requires initial installation. The setup script handles this automatically. If it fails, check logs: `./scripts/briklab.sh logs gitea`
+
 For the complete list of known issues and solutions, see [docs/architecture.md - Known Gotchas](docs/architecture.md#known-gotchas).
 
 ## Cleanup
@@ -209,15 +249,18 @@ For the complete list of known issues and solutions, see [docs/architecture.md -
 
 # Full removal: after clean, remove Docker images manually
 docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding registry:3.0
+docker rmi gitea/gitea:1.25.5-rootless
+docker rmi briklab-jenkins  # custom-built Jenkins image
 docker network rm brik-net 2>/dev/null
 ```
 
 ## Status
 
-- [x] GitLab CE + Runner + Registry (MVP)
+- [x] GitLab CE + Runner + Registry
+- [x] Gitea + Jenkins (CasC + Job DSL)
 - [x] Automated init with smoke tests
-- [x] E2E pipeline testing (13 scenarios: node, python, java, rust, dotnet)
-- [x] Gitea + Jenkins (Level 2)
+- [x] E2E pipeline testing -- GitLab (13 scenarios: node, python, java, rust, dotnet)
+- [x] E2E pipeline testing -- Jenkins (node-minimal)
 - [x] Security stage E2E
 - [x] Deploy stage E2E
 - [x] Error scenario E2E (build fail, test fail, invalid config)

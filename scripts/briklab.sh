@@ -231,6 +231,12 @@ cmd_setup() {
         log_warn "Runner is not running - skipping"
     fi
 
+    # Gitea setup (if level 2)
+    if docker ps --format '{{.Names}}' | grep -q "^brik-gitea$"; then
+        log_info "Configuring Gitea..."
+        bash "${LIB_SETUP}/gitea.sh"
+    fi
+
     # Jenkins setup (if level 2)
     if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$"; then
         log_info "Configuring Jenkins..."
@@ -295,11 +301,22 @@ cmd_test() {
 
     local mode=""
     local project=""
+    local jenkins_job=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --all)    mode="all"; shift ;;
             --list)   mode="list"; shift ;;
+            --jenkins)
+                mode="jenkins"
+                jenkins_job="${2:-node-minimal}"
+                if [[ "$jenkins_job" == --* ]]; then
+                    jenkins_job="node-minimal"
+                else
+                    shift
+                fi
+                shift
+                ;;
             --project)
                 mode="project"
                 project="${2:-}"
@@ -322,6 +339,15 @@ cmd_test() {
             ;;
         project)
             bash "${LIB_E2E}/e2e-run-suite.sh" --only "$project"
+            ;;
+        jenkins)
+            log_info "=== Jenkins E2E Test ==="
+            echo ""
+            log_info "Step 1/2 - Pushing repos to Gitea..."
+            E2E_JENKINS_PROJECTS="$jenkins_job" bash "${LIB_E2E}/push-test-project-gitea.sh"
+            echo ""
+            log_info "Step 2/2 - Running Jenkins pipeline test..."
+            E2E_JENKINS_JOB="$jenkins_job" bash "${LIB_E2E}/e2e-jenkins-test.sh"
             ;;
         *)
             # Default: run node-minimal scenario via the suite orchestrator
@@ -403,6 +429,7 @@ Testing:
   test               Push Brik repos to GitLab and run E2E pipeline (node-minimal)
   test --all         Run full E2E test suite (all scenarios)
   test --project X   Run a single E2E scenario by name
+  test --jenkins [X] Push repos to Gitea and run Jenkins pipeline (default: node-minimal)
   test --list        List available E2E scenarios
 
 Monitoring:

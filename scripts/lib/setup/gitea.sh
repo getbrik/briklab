@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Initial Gitea configuration
+# Creates admin user, API token, and 'brik' organization
+set -euo pipefail
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
+log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../../../.env"
+
+GITEA_URL="http://localhost:${GITEA_HTTP_PORT:-3000}"
+GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-brik}"
+GITEA_ADMIN_PASSWORD="${GITEA_ADMIN_PASSWORD:-}"
+GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-brik@briklab.local}"
+
+if [[ -z "$GITEA_ADMIN_PASSWORD" ]]; then
+    log_error "GITEA_ADMIN_PASSWORD is not set in .env"
+    exit 1
+fi
+
+# Complete Gitea initial installation if needed
+run_initial_install() {
+    log_info "Running Gitea initial installation..."
+    local http_code
+    http_code=$(curl -s --max-time 30 -X POST "${GITEA_URL}/" \
+        -d "db_type=sqlite3" \
+        -d "db_host=localhost:3306" \
+        -d "db_user=root" \
+        -d "db_passwd=" \
+        -d "db_name=gitea" \
+        -d "ssl_mode=disable" \
+        -d "db_schema=" \
+        -d "charset=utf8" \
+        -d "db_path=/data/gitea/gitea.db" \
+        -d "app_name=Gitea: Git with a cup of tea" \
+        -d "repo_root_path=/data/git/repositories" \
+        -d "lfs_root_path=/data/git/lfs" \
+        -d "run_user=git" \
+        -d "domain=${GITEA_HOSTNAME:-gitea.briklab.local}" \
+        -d "ssh_port=22" \
+        -d "http_port=${GITEA_HTTP_PORT:-3000}" \
+        -d "app_url=http://${GITEA_HOSTNAME:-gitea.briklab.local}:${GITEA_HTTP_PORT:-3000}/" \
+        -d "log_root_path=/data/gitea/log" \
+        -d "smtp_addr=" \
+        -d "smtp_port=" \
+        -d "smtp_from=" \
+        -d "smtp_user=" \
+        -d "smtp_passwd=" \
+        -d "enable_federated_avatar=off" \
+        -d "enable_open_id_sign_in=off" \
+        -d "enable_open_id_sign_up=off" \
+        -d "default_allow_create_organization=on" \
+        -d "default_enable_timetracking=on" \
+        -d "no_reply_address=noreply.${GITEA_HOSTNAME:-gitea.briklab.local}" \
+        -d "admin_name=${GITEA_ADMIN_USER}" \
+        -d "admin_passwd=${GITEA_ADMIN_PASSWORD}" \
+        -d "admin_confirm_passwd=${GITEA_ADMIN_PASSWORD}" \
+        -d "admin_email=${GITEA_ADMIN_EMAIL}" \
+        -o /dev/null -w "%{http_code}")
+
+    if [[ "$http_code" == "200" || "$http_code" == "302" ]]; then
+        log_ok "Initial installation complete"
+        sleep 2
+    else
+        log_error "Initial installation failed (HTTP ${http_code})"
+        return 1
+    fi
+}
+
+# Wait for Gitea to be ready
+wait_for_gitea() {
+    log_info "Waiting for Gitea..."
+    local max_attempts=30
+    local attempt=0
+    while [[ $attempt -lt $max_attempts ]]; do
+        # Check if Gitea HTTP is reachable at all
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${GITEA_URL}/api/v1/version" 2>/dev/null || echo "000")
+
+        if [[ "$http_code" == "200" ]]; then
+            log_ok "Gitea is ready"
+            return 0
+        fi
+
+        # If API returns 404, Gitea is on install page -- run initial install
+        if [[ "$http_code" == "404" ]]; then
+            run_initial_install
+            continue
+        fi
+
+        attempt=$((attempt + 1))
+        echo -n "."
+        sleep 5
+    done
+    echo ""
+    log_error "Gitea is not ready after $((max_attempts * 5))s"
+    exit 1
+}
+
+# Create admin user via Gitea CLI inside the container
+create_admin_user() {
+    log_info "Creating admin user '${GITEA_ADMIN_USER}'..."
+
+    # Check if user already exists
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        "${GITEA_URL}/api/v1/users/${GITEA_ADMIN_USER}")
+
+    if [[ "$http_code" == "200" ]]; then
+        log_info "User '${GITEA_ADMIN_USER}' already exists"
+        return 0
+    fi
+
+    docker exec -u git brik-gitea gitea admin user create \
+        --username "${GITEA_ADMIN_USER}" \
+        --password "${GITEA_ADMIN_PASSWORD}" \
+        --email "${GITEA_ADMIN_EMAIL}" \
+        --admin \
+        --must-change-password=false 2>/dev/null || {
+        log_warn "Could not create user via CLI (may already exist)"
+        return 0
+    }
+
+    log_ok "Admin user '${GITEA_ADMIN_USER}' created"
+}
+
+# Generate API token
+create_api_token() {
+    # Check if token already in .env
+    if [[ -n "${GITEA_PAT:-}" ]]; then
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            -H "Authorization: token ${GITEA_PAT}" \
+            "${GITEA_URL}/api/v1/user")
+
+        if [[ "$http_code" == "200" ]]; then
+            log_info "GITEA_PAT already set and valid"
+            return 0
+        fi
+        log_warn "Existing GITEA_PAT is invalid, creating new one"
+    fi
+
+    log_info "Generating API token..."
+
+    local response
+    response=$(curl -s --max-time 10 \
+        -u "${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASSWORD}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"name":"briklab","scopes":["all"]}' \
+        "${GITEA_URL}/api/v1/users/${GITEA_ADMIN_USER}/tokens")
+
+    local token
+    token=$(echo "$response" | jq -r '.sha1 // empty' 2>/dev/null || true)
+
+    if [[ -z "$token" ]]; then
+        log_error "Failed to create token: ${response}"
+        return 1
+    fi
+
+    # Save to .env
+    if grep -q "^GITEA_PAT=" "$ENV_FILE" 2>/dev/null; then
+        sed -i.bak "s|^GITEA_PAT=.*|GITEA_PAT=${token}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+    else
+        echo "GITEA_PAT=${token}" >> "$ENV_FILE"
+    fi
+
+    export GITEA_PAT="$token"
+    log_ok "API token saved to .env"
+}
+
+# === Main ===
+wait_for_gitea
+create_admin_user
+create_api_token
+
+log_ok "Gitea configuration complete"
+echo ""
+echo -e "${BLUE}Gitea access:${NC}"
+echo "  URL      : ${GITEA_URL}"
+echo "  Login    : ${GITEA_ADMIN_USER}"
+echo "  Password : (from GITEA_ADMIN_PASSWORD in .env)"

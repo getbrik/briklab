@@ -16,14 +16,36 @@ jenkins:
 unclassified:
   location:
     url: "http://jenkins.briklab.local:9090/"
-  gitLabConnectionConfig:
-    connections:
-      - name: "gitlab-briklab"
-        url: "http://gitlab.briklab.local:8929"
-        apiTokenId: "gitlab-api-token"
+  globalLibraries:
+    libraries:
+      - name: "brik"
+        defaultVersion: "main"
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "http://gitea.briklab.local:3000/brik/brik.git"
 
 tool:
   git:
     installations:
       - name: Default
         home: git
+
+jobs:
+  - script: >
+      pipelineJob('node-minimal') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.local:3000/brik/node-minimal.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

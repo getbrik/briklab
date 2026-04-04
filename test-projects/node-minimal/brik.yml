@@ -4,5 +4,11 @@ project:
   name: node-minimal
   stack: node
 
+quality:
+  enabled: false
+
+security:
+  enabled: false
+
 test:
   framework: npm
