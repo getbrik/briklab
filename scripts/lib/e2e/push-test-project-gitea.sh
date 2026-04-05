@@ -75,62 +75,6 @@ create_repo() {
     esac
 }
 
-# Assemble the brik repo into Jenkins Shared Library layout and push it.
-# Jenkins expects vars/ at the root of the repo.
-push_brik_as_shared_library() {
-    local brik_root="$1"
-    local remote_path="$2"
-    local tag="$3"
-
-    local original_dir="$PWD"
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    local askpass_script
-    askpass_script=$(mktemp)
-    # shellcheck disable=SC2064  # Intentional: capture current values
-    trap "cd '$original_dir'; rm -rf '$tmp_dir' '$askpass_script'" RETURN
-
-    log_info "Assembling Jenkins Shared Library layout..."
-
-    # vars/ and scripts/ from shared-libs/jenkins/
-    cp -r "${brik_root}/shared-libs/jenkins/vars" "$tmp_dir/vars"
-    mkdir -p "$tmp_dir/shared-libs/jenkins/scripts"
-    cp -r "${brik_root}/shared-libs/jenkins/scripts/." "$tmp_dir/shared-libs/jenkins/scripts/"
-
-    # runtime/ for brik-lib and stage.run
-    cp -r "${brik_root}/runtime" "$tmp_dir/runtime"
-
-    # schemas/ for brik.yml validation
-    if [[ -d "${brik_root}/schemas" ]]; then
-        cp -r "${brik_root}/schemas" "$tmp_dir/schemas"
-    fi
-
-    log_info "Pushing ${tmp_dir} -> ${remote_path}..."
-
-    cd "$tmp_dir"
-    git init -b main >/dev/null 2>&1
-    git add -A >/dev/null 2>&1
-    git commit -m "Initial commit" >/dev/null 2>&1
-    git tag "$tag" >/dev/null 2>&1
-
-    local remote_url="${GITEA_URL}/${remote_path}.git"
-    git remote add origin "$remote_url" >/dev/null 2>&1
-
-    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$GITEA_PAT" > "$askpass_script"
-    chmod +x "$askpass_script"
-
-    local gitea_user="${GITEA_ADMIN_USER:-brik}"
-
-    if GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-        git -c "credential.username=${gitea_user}" push -u origin main --tags --force >/dev/null 2>&1; then
-        log_ok "Pushed ${remote_path} with tag ${tag}"
-    else
-        log_error "Failed to push ${remote_path}"
-        return 1
-    fi
-}
-
 # Push a local directory as a Git repo to briklab Gitea.
 push_directory() {
     local source_dir="$1"
@@ -186,15 +130,10 @@ push_directory() {
 log_info "=== Pushing Brik repos to briklab Gitea ==="
 echo ""
 
-# 1. Create and push brik/brik (Jenkins Shared Library layout)
-#    Jenkins expects vars/ at root, so we assemble the layout:
-#    vars/           <- shared-libs/jenkins/vars/
-#    scripts/        <- shared-libs/jenkins/scripts/
-#    runtime/        <- runtime/
-#    schemas/        <- schemas/
-log_info "--- brik/brik (Jenkins Shared Library layout) ---"
+# 1. Create and push brik/brik (full repo, same as production)
+log_info "--- brik/brik (full repo) ---"
 create_repo "brik"
-push_brik_as_shared_library "$BRIK_ROOT" "brik/brik" "$TAG_NAME"
+push_directory "$BRIK_ROOT" "brik/brik" "$TAG_NAME"
 echo ""
 
 # 2. Create and push test projects
