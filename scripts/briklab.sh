@@ -313,11 +313,11 @@ cmd_test() {
             --list)   mode="list"; shift ;;
             --jenkins)
                 mode="jenkins"
-                jenkins_job="${2:-node-minimal}"
-                if [[ "$jenkins_job" == --* ]]; then
-                    jenkins_job="node-minimal"
-                else
+                if [[ $# -ge 2 && "${2}" != --* ]]; then
+                    jenkins_job="$2"
                     shift
+                else
+                    jenkins_job="node-minimal"
                 fi
                 shift
                 ;;
