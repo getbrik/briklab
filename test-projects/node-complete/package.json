@@ -1,0 +1,16 @@
+{
+  "name": "node-complete",
+  "version": "1.0.0",
+  "description": "Complete Node.js project for Brik E2E testing with Nexus publish",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --platform=node --outfile=dist/index.js --minify",
+    "test": "node test/index.test.js",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "eslint": "^10.1.0"
+  },
+  "license": "MIT"
+}

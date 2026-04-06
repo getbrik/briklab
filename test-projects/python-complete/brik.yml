@@ -1,0 +1,35 @@
+version: 1
+
+project:
+  name: python-complete
+  stack: python
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+test:
+  framework: pytest
+
+quality:
+  enabled: true
+  lint:
+    tool: ruff
+
+security:
+  enabled: true
+
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/python-complete
+    dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: nexus.briklab.test:8082/brik/python-complete
+    registry: nexus.briklab.test:8082
+    username_var: NEXUS_DOCKER_USER
+    password_var: NEXUS_DOCKER_PASSWORD
+  pypi:
+    repository: http://nexus.briklab.test:8081/repository/brik-pypi/
+    token_var: NEXUS_PYPI_TOKEN

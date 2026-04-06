@@ -1,0 +1,36 @@
+version: 1
+
+project:
+  name: java-complete
+  stack: java
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+test:
+  framework: maven
+
+quality:
+  enabled: true
+  lint:
+    tool: checkstyle
+
+security:
+  enabled: true
+
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/java-complete
+    dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: nexus.briklab.test:8082/brik/java-complete
+    registry: nexus.briklab.test:8082
+    username_var: NEXUS_DOCKER_USER
+    password_var: NEXUS_DOCKER_PASSWORD
+  maven:
+    repository: http://nexus.briklab.test:8081/repository/brik-maven/
+    username_var: NEXUS_MAVEN_USER
+    password_var: NEXUS_MAVEN_PASSWORD

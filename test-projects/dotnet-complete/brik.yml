@@ -1,0 +1,35 @@
+version: 1
+
+project:
+  name: dotnet-complete
+  stack: dotnet
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+test:
+  framework: dotnet
+
+quality:
+  enabled: true
+  lint:
+    tool: dotnet-format
+
+security:
+  enabled: true
+
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/dotnet-complete
+    dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: nexus.briklab.test:8082/brik/dotnet-complete
+    registry: nexus.briklab.test:8082
+    username_var: NEXUS_DOCKER_USER
+    password_var: NEXUS_DOCKER_PASSWORD
+  nuget:
+    source: http://nexus.briklab.test:8081/repository/brik-nuget/
+    api_key_var: NEXUS_NUGET_API_KEY

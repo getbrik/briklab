@@ -163,7 +163,7 @@ Setup creates 6 hosted repositories for artifact publishing:
 
 Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
 
-#### Scenarios (13 total)
+#### Scenarios (18 total)
 
 ##### Minimal stack coverage
 
@@ -182,6 +182,16 @@ Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pip
 | `node-full` | Node.js | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
 | `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, notify | pass |
 | `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
+
+##### Complete pipelines with Nexus publish
+
+| Scenario | Stack | Trigger | Validated stages | Expected |
+|----------|-------|---------|-----------------|----------|
+| `node-complete` | Node.js | tag `v0.1.0` | init, release, build, test, package, notify | pass |
+| `python-complete` | Python | tag `v0.1.0` | init, release, build, test, package, notify | pass |
+| `java-complete` | Java | tag `v0.1.0` | init, release, build, test, package, notify | pass |
+| `rust-complete` | Rust | tag `v0.1.0` | init, release, build, test, package, notify | pass |
+| `dotnet-complete` | .NET | tag `v0.1.0` | init, release, build, test, package, notify | pass |
 
 ##### Security and Deploy
 
@@ -236,6 +246,11 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 | `java-full` | Java | maven:3.9-eclipse-temurin-21-alpine | Full Java pipeline (checkstyle, Docker) |
 | `rust-minimal` | Rust | rust:1-alpine3.21 | Rust stack (cargo test) |
 | `dotnet-minimal` | .NET | mcr.microsoft.com/dotnet/sdk:9.0-alpine3.21 | .NET stack (xUnit) |
+| `node-complete` | Node.js | alpine:3.21 (default) | Full pipeline + npm/Docker publish to Nexus |
+| `python-complete` | Python | alpine:3.21 (default) | Full pipeline + PyPI/Docker publish to Nexus |
+| `java-complete` | Java | maven:3.9-eclipse-temurin-21-alpine | Full pipeline + Maven/Docker publish to Nexus |
+| `rust-complete` | Rust | rust:1-alpine3.21 | Full pipeline + Cargo dry-run/Docker publish to Nexus |
+| `dotnet-complete` | .NET | mcr.microsoft.com/dotnet/sdk:9.0-alpine3.21 | Full pipeline + NuGet/Docker publish to Nexus |
 | `node-error-build` | Node.js | alpine:3.21 (default) | Intentionally broken build |
 | `node-error-test` | Node.js | alpine:3.21 (default) | Intentionally failing tests |
 | `invalid-config` | Node.js | alpine:3.21 (default) | Invalid brik.yml (version: 99) |
