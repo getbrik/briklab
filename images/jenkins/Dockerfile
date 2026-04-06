@@ -22,7 +22,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-install plugins (single source of truth: config/jenkins/plugins.txt)
-# This file is copied via docker-compose build context (see docker-compose.level2.yml)
+# This file is copied via docker-compose build context (see docker-compose.yml)
 COPY config/jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 

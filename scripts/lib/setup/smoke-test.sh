@@ -93,7 +93,7 @@ else
     skip "Docker Registry"
 fi
 
-# === Gitea (Level 2) ===
+# === Gitea ===
 echo ""
 echo -e "${BLUE}Gitea:${NC}"
 if is_running "brik-gitea"; then
@@ -105,7 +105,7 @@ else
     skip "Gitea"
 fi
 
-# === Jenkins (Level 2) ===
+# === Jenkins ===
 echo ""
 echo -e "${BLUE}Jenkins:${NC}"
 if is_running "brik-jenkins"; then
@@ -114,6 +114,18 @@ if is_running "brik-jenkins"; then
     check "Jenkins HTTP" "curl -sf http://${JENKINS_HOST}:${JENKINS_PORT}/login"
 else
     skip "Jenkins"
+fi
+
+# === Nexus ===
+echo ""
+echo -e "${BLUE}Nexus:${NC}"
+if is_running "brik-nexus"; then
+    NEXUS_PORT="${NEXUS_HTTP_PORT:-8081}"
+    NEXUS_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}"
+    check "Nexus HTTP" "curl -sf http://${NEXUS_HOST}:${NEXUS_PORT}/service/rest/v1/status"
+    check "Nexus repositories" "curl -sf -u admin:${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026} http://${NEXUS_HOST}:${NEXUS_PORT}/service/rest/v1/repositories"
+else
+    skip "Nexus"
 fi
 
 # === k3d / ArgoCD ===

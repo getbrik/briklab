@@ -8,7 +8,6 @@ BRIKLAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LIB_SETUP="${SCRIPT_DIR}/lib/setup"
 LIB_E2E="${SCRIPT_DIR}/lib/e2e"
 COMPOSE_FILE="${BRIKLAB_DIR}/docker-compose.yml"
-COMPOSE_LEVEL2="${BRIKLAB_DIR}/docker-compose.level2.yml"
 ENV_FILE="${BRIKLAB_DIR}/.env"
 
 # Colors
@@ -55,33 +54,17 @@ load_env() {
     fi
 }
 
-# Compose args based on mode
-compose_args() {
-    local args=("-f" "$COMPOSE_FILE")
-    if [[ "${1:-}" == "--full" ]]; then
-        args+=("-f" "$COMPOSE_LEVEL2")
-    fi
-    echo "${args[@]}"
-}
-
 # === COMMANDS ===
 
 cmd_start() {
-    local mode="${1:-}"
     check_prereqs
     load_env
 
-    # Level 1 first (creates brik-net network)
-    log_info "Starting Level 1 (MVP)..."
+    log_info "Starting all containers..."
     docker compose -f "$COMPOSE_FILE" up -d
 
-    if [[ "$mode" == "--full" ]]; then
-        log_info "Starting Level 2 (Gitea + Jenkins)..."
-        docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LEVEL2" up -d
-    fi
-
     log_ok "Containers started"
-    log_info "GitLab may take 3-5 min on first start"
+    log_info "GitLab takes 3-5 min, Nexus 2-3 min on first start"
 
     # Ensure root password is set after GitLab becomes healthy
     if docker ps --format '{{.Names}}' | grep -q "^brik-gitlab$"; then
@@ -97,10 +80,10 @@ cmd_start() {
 _ensure_gitlab_password() {
     local max_attempts=60
     local attempt=0
+    local health=""
 
     log_info "Waiting for GitLab to be healthy..."
     while [[ $attempt -lt $max_attempts ]]; do
-        local health
         health=$(docker inspect --format='{{.State.Health.Status}}' brik-gitlab 2>/dev/null || echo "unknown")
         if [[ "$health" == "healthy" ]]; then
             break
@@ -144,14 +127,13 @@ RUBY
 cmd_stop() {
     load_env
     log_info "Stopping all containers..."
-    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LEVEL2" down 2>/dev/null || true
     docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
     log_ok "Containers stopped"
 }
 
 cmd_restart() {
     cmd_stop
-    cmd_start "${1:-}"
+    cmd_start
 }
 
 cmd_status() {
@@ -164,15 +146,17 @@ cmd_status() {
     local registry_port="${REGISTRY_PORT:-5000}"
     local gitea_port="${GITEA_HTTP_PORT:-3000}"
     local jenkins_port="${JENKINS_HTTP_PORT:-9090}"
+    local nexus_port="${NEXUS_HTTP_PORT:-8081}"
     local gitlab_host="${GITLAB_HOSTNAME:-gitlab.briklab.test}"
     local registry_host="${REGISTRY_HOSTNAME:-registry.briklab.test}"
     local gitea_host="${GITEA_HOSTNAME:-gitea.briklab.test}"
     local jenkins_host="${JENKINS_HOSTNAME:-jenkins.briklab.test}"
+    local nexus_host="${NEXUS_HOSTNAME:-nexus.briklab.test}"
 
     # Check each container
-    for container in brik-gitlab brik-runner brik-registry brik-gitea brik-jenkins; do
+    local health=""
+    for container in brik-gitlab brik-runner brik-registry brik-gitea brik-jenkins brik-nexus; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-            local health
             health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null | tr -d '[:space:]')
             health="${health:-none}"
             case "$health" in
@@ -192,6 +176,7 @@ cmd_status() {
     echo "  Registry : http://${registry_host}:${registry_port}/v2/_catalog"
     echo "  Gitea    : http://${gitea_host}:${gitea_port}"
     echo "  Jenkins  : http://${jenkins_host}:${jenkins_port}"
+    echo "  Nexus    : http://${nexus_host}:${nexus_port}"
     echo ""
 }
 
@@ -199,7 +184,7 @@ cmd_logs() {
     local service="${1:-}"
     if [[ -z "$service" ]]; then
         log_error "Usage: briklab.sh logs <service>"
-        log_info "Services: gitlab, gitlab-runner, registry, gitea, jenkins"
+        log_info "Services: gitlab, gitlab-runner, registry, gitea, jenkins, nexus"
         exit 1
     fi
 
@@ -235,16 +220,22 @@ cmd_setup() {
         log_warn "Runner is not running - skipping"
     fi
 
-    # Gitea setup (if level 2)
+    # Gitea setup
     if docker ps --format '{{.Names}}' | grep -q "^brik-gitea$"; then
         log_info "Configuring Gitea..."
         bash "${LIB_SETUP}/gitea.sh"
     fi
 
-    # Jenkins setup (if level 2)
+    # Jenkins setup
     if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$"; then
         log_info "Configuring Jenkins..."
         bash "${LIB_SETUP}/jenkins.sh"
+    fi
+
+    # Nexus setup
+    if docker ps --format '{{.Names}}' | grep -q "^brik-nexus$"; then
+        log_info "Configuring Nexus..."
+        bash "${LIB_SETUP}/nexus.sh"
     fi
 
     echo ""
@@ -277,7 +268,7 @@ cmd_k3d_stop() {
 
 cmd_clean() {
     echo -e "${RED}WARNING: This action deletes ALL persistent data.${NC}"
-    echo -e "${RED}GitLab, Registry, Gitea, Jenkins volumes will be lost.${NC}"
+    echo -e "${RED}GitLab, Registry, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
     echo ""
     read -rp "Confirm deletion (type 'yes'): " confirm
     if [[ "$confirm" != "yes" ]]; then
@@ -306,11 +297,13 @@ cmd_test() {
     local mode=""
     local project=""
     local jenkins_job=""
+    local complete=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --all)    mode="all"; shift ;;
-            --list)   mode="list"; shift ;;
+            --all)      mode="all"; shift ;;
+            --list)     mode="list"; shift ;;
+            --complete) complete="true"; shift ;;
             --jenkins)
                 mode="jenkins"
                 if [[ $# -ge 2 && "${2}" != --* ]]; then
@@ -354,15 +347,20 @@ cmd_test() {
             E2E_JENKINS_JOB="$jenkins_job" bash "${LIB_E2E}/e2e-jenkins-test.sh"
             ;;
         *)
-            # Default: run node-minimal scenario via the suite orchestrator
-            bash "${LIB_E2E}/e2e-run-suite.sh" --only node-minimal
+            if [[ "$complete" == "true" ]]; then
+                # Run only the *-complete scenarios
+                for proj in node-complete python-complete java-complete rust-complete dotnet-complete; do
+                    bash "${LIB_E2E}/e2e-run-suite.sh" --only "$proj"
+                done
+            else
+                # Default: run node-minimal scenario via the suite orchestrator
+                bash "${LIB_E2E}/e2e-run-suite.sh" --only node-minimal
+            fi
             ;;
     esac
 }
 
 cmd_init() {
-    local mode="${1:-}"
-
     echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
     echo -e "${BLUE}║       Briklab - Initialization       ║${NC}"
     echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
@@ -385,10 +383,10 @@ cmd_init() {
 
     # 3. Start containers
     log_info "Step 3/5 - Starting containers"
-    cmd_start "$mode"
+    cmd_start
 
-    # 4. Configuration (PAT, project, runner)
-    log_info "Step 4/5 - Configuring GitLab + Runner"
+    # 4. Configuration
+    log_info "Step 4/5 - Configuring services"
     cmd_setup
 
     # 5. Smoke tests
@@ -413,43 +411,40 @@ Usage: ./scripts/briklab.sh <command> [options]
 
 Getting started:
   First time? Run 'init'. It does everything automatically:
-  starts containers, configures GitLab + Runner, and runs smoke tests.
+  starts all containers, configures services, and runs smoke tests.
 
   Already initialized? Use 'start' to restart the containers.
 
 Lifecycle:
-  init [--full]      First launch (runs: start + setup + smoke-test)
-  start [--full]     Start containers (+ set root password)
+  init               First launch (start + setup + smoke-test)
+  start              Start all containers (+ set root password)
   stop               Stop all containers
-  restart [--full]   Stop + start
+  restart            Stop + start
   clean              Delete all data and volumes (irreversible)
 
 Configuration:
-  setup              Re-run GitLab/Runner/Jenkins configuration
+  setup              Re-run GitLab/Runner/Gitea/Jenkins/Nexus configuration
                      (only needed if setup failed during init)
   smoke-test         Verify that each component is reachable
 
 Testing:
   test               Push Brik repos to GitLab and run E2E pipeline (node-minimal)
   test --all         Run full E2E test suite (all scenarios)
+  test --complete    Run only *-complete scenarios (with Nexus artifact verification)
   test --project X   Run a single E2E scenario by name
   test --jenkins [X] Push repos to Gitea and run Jenkins pipeline (default: node-minimal)
   test --list        List available E2E scenarios
 
 Monitoring:
   status             Show container health and access URLs
-  logs <service>     Tail logs (gitlab, runner, registry, gitea, jenkins)
+  logs <service>     Tail logs (gitlab, runner, registry, gitea, jenkins, nexus)
 
 Kubernetes (optional):
   k3d-start          Create k3d cluster + install ArgoCD
   k3d-stop           Destroy the k3d cluster
 
-Options:
-  --full             Also start Level 2 services (Gitea + Jenkins)
-  help               Show this help
-
 Typical workflow:
-  ./scripts/briklab.sh init            # First time setup (5 min)
+  ./scripts/briklab.sh init            # First time setup (~5 min)
   ./scripts/briklab.sh test            # Run E2E pipeline test
   ./scripts/briklab.sh stop            # Done for the day
   ./scripts/briklab.sh start           # Next day, just start
@@ -459,10 +454,10 @@ EOF
 # === DISPATCH ===
 
 case "${1:-help}" in
-    init)        cmd_init "${2:-}" ;;
-    start)       cmd_start "${2:-}" ;;
+    init)        cmd_init ;;
+    start)       cmd_start ;;
     stop)        cmd_stop ;;
-    restart)     cmd_restart "${2:-}" ;;
+    restart)     cmd_restart ;;
     status)      cmd_status ;;
     logs)        cmd_logs "${2:-}" ;;
     setup)       cmd_setup ;;

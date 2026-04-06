@@ -12,20 +12,22 @@ Brik pipelines run on real CI/CD platforms (GitLab, Jenkins, GitHub Actions). Un
 
 Briklab provides that infrastructure as a local Docker environment, reproducible in one command. No cloud accounts, no shared servers, no flaky network dependencies.
 
-Two infrastructure levels are available:
+All services run together via a single `docker-compose.yml`:
 
-| Level | Components | Estimated RAM |
-|-------|------------|---------------|
-| **MVP** | GitLab CE + Runner + Registry | ~4 GB |
-| **Full** | + Gitea + Jenkins + k3d/ArgoCD | ~8 GB |
+| Component | Estimated RAM |
+|-----------|---------------|
+| GitLab CE + Runner + Registry | ~4 GB |
+| Gitea + Jenkins | ~2 GB |
+| Nexus 3 CE | ~1 GB |
+| **Total (recommended)** | **~8 GB** |
 
 ---
 
 ## Design Principles
 
-### 1. Two infrastructure levels
+### 1. Single compose, all services
 
-The MVP level covers daily development: push code, run a pipeline, validate results. The Full level adds Jenkins (for M4) and Gitea/k3d (for M5+). Docker Compose layering (`-f docker-compose.yml -f docker-compose.level2.yml`) keeps the base config clean.
+All services are defined in a single `docker-compose.yml`. This simplifies the CLI (no flags needed), ensures all services share the same network, and makes `docker compose up/down` straightforward.
 
 ### 2. Static IP networking
 
@@ -45,34 +47,33 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 
 ```
  brik-net (172.20.0.0/16)
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│  ┌──────────────────┐   ┌──────────────────┐   ┌────────────┐   │
-│  │   GitLab CE      │   │  GitLab Runner   │   │  Registry  │   │
-│  │   172.20.0.10    │   │  172.20.0.11     │   │ 172.20.0.12│   │
-│  │   :8929, :2222   │   │  (no port)       │   │   :5050    │   │
-│  └──────────────────┘   └──────────────────┘   └────────────┘   │
-│         MVP                    MVP                  MVP         │
-│                                                                 │
-│  ┌──────────────────┐   ┌──────────────────┐                    │
-│  │   Gitea          │   │  Jenkins         │                    │
-│  │   172.20.0.20    │   │  172.20.0.21     │                    │
-│  │   :3000, :222    │   │  :9090, :50000   │                    │
-│  └──────────────────┘   └──────────────────┘                    │
-│         Full                   Full                             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                                                                  |
+|  +------------------+   +------------------+   +--------------+  |
+|  |   GitLab CE      |   |  GitLab Runner   |   |  Registry    |  |
+|  |   172.20.0.10    |   |  172.20.0.11     |   | 172.20.0.12  |  |
+|  |   :8929, :2222   |   |  (no port)       |   |   :5050      |  |
+|  +------------------+   +------------------+   +--------------+  |
+|                                                                  |
+|  +------------------+   +------------------+   +--------------+  |
+|  |   Gitea          |   |  Jenkins         |   |  Nexus 3 CE  |  |
+|  |   172.20.0.20    |   |  172.20.0.21     |   | 172.20.0.30  |  |
+|  |   :3000, :222    |   |  :9090, :50000   |   | :8081, :8082 |  |
+|  +------------------+   +------------------+   +--------------+  |
+|                                                                  |
++-----------------------------------------------------------------+
 ```
 
-| Service | Image | IP | Level | Ports |
-|---------|-------|----|-------|-------|
-| GitLab CE | `gitlab/gitlab-ce` | 172.20.0.10 | MVP | 8929, 2222 |
-| GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | MVP | - |
-| Docker Registry | `registry:3.0` | 172.20.0.12 | MVP | 5050 |
-| Gitea | `gitea/gitea` | 172.20.0.20 | Full | 3000, 222 |
-| Jenkins | `jenkins/jenkins` | 172.20.0.21 | Full | 9090, 50000 |
+| Service | Image | IP | Ports |
+|---------|-------|----|-------|
+| GitLab CE | `gitlab/gitlab-ce` | 172.20.0.10 | 8929, 2222 |
+| GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | - |
+| Docker Registry | `registry:3.0` | 172.20.0.12 | 5050 |
+| Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 |
+| Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 |
+| Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 |
 
-The Runner uses `extra_hosts` to map `gitlab.briklab.test` to 172.20.0.10. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve the GitLab hostname to clone repositories over HTTP.
+The Runner uses `extra_hosts` to map `gitlab.briklab.test` and `nexus.briklab.test` to their static IPs. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve hostnames to clone repositories and push artifacts.
 
 ---
 
@@ -80,13 +81,16 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.test` to 172.20.0.10. This 
 
 ```
 0. init
- ├── 1. check_prereqs         (docker, jq)
- ├── 2. prepare .env          (copy .env.example if missing)
- ├── 3. docker compose up -d  (wait for GitLab healthcheck)
- ├── 4. setup
- │    ├── 4.1. gitlab.sh      (GitLab configuration)
- │    └── 4.2. runner.sh      (Runner registration)
- └── 5. smoke-test.sh         (component verification)
+ |-- 1. check_prereqs         (docker, jq)
+ |-- 2. prepare .env          (copy .env.example if missing)
+ |-- 3. docker compose up -d  (wait for healthchecks)
+ |-- 4. setup
+ |    |-- 4.1. gitlab.sh      (GitLab configuration)
+ |    |-- 4.2. runner.sh      (Runner registration)
+ |    |-- 4.3. gitea.sh       (Gitea configuration)
+ |    |-- 4.4. jenkins.sh     (Jenkins plugins + CasC)
+ |    +-- 4.5. nexus.sh       (Nexus admin + repositories)
+ +-- 5. smoke-test.sh         (component verification)
 ```
 
 ### gitlab.sh - GitLab configuration
@@ -107,7 +111,7 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.test` to 172.20.0.10. This 
    - Executor: `docker`
    - Default image: `alpine:3.21`
    - Network: `brik-net`
-   - Extra hosts: `gitlab.briklab.test:172.20.0.10`
+   - Extra hosts: `gitlab.briklab.test:172.20.0.10`, `nexus.briklab.test:172.20.0.30`
    - Tags: `docker`, `brik`
 
 2. **Concurrent jobs** -- `gitlab-runner register` always defaults to `concurrent = 1`. The script patches `config.toml` via `sed` to set `concurrent` to the value of `GITLAB_RUNNER_CONCURRENT` (default: 4). This allows multiple jobs to run in parallel within a pipeline and across pipelines.
@@ -120,11 +124,19 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.test` to 172.20.0.10. This 
 
 6. **Verification** -- confirms the `helper_image`, `concurrent`, `request_concurrency`, and `memory` entries exist in `config.toml`.
 
-### jenkins.sh - Jenkins configuration (Level 2)
+### jenkins.sh - Jenkins configuration
 
-Called only with `--full`. Installs plugins from `config/jenkins/plugins.txt` via `jenkins-plugin-cli` and applies Configuration-as-Code from `config/jenkins/casc.yaml`.
+Installs plugins from `config/jenkins/plugins.txt` via `jenkins-plugin-cli` and applies Configuration-as-Code from `config/jenkins/casc.yaml`.
 
-### k3d.sh - Kubernetes setup (Level 2)
+### nexus.sh - Nexus configuration
+
+1. **Wait for Nexus** -- polls `/service/rest/v1/status` until HTTP 200.
+2. **Admin password** -- reads the initial password from the container, changes it via REST API.
+3. **Docker Bearer Token Realm** -- enables the realm needed for `docker login`.
+4. **Anonymous access** -- enables anonymous reads (needed for `npm install`, `docker pull`).
+5. **Repositories** -- creates 6 hosted repositories: `brik-npm`, `brik-maven`, `brik-pypi`, `brik-nuget`, `brik-docker` (HTTP connector on port 8082), `brik-raw`.
+
+### k3d.sh - Kubernetes setup
 
 Creates a k3d cluster, installs ArgoCD via Helm, and sets up port-forwarding for the ArgoCD UI.
 
@@ -147,6 +159,8 @@ The `smoke-test.sh` script verifies each component after setup. Each check outpu
 | Gitea HTTP | `curl /` | HTTP 200 |
 | Gitea API | `curl /api/v1/version` | HTTP 200 |
 | Jenkins HTTP | `curl /login` | HTTP 200 |
+| Nexus HTTP | `curl /service/rest/v1/status` | HTTP 200 |
+| Nexus repositories | `curl /service/rest/v1/repositories` | HTTP 200 |
 | k3d cluster | `kubectl cluster-info` | Reachable |
 | ArgoCD server | `kubectl get deployment` | Ready |
 
@@ -158,54 +172,55 @@ A summary line shows total / PASS / FAIL / SKIP counts. Exit code is non-zero if
 
 ```
 briklab/
-├── docker-compose.yml            # MVP (GitLab + Runner + Registry)
-├── docker-compose.level2.yml     # Extension (Gitea + Jenkins)
-├── .env.example                  # Variables template
-├── scripts/
-│   ├── briklab.sh                # Main CLI
-│   └── lib/
-│       ├── setup/                # Setup scripts
-│       │   ├── gitlab.sh         # PAT + project + runner token
-│       │   ├── runner.sh         # Runner registration + helper_image
-│       │   ├── jenkins.sh        # Jenkins plugins + CasC
-│       │   ├── k3d.sh            # k3d cluster + ArgoCD
-│       │   └── smoke-test.sh     # Component verification
-│       └── e2e/                  # E2E test scripts
-│           ├── push-test-project.sh   # Push repos to briklab GitLab
-│           ├── e2e-pipeline-test.sh   # Trigger + validate one pipeline
-│           └── e2e-run-suite.sh       # Orchestrate all scenarios
-├── test-projects/                # E2E fixtures (13 scenarios)
-│   ├── node-minimal/             # Node.js minimal (init, build, test)
-│   ├── node-full/                # Node.js full (release, quality, package)
-│   ├── node-security/            # Node.js security stage (npm audit)
-│   ├── node-deploy/              # Node.js deploy stage
-│   ├── python-minimal/           # Python minimal (pytest)
-│   ├── python-full/              # Python full (ruff, pip-audit, Docker)
-│   ├── java-minimal/             # Java minimal (JUnit 5) - maven CI image
-│   ├── java-full/                # Java full (checkstyle, Docker) - maven CI image
-│   ├── rust-minimal/             # Rust minimal (cargo test) - rust CI image
-│   ├── dotnet-minimal/           # .NET minimal (xUnit) - dotnet SDK CI image
-│   ├── node-error-build/         # Error: intentionally broken build
-│   ├── node-error-test/          # Error: intentionally failing tests
-│   └── invalid-config/           # Error: invalid brik.yml (version: 99)
-├── config/
-│   ├── registry/config.yml       # Registry HTTP config
-│   └── jenkins/
-│       ├── plugins.txt           # Required plugins
-│       └── casc.yaml             # Jenkins Configuration-as-Code
-├── docs/
-│   ├── architecture.md           # This file
-│   └── briklab.jpg               # Logo
-├── assets/
-│   └── briklab.jpg               # Logo (legacy location)
-└── data/                         # Persistent volumes (gitignored)
+|-- docker-compose.yml            # All services (GitLab + Runner + Registry + Gitea + Jenkins + Nexus)
+|-- .env.example                  # Variables template
+|-- scripts/
+|   |-- briklab.sh                # Main CLI
+|   +-- lib/
+|       |-- setup/                # Setup scripts
+|       |   |-- gitlab.sh         # PAT + project + runner token
+|       |   |-- runner.sh         # Runner registration + helper_image
+|       |   |-- gitea.sh          # Gitea initial install + API token
+|       |   |-- jenkins.sh        # Jenkins plugins + CasC
+|       |   |-- nexus.sh          # Nexus admin + repositories
+|       |   |-- k3d.sh            # k3d cluster + ArgoCD
+|       |   +-- smoke-test.sh     # Component verification
+|       +-- e2e/                  # E2E test scripts
+|           |-- push-test-project.sh       # Push repos to briklab GitLab
+|           |-- push-test-project-gitea.sh # Push repos to briklab Gitea
+|           |-- e2e-pipeline-test.sh       # Trigger + validate one pipeline
+|           |-- e2e-jenkins-test.sh        # Trigger + validate Jenkins pipeline
+|           +-- e2e-run-suite.sh           # Orchestrate all scenarios
+|-- test-projects/                # E2E fixtures (13 scenarios)
+|   |-- node-minimal/             # Node.js minimal (init, build, test)
+|   |-- node-full/                # Node.js full (release, quality, package)
+|   |-- node-security/            # Node.js security stage (npm audit)
+|   |-- node-deploy/              # Node.js deploy stage
+|   |-- python-minimal/           # Python minimal (pytest)
+|   |-- python-full/              # Python full (ruff, pip-audit, Docker)
+|   |-- java-minimal/             # Java minimal (JUnit 5) - maven CI image
+|   |-- java-full/                # Java full (checkstyle, Docker) - maven CI image
+|   |-- rust-minimal/             # Rust minimal (cargo test) - rust CI image
+|   |-- dotnet-minimal/           # .NET minimal (xUnit) - dotnet SDK CI image
+|   |-- node-error-build/         # Error: intentionally broken build
+|   |-- node-error-test/          # Error: intentionally failing tests
+|   +-- invalid-config/           # Error: invalid brik.yml (version: 99)
+|-- config/
+|   |-- registry/config.yml       # Registry HTTP config
+|   +-- jenkins/
+|       |-- plugins.txt           # Required plugins
+|       +-- casc.yaml             # Jenkins Configuration-as-Code
+|-- docs/
+|   |-- architecture.md           # This file
+|   +-- briklab.jpg               # Logo
++-- data/                         # Persistent volumes (gitignored)
 ```
 
 ---
 
 ## Configuration Reference (.env)
 
-### GitLab (MVP)
+### GitLab
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -219,13 +234,13 @@ briklab/
 | `GITLAB_PAT` | *(auto-generated)* | Personal Access Token |
 | `GITLAB_RUNNER_TOKEN` | *(auto-generated)* | Runner registration token |
 
-### Docker Registry (MVP)
+### Docker Registry
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REGISTRY_PORT` | `5050` | Registry port (5050 to avoid macOS AirPlay conflict) |
 
-### Gitea (Level 2)
+### Gitea
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -233,7 +248,7 @@ briklab/
 | `GITEA_SSH_PORT` | `222` | SSH port |
 | `GITEA_HOSTNAME` | `gitea.briklab.test` | Hostname |
 
-### Jenkins (Level 2)
+### Jenkins
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -242,7 +257,16 @@ briklab/
 | `JENKINS_HOSTNAME` | `jenkins.briklab.test` | Hostname |
 | `JENKINS_ADMIN_PASSWORD` | `Brik-Jenkins-2026!` | Admin password |
 
-### k3d / ArgoCD (Level 2)
+### Nexus
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXUS_HOSTNAME` | `nexus.briklab.test` | Hostname |
+| `NEXUS_HTTP_PORT` | `8081` | UI/API port |
+| `NEXUS_DOCKER_PORT` | `8082` | Docker hosted registry port (HTTP) |
+| `NEXUS_ADMIN_PASSWORD` | `Brik-Nexus-2026` | Admin password |
+
+### k3d / ArgoCD
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -271,6 +295,7 @@ briklab/
 | Runner `image_pull_failure` | Bleeding edge helper tag not published | Explicit `helper_image` in config.toml |
 | Root password rejected | GitLab 18.x requires strong password | Default `Briklab-2026!` meets requirements |
 | Forced password change at login | `password_automatically_set = true` | Rails runner sets `password_automatically_set = false` |
+| Nexus healthcheck fails on Alpine | `curl` not available in Nexus Alpine image | Healthcheck uses `wget` instead |
 
 ---
 
@@ -317,9 +342,9 @@ To add a new E2E test scenario:
 
 To add a new CI platform or tool to Briklab:
 
-1. **Add the service** to `docker-compose.level2.yml` (or create a new compose layer).
+1. **Add the service** to `docker-compose.yml`.
 
-2. **Allocate a static IP** following the pattern: MVP services use 172.20.0.1x, Level 2 services use 172.20.0.2x.
+2. **Allocate a static IP** following the pattern: 172.20.0.1x (core), 172.20.0.2x (secondary), 172.20.0.3x (tertiary).
 
 3. **Create a setup script** in `scripts/lib/setup/` that handles initial configuration (wait for readiness, create credentials, etc.).
 
@@ -346,3 +371,7 @@ Brik targets the latest GitLab CI features. Using a bleeding edge runner ensures
 ### Why Rails runner for setup (not the API)
 
 GitLab's API requires a valid authentication token, but tokens don't exist on a fresh install. The Rails runner provides direct access to the application layer, bypassing the API authentication requirement. This solves the bootstrapping chicken-and-egg problem.
+
+### Why Nexus CE (not Artifactory, not custom registries)
+
+Nexus 3 CE is free, supports multiple repository formats (npm, Maven, PyPI, NuGet, Docker, raw) in a single instance, and has a well-documented REST API for automated setup. This avoids running separate registries per format.

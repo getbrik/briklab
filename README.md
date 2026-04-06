@@ -11,6 +11,7 @@ Brik needs real CI/CD platforms to validate its shared libraries and runtime. Br
 - One command to set up everything (`init`)
 - GitLab CE + Runner + Registry for GitLab CI pipelines
 - Gitea + Jenkins for Jenkins pipelines
+- Nexus 3 CE for artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - E2E pipeline testing with automated scenario validation on both platforms
 - Managed by a Bash CLI (`scripts/briklab.sh`)
 
@@ -20,7 +21,7 @@ For internal architecture details, see [docs/architecture.md](docs/architecture.
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (4 GB RAM minimum, 8 GB for full setup)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (8 GB RAM recommended)
 - `jq` (`brew install jq`)
 
 ### Network configuration
@@ -30,27 +31,27 @@ Add to `/etc/hosts`:
 ```
 127.0.0.1  gitlab.briklab.test registry.briklab.test
 127.0.0.1  gitea.briklab.test jenkins.briklab.test argocd.briklab.test
+127.0.0.1  nexus.briklab.test
 ```
 
 Add to Docker Desktop (Settings > Docker Engine):
 
 ```json
 {
-  "insecure-registries": ["registry.briklab.test:5050"]
+  "insecure-registries": [
+    "registry.briklab.test:5050",
+    "nexus.briklab.test:8082"
+  ]
 }
 ```
 
 ### Initialize
 
 ```bash
-# GitLab only (MVP)
 ./scripts/briklab.sh init
-
-# GitLab + Gitea + Jenkins (full)
-./scripts/briklab.sh init --full
 ```
 
-> GitLab takes 3-5 minutes on first start. Jenkins builds a custom Docker image on first start. The script waits automatically.
+> GitLab takes 3-5 minutes on first start. Jenkins builds a custom Docker image on first start. Nexus takes 2-3 minutes. The script waits automatically.
 
 ## Services
 
@@ -61,6 +62,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 | Docker Registry | 5050 | - |
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
 | Jenkins | 9090 (HTTP), 50000 (agent) | `admin` / `Brik-Jenkins-2026` |
+| Nexus 3 CE | 8081 (UI/API), 8082 (Docker) | `admin` / `Brik-Nexus-2026` |
 | k3d (k3s) | 6443, 8080 | - |
 | ArgoCD | 9080 | - |
 
@@ -77,6 +79,23 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 | Docker Registry | http://registry.briklab.test:5050/v2/_catalog |
 | Gitea UI | http://gitea.briklab.test:3000 |
 | Jenkins UI | http://jenkins.briklab.test:9090 |
+| Nexus UI | http://nexus.briklab.test:8081 |
+| Nexus Docker | http://nexus.briklab.test:8082 |
+
+### Nexus Repositories
+
+Setup creates 6 hosted repositories for artifact publishing:
+
+| Repository | Format | Endpoint | Usage |
+|-----------|--------|----------|-------|
+| `brik-npm` | npm | `:8081/repository/brik-npm/` | `npm publish` |
+| `brik-maven` | maven2 (release) | `:8081/repository/brik-maven/` | `mvn deploy` |
+| `brik-pypi` | pypi | `:8081/repository/brik-pypi/` | `twine upload` / `uv publish` |
+| `brik-nuget` | nuget (V3) | `:8081/repository/brik-nuget/` | `dotnet nuget push` |
+| `brik-docker` | docker | `:8082/v2/` | `docker push` |
+| `brik-raw` | raw | `:8081/repository/brik-raw/` | Generic artifacts (Cargo workaround) |
+
+> **Note:** Nexus CE does not support the Cargo registry protocol natively. Rust crate publishing uses `cargo publish --dry-run` for validation, with Docker as the actual publish target.
 
 ## CLI Commands
 
@@ -84,17 +103,17 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh init [--full]` | First launch (start + setup + smoke-test) |
-| `briklab.sh start [--full]` | Start containers |
+| `briklab.sh init` | First launch (start + setup + smoke-test) |
+| `briklab.sh start` | Start all containers (+ set root password) |
 | `briklab.sh stop` | Stop all containers |
-| `briklab.sh restart [--full]` | Stop + start |
+| `briklab.sh restart` | Stop + start |
 | `briklab.sh clean` | Delete all data and volumes (irreversible) |
 
 ### Configuration
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh setup` | Re-run GitLab/Runner/Gitea/Jenkins configuration |
+| `briklab.sh setup` | Re-run GitLab/Runner/Gitea/Jenkins/Nexus configuration |
 | `briklab.sh smoke-test` | Verify that each component is reachable |
 
 ### Testing
@@ -103,6 +122,7 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 |---------|-------------|
 | `briklab.sh test` | Run E2E pipeline for `node-minimal` on GitLab |
 | `briklab.sh test --all` | Run the full E2E test suite (GitLab) |
+| `briklab.sh test --complete` | Run only `*-complete` scenarios (with Nexus artifact verification) |
 | `briklab.sh test --project <name>` | Run a single E2E scenario (GitLab) |
 | `briklab.sh test --list` | List available E2E scenarios |
 | `briklab.sh test --jenkins [job]` | Run Jenkins E2E pipeline (default: `node-minimal`) |
@@ -112,7 +132,7 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 | Command | Description |
 |---------|-------------|
 | `briklab.sh status` | Show container health and access URLs |
-| `briklab.sh logs <service>` | Tail logs (gitlab, runner, registry, gitea, jenkins) |
+| `briklab.sh logs <service>` | Tail logs (gitlab, runner, registry, gitea, jenkins, nexus) |
 
 ### Kubernetes
 
@@ -124,14 +144,14 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 ## Typical Workflow
 
 ```bash
-# Day 1 - Full setup (GitLab + Gitea + Jenkins)
-./scripts/briklab.sh init --full       # First time setup (~5 min)
+# Day 1 - Full setup
+./scripts/briklab.sh init              # First time setup (~5 min)
 ./scripts/briklab.sh test --all        # Run GitLab E2E suite
 ./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
 ./scripts/briklab.sh stop              # Done for the day
 
 # Day N
-./scripts/briklab.sh start --full      # Restart (fast, data preserved)
+./scripts/briklab.sh start            # Restart (fast, data preserved)
 ./scripts/briklab.sh test --all        # Run GitLab E2E suite
 ./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
 ./scripts/briklab.sh stop              # Done
@@ -236,6 +256,12 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 
 **Gitea shows install page** -- On first start, Gitea requires initial installation. The setup script handles this automatically. If it fails, check logs: `./scripts/briklab.sh logs gitea`
 
+**Nexus slow to start** -- First start takes 2-3 minutes (JVM + plugin initialization). The healthcheck has a 180s start_period. Check logs: `./scripts/briklab.sh logs nexus`
+
+**Nexus Docker push fails (HTTP)** -- Add `"nexus.briklab.test:8082"` to `insecure-registries` in Docker Desktop settings. The Nexus Docker registry uses HTTP, not HTTPS.
+
+**Nexus repository creation fails** -- If `setup` is run before Nexus is fully ready, repository creation may fail. Wait for the healthcheck to pass, then re-run: `./scripts/briklab.sh setup`
+
 For the complete list of known issues and solutions, see [docs/architecture.md - Known Gotchas](docs/architecture.md#known-gotchas).
 
 ## Cleanup
@@ -251,6 +277,7 @@ For the complete list of known issues and solutions, see [docs/architecture.md -
 docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding registry:3.0
 docker rmi gitea/gitea:1.25.5-rootless
 docker rmi briklab-jenkins  # custom-built Jenkins image
+docker rmi sonatype/nexus3:3.90.2-alpine
 docker network rm brik-net 2>/dev/null
 ```
 
@@ -258,12 +285,14 @@ docker network rm brik-net 2>/dev/null
 
 - [x] GitLab CE + Runner + Registry
 - [x] Gitea + Jenkins (CasC + Job DSL)
+- [x] Nexus 3 CE -- artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - [x] Automated init with smoke tests
 - [x] E2E pipeline testing -- GitLab (13 scenarios: node, python, java, rust, dotnet)
 - [x] E2E pipeline testing -- Jenkins (node-minimal)
 - [x] Security stage E2E
 - [x] Deploy stage E2E
 - [x] Error scenario E2E (build fail, test fail, invalid config)
+- [ ] Complete E2E scenarios with Nexus artifact verification
 - [ ] k3d + ArgoCD integration
 
 ## Related

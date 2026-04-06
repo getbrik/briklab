@@ -1,5 +1,5 @@
-# Briklab - Level 1 (MVP)
-# GitLab CE + Runner + Docker Registry
+# Briklab - Local CI/CD test infrastructure for Brik
+# GitLab CE + Runner + Registry + Gitea + Jenkins + Nexus
 #
 # Usage:
 #   docker compose up -d
@@ -71,6 +71,7 @@ services:
         ipv4_address: 172.20.0.11
     extra_hosts:
       - "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10"
+      - "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30"
 
   # --- Docker Registry ---
   registry:
@@ -90,3 +91,91 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  # --- Gitea ---
+  gitea:
+    image: gitea/gitea:1.25.5
+    container_name: brik-gitea
+    hostname: ${GITEA_HOSTNAME:-gitea.briklab.test}
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__server__DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.test}
+      - GITEA__server__SSH_DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.test}
+      - GITEA__server__ROOT_URL=http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/
+      - GITEA__server__HTTP_PORT=${GITEA_HTTP_PORT:-3000}
+      - GITEA__server__SSH_PORT=${GITEA_SSH_PORT:-222}
+      - GITEA__server__SSH_LISTEN_PORT=22
+    ports:
+      - "${GITEA_HTTP_PORT:-3000}:${GITEA_HTTP_PORT:-3000}"
+      - "${GITEA_SSH_PORT:-222}:22"
+    volumes:
+      - ./data/gitea:/data
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.20
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_HTTP_PORT:-3000}/api/v1/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # --- Jenkins ---
+  jenkins:
+    build:
+      context: .
+      dockerfile: images/jenkins/Dockerfile
+    container_name: brik-jenkins
+    hostname: ${JENKINS_HOSTNAME:-jenkins.briklab.test}
+    restart: unless-stopped
+    environment:
+      - JENKINS_OPTS=--httpPort=${JENKINS_HTTP_PORT:-9090}
+      - CASC_JENKINS_CONFIG=/var/jenkins_casc/casc.yaml
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-changeme_jenkins_admin}
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx512m
+    ports:
+      - "${JENKINS_HTTP_PORT:-9090}:${JENKINS_HTTP_PORT:-9090}"
+      - "${JENKINS_AGENT_PORT:-50000}:50000"
+    volumes:
+      - ./data/jenkins:/var/jenkins_home
+      - ./config/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
+      # Docker socket for pipeline builds (local lab only -- not for production)
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.21
+    extra_hosts:
+      - "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10"
+      - "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20"
+      - "registry.briklab.test:172.20.0.12"
+      - "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${JENKINS_HTTP_PORT:-9090}/login"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # --- Sonatype Nexus 3 CE ---
+  nexus:
+    image: sonatype/nexus3:3.90.2-alpine
+    container_name: brik-nexus
+    hostname: ${NEXUS_HOSTNAME:-nexus.briklab.test}
+    restart: unless-stopped
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=-Xms512m -Xmx1g -XX:MaxDirectMemorySize=512m
+    ports:
+      - "${NEXUS_HTTP_PORT:-8081}:8081"
+      - "${NEXUS_DOCKER_PORT:-8082}:8082"
+    volumes:
+      - ./data/nexus:/nexus-data
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.30
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8081/service/rest/v1/status || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 180s

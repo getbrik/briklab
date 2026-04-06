@@ -57,6 +57,7 @@ docker exec brik-runner gitlab-runner register \
     --docker-network-mode "brik-net" \
     --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
     --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
+    --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
     --description "brik-docker-runner" \
     --tag-list "docker,brik" \
     --run-untagged=true \
@@ -85,6 +86,14 @@ log_info "Setting job memory limit = ${RUNNER_JOB_MEMORY}..."
 docker exec brik-runner sed -i \
     "/shm_size = 0/a\\    memory = \"${RUNNER_JOB_MEMORY}\"" \
     /etc/gitlab-runner/config.toml
+
+# Allow flexible pull policies for job containers (needed for local/cached images)
+log_info "Setting allowed pull policies..."
+if ! docker exec brik-runner grep -q "allowed_pull_policies" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "/\[runners.docker\]/a\\    allowed_pull_policies = [\"always\", \"if-not-present\"]" \
+        /etc/gitlab-runner/config.toml 2>/dev/null || true
+fi
 
 # Verification
 errors=0
