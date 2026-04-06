@@ -32,5 +32,3 @@ publish:
     registry: nexus.briklab.test:8082
     username_var: NEXUS_DOCKER_USER
     password_var: NEXUS_DOCKER_PASSWORD
-  cargo:
-    token_var: NEXUS_CARGO_TOKEN

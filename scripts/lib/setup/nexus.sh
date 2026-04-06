@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nexus 3 CE configuration via REST API
-# Waits for Nexus, changes admin password, enables Docker realm,
+# Waits for Nexus, changes admin password, enables Docker + npm token realms,
 # and creates 6 hosted repositories for artifact publishing.
 set -euo pipefail
 
@@ -103,24 +103,29 @@ change_admin_password() {
     fi
 }
 
-# Enable Docker Bearer Token Realm
-enable_docker_realm() {
-    log_info "Enabling Docker Bearer Token Realm..."
+# Enable Docker and npm Bearer Token Realms
+enable_token_realms() {
+    log_info "Enabling Docker + npm + NuGet Token Realms..."
 
     # Get current active realms
     local realms
     realms=$(curl -sf -u "admin:${NEXUS_NEW_PASSWORD}" \
         "${NEXUS_URL}/service/rest/v1/security/realms/active" 2>/dev/null || echo "[]")
 
-    # Check if Docker realm already active
-    if echo "$realms" | grep -q "DockerToken"; then
-        log_warn "Docker Bearer Token Realm already active"
+    # Add missing realms (DockerToken, NpmToken, NuGetApiKey)
+    local new_realms="$realms"
+    local added=0
+    for realm in DockerToken NpmToken NuGetApiKey; do
+        if ! echo "$new_realms" | grep -q "$realm"; then
+            new_realms=$(echo "$new_realms" | jq --arg r "$realm" '. + [$r]')
+            added=$((added + 1))
+        fi
+    done
+
+    if [[ $added -eq 0 ]]; then
+        log_warn "Docker + npm Bearer Token Realms already active"
         return 0
     fi
-
-    # Add DockerToken realm to active list
-    local new_realms
-    new_realms=$(echo "$realms" | jq '. + ["DockerToken"]')
 
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
@@ -130,9 +135,9 @@ enable_docker_realm() {
         "${NEXUS_URL}/service/rest/v1/security/realms/active")
 
     if [[ "$http_code" == "204" ]]; then
-        log_ok "Docker Bearer Token Realm enabled"
+        log_ok "Docker + npm Bearer Token Realms enabled"
     else
-        log_error "Failed to enable Docker realm (HTTP ${http_code})"
+        log_error "Failed to enable realms (HTTP ${http_code})"
         return 1
     fi
 }
@@ -263,7 +268,7 @@ create_repositories() {
 # === Main ===
 wait_for_nexus
 change_admin_password
-enable_docker_realm
+enable_token_realms
 enable_anonymous_access
 create_repositories
 

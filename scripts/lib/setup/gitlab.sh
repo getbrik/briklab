@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GitLab CE configuration via API
-# Creates a Personal Access Token, an brik-test project, and retrieves the runner token
+# Creates PAT, brik-test project, brik group with Nexus CI/CD variables, and retrieves runner token
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -96,7 +96,7 @@ if existing
 else
   token = user.personal_access_tokens.create!(
     name: "brik-briklab",
-    scopes: ["api", "read_repository", "write_repository"],
+    scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
     expires_at: 365.days.from_now
   )
   puts token.token
@@ -151,6 +151,110 @@ create_test_project() {
     esac
 }
 
+# Create the 'brik' group for E2E test projects
+create_brik_group() {
+    log_info "Creating 'brik' group..."
+
+    local pat="${GITLAB_PAT:-}"
+    if [[ -z "$pat" ]]; then
+        log_warn "GITLAB_PAT not set - group not created"
+        return 0
+    fi
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "PRIVATE-TOKEN: ${pat}" \
+        "${GITLAB_URL}/api/v4/groups" \
+        -d "name=brik&path=brik&visibility=public")
+
+    case "$http_code" in
+        201) log_ok "Group 'brik' created" ;;
+        400) log_info "Group 'brik' already exists" ;;
+        *)   log_warn "Group creation returned HTTP ${http_code}" ;;
+    esac
+}
+
+# Set a CI/CD variable on the 'brik' group (create or update)
+_set_group_variable() {
+    local group_path="brik"
+    local key="$1"
+    local value="$2"
+    local masked="${3:-true}"
+
+    local pat="${GITLAB_PAT:-}"
+
+    # Try to create first
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "PRIVATE-TOKEN: ${pat}" \
+        "${GITLAB_URL}/api/v4/groups/${group_path}/variables" \
+        --data-urlencode "key=${key}" \
+        --data-urlencode "value=${value}" \
+        -d "protected=false&masked=${masked}")
+
+    case "$http_code" in
+        201) return 0 ;;
+        400|409)
+            # Already exists - update it
+            curl -s -o /dev/null \
+                -X PUT \
+                -H "PRIVATE-TOKEN: ${pat}" \
+                "${GITLAB_URL}/api/v4/groups/${group_path}/variables/${key}" \
+                --data-urlencode "value=${value}" \
+                -d "protected=false&masked=${masked}"
+            return 0
+            ;;
+        *)
+            log_warn "Variable '${key}' creation returned HTTP ${http_code}"
+            return 1
+            ;;
+    esac
+}
+
+# Configure Nexus CI/CD variables on the 'brik' group
+setup_nexus_ci_variables() {
+    log_info "Configuring Nexus CI/CD variables on 'brik' group..."
+
+    local pat="${GITLAB_PAT:-}"
+    if [[ -z "$pat" ]]; then
+        log_warn "GITLAB_PAT not set - Nexus variables not configured"
+        return 0
+    fi
+
+    local nexus_password="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
+    local npm_token
+    npm_token=$(printf 'admin:%s' "$nexus_password" | base64)
+
+    local count=0
+    local total=8
+
+    # Docker registry credentials (all 5 stacks)
+    _set_group_variable "NEXUS_DOCKER_USER" "admin" "false" && count=$((count + 1))
+    _set_group_variable "NEXUS_DOCKER_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
+
+    # npm (node-complete)
+    _set_group_variable "NEXUS_NPM_TOKEN" "$npm_token" "true" && count=$((count + 1))
+
+    # PyPI (python-complete) - format admin:password for basic auth
+    _set_group_variable "NEXUS_PYPI_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
+
+    # Maven (java-complete)
+    _set_group_variable "NEXUS_MAVEN_USER" "admin" "false" && count=$((count + 1))
+    _set_group_variable "NEXUS_MAVEN_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
+
+    # Cargo (rust-complete) - dummy token for dry-run
+    _set_group_variable "NEXUS_CARGO_TOKEN" "dummy-dry-run-token" "false" && count=$((count + 1))
+
+    # NuGet (dotnet-complete) - format admin:password for basic auth
+    _set_group_variable "NEXUS_NUGET_API_KEY" "admin:${nexus_password}" "true" && count=$((count + 1))
+
+    if [[ $count -eq $total ]]; then
+        log_ok "All ${total} Nexus CI/CD variables configured"
+    else
+        log_warn "${count}/${total} Nexus CI/CD variables configured"
+    fi
+}
+
 # Get the runner registration token
 get_runner_token() {
     log_info "Retrieving runner registration token..."
@@ -176,6 +280,8 @@ wait_for_gitlab
 setup_root_password
 create_pat
 create_test_project
+create_brik_group
+setup_nexus_ci_variables
 get_runner_token
 
 log_ok "GitLab configuration complete"
