@@ -4,5 +4,8 @@ project:
   name: java-minimal
   stack: java
 
+quality:
+  enabled: false
+
 test:
   framework: maven

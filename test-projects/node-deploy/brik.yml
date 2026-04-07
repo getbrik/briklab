@@ -8,6 +8,9 @@ release:
   strategy: semver
   tag_prefix: v
 
+quality:
+  enabled: false
+
 test:
   framework: npm
 

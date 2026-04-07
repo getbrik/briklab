@@ -133,6 +133,8 @@ services:
       - JENKINS_OPTS=--httpPort=${JENKINS_HTTP_PORT:-9090}
       - CASC_JENKINS_CONFIG=/var/jenkins_casc/casc.yaml
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-changeme_jenkins_admin}
+      - NEXUS_ADMIN_PASSWORD=${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}
+      - NEXUS_NPM_TOKEN=${NEXUS_NPM_TOKEN:-}
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx512m
     ports:
       - "${JENKINS_HTTP_PORT:-9090}:${JENKINS_HTTP_PORT:-9090}"

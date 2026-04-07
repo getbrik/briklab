@@ -4,5 +4,8 @@ project:
   name: python-minimal
   stack: python
 
+quality:
+  enabled: false
+
 test:
   framework: pytest

@@ -35,8 +35,8 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
-    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||300"
-    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||300"
+    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"

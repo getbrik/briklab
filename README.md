@@ -265,7 +265,7 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 
 **Registry unreachable** -- Verify `"insecure-registries": ["registry.briklab.test:5050"]` in Docker Desktop settings. Test: `curl http://registry.briklab.test:5050/v2/`
 
-**Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `images/jenkins/plugins.txt` includes all required plugins.
+**Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `images/jenkins/plugins.txt` includes all required plugins. To reload CasC without restarting Jenkins, use the `jenkins_reload_casc` helper in `briklab.sh` (only works for CasC YAML changes; env var changes require a full restart).
 
 **Jenkins pipeline can't find Brik library** -- The Brik shared library must be pushed to Gitea before triggering a pipeline. Run `./scripts/briklab.sh setup` to ensure Gitea is configured, then push repos with the E2E test command.
 

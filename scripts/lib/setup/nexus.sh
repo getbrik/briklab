@@ -196,14 +196,14 @@ create_repositories() {
         }
     }'
 
-    # maven2 hosted (release)
+    # maven2 hosted (release) -- ALLOW redeploy for E2E test repeatability
     create_repo "maven" "brik-maven" '{
         "name": "brik-maven",
         "online": true,
         "storage": {
             "blobStoreName": "default",
             "strictContentTypeValidation": true,
-            "writePolicy": "ALLOW_ONCE"
+            "writePolicy": "ALLOW"
         },
         "maven": {
             "versionPolicy": "RELEASE",
@@ -276,6 +276,10 @@ create_repositories
 save_to_env "NEXUS_HOSTNAME" "${NEXUS_HOSTNAME:-nexus.briklab.test}"
 save_to_env "NEXUS_HTTP_PORT" "${NEXUS_HTTP_PORT:-8081}"
 save_to_env "NEXUS_DOCKER_PORT" "${NEXUS_DOCKER_PORT:-8082}"
+
+# Pre-compute npm token for Jenkins CasC (base64-encoded admin:password)
+npm_token=$(printf 'admin:%s' "${NEXUS_NEW_PASSWORD}" | base64)
+save_to_env "NEXUS_NPM_TOKEN" "${npm_token}"
 
 log_ok "Nexus configuration complete"
 echo ""

@@ -54,6 +54,28 @@ load_env() {
     fi
 }
 
+# === HELPERS ===
+
+# Reload Jenkins CasC configuration without a full restart.
+# Use when only CasC YAML changed (e.g. new job definitions).
+# For env var changes (e.g. NEXUS_NPM_TOKEN), a full restart is needed.
+jenkins_reload_casc() {
+    local jenkins_url="http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}"
+    local crumb
+    crumb=$(curl -sf -u "admin:${JENKINS_ADMIN_PASSWORD:-changeme_jenkins}" \
+        "${jenkins_url}/crumbIssuer/api/json" | jq -r '.crumb') || {
+        log_error "Failed to get Jenkins crumb - is Jenkins running?"
+        return 1
+    }
+    curl -sf -X POST -u "admin:${JENKINS_ADMIN_PASSWORD:-changeme_jenkins}" \
+        -H "Jenkins-Crumb: ${crumb}" \
+        "${jenkins_url}/configuration-as-code/reload" || {
+        log_error "Failed to reload Jenkins CasC"
+        return 1
+    }
+    log_ok "Jenkins CasC reloaded"
+}
+
 # === COMMANDS ===
 
 cmd_start() {
@@ -238,6 +260,27 @@ cmd_setup() {
         bash "${LIB_SETUP}/nexus.sh"
     fi
 
+    # After Nexus setup, restart Jenkins to pick up new env vars (.env may have changed)
+    if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$" \
+       && docker ps --format '{{.Names}}' | grep -q "^brik-nexus$"; then
+        log_info "Restarting Jenkins to pick up Nexus credentials..."
+        docker restart brik-jenkins
+        local jenkins_url="http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}"
+        local attempts=0
+        while [[ $attempts -lt 60 ]]; do
+            if curl -sf "${jenkins_url}/login" -o /dev/null 2>/dev/null; then
+                break
+            fi
+            attempts=$((attempts + 1))
+            sleep 2
+        done
+        if [[ $attempts -ge 60 ]]; then
+            log_warn "Jenkins did not become ready after restart"
+        else
+            log_ok "Jenkins restarted and ready"
+        fi
+    fi
+
     echo ""
     log_ok "Configuration complete"
 }
@@ -338,13 +381,17 @@ cmd_test() {
             bash "${LIB_E2E}/e2e-run-suite.sh" --only "$project"
             ;;
         jenkins)
-            log_info "=== Jenkins E2E Test ==="
-            echo ""
-            log_info "Step 1/2 - Pushing repos to Gitea..."
-            E2E_JENKINS_PROJECTS="$jenkins_job" bash "${LIB_E2E}/push-test-project-gitea.sh"
-            echo ""
-            log_info "Step 2/2 - Running Jenkins pipeline test..."
-            E2E_JENKINS_JOB="$jenkins_job" bash "${LIB_E2E}/e2e-jenkins-test.sh"
+            if [[ "$complete" == "true" ]]; then
+                bash "${LIB_E2E}/e2e-jenkins-suite.sh" --complete
+            else
+                log_info "=== Jenkins E2E Test ==="
+                echo ""
+                log_info "Step 1/2 - Pushing repos to Gitea..."
+                E2E_JENKINS_PROJECTS="$jenkins_job" bash "${LIB_E2E}/push-test-project-gitea.sh"
+                echo ""
+                log_info "Step 2/2 - Running Jenkins pipeline test..."
+                E2E_JENKINS_JOB="$jenkins_job" bash "${LIB_E2E}/e2e-jenkins-test.sh"
+            fi
             ;;
         *)
             if [[ "$complete" == "true" ]]; then

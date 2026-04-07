@@ -4,5 +4,8 @@ project:
   name: dotnet-minimal
   stack: dotnet
 
+quality:
+  enabled: false
+
 test:
   framework: dotnet

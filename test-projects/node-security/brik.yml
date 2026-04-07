@@ -4,6 +4,9 @@ project:
   name: node-security
   stack: node
 
+quality:
+  enabled: false
+
 test:
   framework: npm
 

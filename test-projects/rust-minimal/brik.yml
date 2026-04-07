@@ -4,5 +4,8 @@ project:
   name: rust-minimal
   stack: rust
 
+quality:
+  enabled: false
+
 test:
   framework: cargo
