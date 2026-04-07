@@ -14,12 +14,15 @@ Briklab provides that infrastructure as a local Docker environment, reproducible
 
 All services run together via a single `docker-compose.yml`:
 
-| Component | Estimated RAM |
-|-----------|---------------|
-| GitLab CE + Runner + Registry | ~4 GB |
-| Gitea + Jenkins | ~2 GB |
-| Nexus 3 CE | ~1 GB |
-| **Total (recommended)** | **~8 GB** |
+| Component | Memory limit |
+|-----------|-------------|
+| GitLab CE | 8 GB |
+| GitLab Runner | 512 MB |
+| Docker Registry | 512 MB |
+| Gitea | 512 MB |
+| Jenkins | 6 GB |
+| Nexus 3 CE | 2 GB |
+| **Total** | **~18 GB** |
 
 ---
 
@@ -226,7 +229,7 @@ briklab/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GITLAB_ROOT_PASSWORD` | `Briklab-2026!` | Root password (must be strong) |
+| `GITLAB_ROOT_PASSWORD` | `Brik-Gitlab-2026!` | Root password (must be strong) |
 | `GITLAB_HTTP_PORT` | `8929` | HTTP port |
 | `GITLAB_SSH_PORT` | `2222` | SSH port |
 | `GITLAB_HOSTNAME` | `gitlab.briklab.test` | Hostname |
@@ -295,7 +298,7 @@ briklab/
 | `create!` causes shell error | `!` is interpreted by bash/zsh | Rails runner via stdin (`cat <<'RUBY'`) |
 | Port 5000 already in use (macOS) | AirPlay Receiver occupies port 5000 | Registry uses port 5050 |
 | Runner `image_pull_failure` | Bleeding edge helper tag not published | Explicit `helper_image` in config.toml |
-| Root password rejected | GitLab 18.x requires strong password | Default `Briklab-2026!` meets requirements |
+| Root password rejected | GitLab 18.x requires strong password | Default `Brik-Gitlab-2026!` meets requirements |
 | Forced password change at login | `password_automatically_set = true` | Rails runner sets `password_automatically_set = false` |
 | Nexus healthcheck fails on Alpine | `curl` not available in Nexus Alpine image | Healthcheck uses `wget` instead |
 

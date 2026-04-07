@@ -121,7 +121,7 @@ _ensure_gitlab_password() {
         return 0
     fi
 
-    local password="${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}"
+    local password="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
     log_info "Ensuring root password is set..."
 
     local result
@@ -165,7 +165,7 @@ cmd_status() {
     echo ""
 
     local gitlab_port="${GITLAB_HTTP_PORT:-8929}"
-    local registry_port="${REGISTRY_PORT:-5000}"
+    local registry_port="${REGISTRY_PORT:-5050}"
     local gitea_port="${GITEA_HTTP_PORT:-3000}"
     local jenkins_port="${JENKINS_HTTP_PORT:-9090}"
     local nexus_port="${NEXUS_HTTP_PORT:-8081}"

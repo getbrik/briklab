@@ -85,7 +85,7 @@ fi
 echo ""
 echo -e "${BLUE}Docker Registry:${NC}"
 if is_running "brik-registry"; then
-    REGISTRY_PORT="${REGISTRY_PORT:-5000}"
+    REGISTRY_PORT="${REGISTRY_PORT:-5050}"
     REGISTRY_HOST="${REGISTRY_HOSTNAME:-registry.briklab.test}"
     check "Registry v2 API" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/"
     check "Registry catalog" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/_catalog"

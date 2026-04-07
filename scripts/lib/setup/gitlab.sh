@@ -24,7 +24,7 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
 GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}"
+GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
 
 # Save a variable to .env (add or update)
 save_to_env() {
@@ -58,7 +58,7 @@ wait_for_gitlab() {
 
 # Configure root password and disable forced password change on first login
 setup_root_password() {
-    local password="${GITLAB_ROOT_PASSWORD:-changeme_gitlab_root}"
+    local password="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
     log_info "Configuring root password..."
 
     local result

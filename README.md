@@ -21,7 +21,7 @@ For internal architecture details, see [docs/architecture.md](docs/architecture.
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (8 GB RAM recommended)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (18 GB RAM recommended)
 - `jq` (`brew install jq`)
 
 ### Network configuration
@@ -57,7 +57,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 
 | Service | Port(s) | Credentials |
 |---------|---------|-------------|
-| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Briklab-2026!` |
+| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Brik-Gitlab-2026!` |
 | GitLab Runner | - | - |
 | Docker Registry | 5050 | - |
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
@@ -265,7 +265,7 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 
 ## Troubleshooting
 
-**GitLab won't start** -- Check Docker Desktop has at least 4 GB RAM. First start takes 3-5 minutes. Check logs: `./scripts/briklab.sh logs gitlab`
+**GitLab won't start** -- Check Docker Desktop has at least 18 GB RAM allocated. First start takes 3-5 minutes. Check logs: `./scripts/briklab.sh logs gitlab`
 
 **Runner errors (`runner_system_failure` / `image_pull_failure`)** -- Verify `helper_image` is present in the runner's `config.toml`. Check logs: `./scripts/briklab.sh logs runner`. If needed, re-run `./scripts/briklab.sh setup`.
 
