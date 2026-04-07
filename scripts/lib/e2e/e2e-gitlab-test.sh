@@ -15,7 +15,7 @@
 #
 # Prerequisites:
 #   - briklab GitLab must be running
-#   - push-test-project.sh must have been run
+#   - push-test-project-gitlab.sh must have been run
 #   - GITLAB_PAT must be set in .env
 set -euo pipefail
 
@@ -41,6 +41,11 @@ log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
 log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+
+# Ensure PAT is valid (refresh if expired/missing)
+# shellcheck source=ensure-gitlab-pat.sh
+. "${SCRIPT_DIR}/ensure-gitlab-pat.sh"
+ensure_pat "$ENV_FILE"
 
 GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PAT="${GITLAB_PAT:-}"
@@ -149,7 +154,7 @@ log_info "Looking up project ${PROJECT_NAME}..."
 PROJECT_ID=$(api_get "projects/${PROJECT_PATH}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
 
 if [[ -z "$PROJECT_ID" ]]; then
-    log_error "Project ${PROJECT_NAME} not found. Run push-test-project.sh first."
+    log_error "Project ${PROJECT_NAME} not found. Run push-test-project-gitlab.sh first."
     exit 1
 fi
 log_ok "Project ID: ${PROJECT_ID}"

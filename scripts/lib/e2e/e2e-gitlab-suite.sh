@@ -4,9 +4,10 @@
 # Runs multiple E2E pipeline scenarios sequentially and reports results.
 #
 # Usage:
-#   bash e2e-run-suite.sh              # Run all scenarios
-#   bash e2e-run-suite.sh --list       # List available scenarios
-#   bash e2e-run-suite.sh --only NAME  # Run a single scenario by name
+#   bash e2e-gitlab-suite.sh              # Run all scenarios
+#   bash e2e-gitlab-suite.sh --list       # List available scenarios
+#   bash e2e-gitlab-suite.sh --only NAME  # Run a single scenario by name
+#   bash e2e-gitlab-suite.sh --complete   # Run only *-complete scenarios
 #
 # Prerequisites:
 #   - briklab GitLab must be running
@@ -110,13 +111,14 @@ run_scenario() {
     E2E_TIMEOUT="${timeout:-300}" \
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
-        bash "${SCRIPT_DIR}/e2e-pipeline-test.sh"
+        bash "${SCRIPT_DIR}/e2e-gitlab-test.sh"
 }
 
 # ---------------------------------------------------------------------------
 # Parse arguments
 # ---------------------------------------------------------------------------
 ONLY_SCENARIO=""
+FILTER_COMPLETE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -132,9 +134,13 @@ while [[ $# -gt 0 ]]; do
             ONLY_SCENARIO="$2"
             shift 2
             ;;
+        --complete)
+            FILTER_COMPLETE="true"
+            shift
+            ;;
         *)
             log_error "Unknown argument: $1"
-            echo "Usage: $0 [--list] [--only SCENARIO_NAME]"
+            echo "Usage: $0 [--list] [--only SCENARIO_NAME] [--complete]"
             exit 1
             ;;
     esac
@@ -164,6 +170,8 @@ if [[ -n "$ONLY_SCENARIO" ]]; then
         list_scenarios
         exit 1
     fi
+elif [[ "$FILTER_COMPLETE" == "true" ]]; then
+    PROJECTS_TO_PUSH="node-complete,python-complete,java-complete,rust-complete,dotnet-complete"
 else
     # Collect unique project names (deduplicated)
     PROJECTS_TO_PUSH=""
@@ -181,7 +189,7 @@ fi
 log_info "Pushing test projects: ${PROJECTS_TO_PUSH}"
 echo ""
 
-E2E_TEST_PROJECTS="$PROJECTS_TO_PUSH" bash "${SCRIPT_DIR}/push-test-project.sh"
+E2E_TEST_PROJECTS="$PROJECTS_TO_PUSH" bash "${SCRIPT_DIR}/push-test-project-gitlab.sh"
 
 # ---------------------------------------------------------------------------
 # Run scenarios
@@ -196,6 +204,11 @@ for scenario in "${SCENARIOS[@]}"; do
 
     # Skip if --only is set and this isn't the target
     if [[ -n "$ONLY_SCENARIO" && "$name" != "$ONLY_SCENARIO" ]]; then
+        continue
+    fi
+
+    # Skip if --complete and this isn't a *-complete scenario
+    if [[ "$FILTER_COMPLETE" == "true" && "$name" != *-complete ]]; then
         continue
     fi
 

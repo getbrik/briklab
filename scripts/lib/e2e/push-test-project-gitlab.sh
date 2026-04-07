@@ -47,8 +47,13 @@ TAG_NAME="v0.1.0"
 # Test projects to push (comma-separated, default: node-minimal)
 TEST_PROJECTS="${E2E_TEST_PROJECTS:-node-minimal}"
 
+# Ensure PAT is valid (refresh if expired/missing)
+# shellcheck source=ensure-gitlab-pat.sh
+. "${SCRIPT_DIR}/ensure-gitlab-pat.sh"
+ensure_pat "$ENV_FILE"
+
 if [[ -z "$GITLAB_PAT" ]]; then
-    log_error "GITLAB_PAT is not set. Run setup-gitlab.sh first."
+    log_error "GITLAB_PAT is not set. Run briklab.sh setup first."
     exit 1
 fi
 

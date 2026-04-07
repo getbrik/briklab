@@ -3,6 +3,7 @@ version: 1
 project:
   name: node-full
   stack: node
+  stack_version: "22"
 
 release:
   strategy: semver

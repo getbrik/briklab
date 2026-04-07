@@ -3,6 +3,7 @@ version: 1
 project:
   name: dotnet-complete
   stack: dotnet
+  stack_version: "9.0"
 
 release:
   strategy: semver

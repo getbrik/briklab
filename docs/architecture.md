@@ -186,11 +186,13 @@ briklab/
 |       |   |-- k3d.sh            # k3d cluster + ArgoCD
 |       |   +-- smoke-test.sh     # Component verification
 |       +-- e2e/                  # E2E test scripts
-|           |-- push-test-project.sh       # Push repos to briklab GitLab
-|           |-- push-test-project-gitea.sh # Push repos to briklab Gitea
-|           |-- e2e-pipeline-test.sh       # Trigger + validate one pipeline
-|           |-- e2e-jenkins-test.sh        # Trigger + validate Jenkins pipeline
-|           +-- e2e-run-suite.sh           # Orchestrate all scenarios
+|           |-- ensure-gitlab-pat.sh         # Auto-refresh GitLab PAT
+|           |-- push-test-project-gitlab.sh  # Push repos to briklab GitLab
+|           |-- push-test-project-gitea.sh   # Push repos to briklab Gitea
+|           |-- e2e-gitlab-test.sh           # Trigger + validate one GitLab pipeline
+|           |-- e2e-gitlab-suite.sh          # Orchestrate all GitLab scenarios
+|           |-- e2e-jenkins-test.sh          # Trigger + validate Jenkins pipeline
+|           +-- e2e-jenkins-suite.sh         # Orchestrate all Jenkins scenarios
 |-- test-projects/                # E2E fixtures (13 scenarios)
 |   |-- node-minimal/             # Node.js minimal (init, build, test)
 |   |-- node-full/                # Node.js full (release, quality, package)
@@ -307,7 +309,7 @@ To add a new E2E test scenario:
 
 2. **Add a `brik.yml`** declaring the stack, tools, and stages to exercise.
 
-3. **Add a scenario entry** in `scripts/lib/e2e/e2e-run-suite.sh`:
+3. **Add a scenario entry** in `scripts/lib/e2e/e2e-gitlab-suite.sh`:
    ```bash
    SCENARIOS=(
        # ...existing scenarios...

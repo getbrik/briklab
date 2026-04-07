@@ -118,14 +118,20 @@ Setup creates 6 hosted repositories for artifact publishing:
 
 ### Testing
 
+Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
+
 | Command | Description |
 |---------|-------------|
-| `briklab.sh test` | Run E2E pipeline for `node-minimal` on GitLab |
-| `briklab.sh test --all` | Run the full E2E test suite (GitLab) |
-| `briklab.sh test --complete` | Run only `*-complete` scenarios (with Nexus artifact verification) |
-| `briklab.sh test --project <name>` | Run a single E2E scenario (GitLab) |
-| `briklab.sh test --list` | List available E2E scenarios |
-| `briklab.sh test --jenkins [job]` | Run Jenkins E2E pipeline (default: `node-minimal`) |
+| `briklab.sh test --gitlab` | Run `node-minimal` on GitLab |
+| `briklab.sh test --gitlab --all` | Run the full GitLab E2E suite |
+| `briklab.sh test --gitlab --complete` | Run only `*-complete` scenarios (with Nexus publish) |
+| `briklab.sh test --gitlab --project <name>` | Run a single GitLab scenario by name |
+| `briklab.sh test --gitlab --list` | List available GitLab scenarios |
+| `briklab.sh test --jenkins` | Run `node-minimal` on Jenkins |
+| `briklab.sh test --jenkins --all` | Run the full Jenkins E2E suite |
+| `briklab.sh test --jenkins --complete` | Run only Jenkins `*-complete` scenarios |
+| `briklab.sh test --jenkins --project <name>` | Run a single Jenkins scenario by name |
+| `briklab.sh test --jenkins --list` | List available Jenkins scenarios |
 
 ### Monitoring
 
@@ -145,16 +151,16 @@ Setup creates 6 hosted repositories for artifact publishing:
 
 ```bash
 # Day 1 - Full setup
-./scripts/briklab.sh init              # First time setup (~5 min)
-./scripts/briklab.sh test --all        # Run GitLab E2E suite
-./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
-./scripts/briklab.sh stop              # Done for the day
+./scripts/briklab.sh init                    # First time setup (~5 min)
+./scripts/briklab.sh test --gitlab --all     # Run GitLab E2E suite
+./scripts/briklab.sh test --jenkins --all    # Run Jenkins E2E suite
+./scripts/briklab.sh stop                    # Done for the day
 
 # Day N
-./scripts/briklab.sh start            # Restart (fast, data preserved)
-./scripts/briklab.sh test --all        # Run GitLab E2E suite
-./scripts/briklab.sh test --jenkins    # Run Jenkins E2E pipeline
-./scripts/briklab.sh stop              # Done
+./scripts/briklab.sh start                   # Restart (fast, data preserved)
+./scripts/briklab.sh test --gitlab           # Quick GitLab smoke test
+./scripts/briklab.sh test --jenkins          # Quick Jenkins smoke test
+./scripts/briklab.sh stop                    # Done
 ```
 
 ## E2E Testing
@@ -234,26 +240,28 @@ Jenkins is configured via CasC (Configuration as Code) with:
 
 Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platform-specific CI config (`.gitlab-ci.yml` for GitLab, `Jenkinsfile` for Jenkins).
 
-| Project | Stack | CI Image | Purpose |
-|---------|-------|----------|---------|
-| `node-minimal` | Node.js | alpine:3.21 (default) | Basic flow (init, build, test) |
-| `node-full` | Node.js | alpine:3.21 (default) | All stages (release, quality, package) |
-| `node-security` | Node.js | alpine:3.21 (default) | Security stage (npm audit) |
-| `node-deploy` | Node.js | alpine:3.21 (default) | Deploy stage validation |
-| `python-minimal` | Python | alpine:3.21 (default) | Python stack (pytest) |
-| `python-full` | Python | alpine:3.21 (default) | Full Python pipeline (ruff, pip-audit, Docker) |
-| `java-minimal` | Java | maven:3.9-eclipse-temurin-21-alpine | Java stack (JUnit 5) |
-| `java-full` | Java | maven:3.9-eclipse-temurin-21-alpine | Full Java pipeline (checkstyle, Docker) |
-| `rust-minimal` | Rust | rust:1-alpine3.21 | Rust stack (cargo test) |
-| `dotnet-minimal` | .NET | mcr.microsoft.com/dotnet/sdk:9.0-alpine3.21 | .NET stack (xUnit) |
-| `node-complete` | Node.js | alpine:3.21 (default) | Full pipeline + npm/Docker publish to Nexus |
-| `python-complete` | Python | alpine:3.21 (default) | Full pipeline + PyPI/Docker publish to Nexus |
-| `java-complete` | Java | maven:3.9-eclipse-temurin-21-alpine | Full pipeline + Maven/Docker publish to Nexus |
-| `rust-complete` | Rust | rust:1-alpine3.21 | Full pipeline + Cargo dry-run/Docker publish to Nexus |
-| `dotnet-complete` | .NET | mcr.microsoft.com/dotnet/sdk:9.0-alpine3.21 | Full pipeline + NuGet/Docker publish to Nexus |
-| `node-error-build` | Node.js | alpine:3.21 (default) | Intentionally broken build |
-| `node-error-test` | Node.js | alpine:3.21 (default) | Intentionally failing tests |
-| `invalid-config` | Node.js | alpine:3.21 (default) | Invalid brik.yml (version: 99) |
+| Project | Stack | Runner Image | Purpose |
+|---------|-------|--------------|---------|
+| `node-minimal` | Node.js | `brik-runner-node:22` | Basic flow (init, build, test) |
+| `node-full` | Node.js | `brik-runner-node:22` | All stages (release, quality, package) |
+| `node-security` | Node.js | `brik-runner-node:22` | Security stage (npm audit) |
+| `node-deploy` | Node.js | `brik-runner-node:22` | Deploy stage validation |
+| `python-minimal` | Python | `brik-runner-python:3.13` | Python stack (pytest) |
+| `python-full` | Python | `brik-runner-python:3.13` | Full Python pipeline (ruff, pip-audit, Docker) |
+| `java-minimal` | Java | `brik-runner-java:21` | Java stack (JUnit 5) |
+| `java-full` | Java | `brik-runner-java:21` | Full Java pipeline (checkstyle, Docker) |
+| `rust-minimal` | Rust | `brik-runner-rust:1` | Rust stack (cargo test) |
+| `dotnet-minimal` | .NET | `brik-runner-dotnet:9.0` | .NET stack (xUnit) |
+| `node-complete` | Node.js | `brik-runner-node:22` | Full pipeline + npm/Docker publish to Nexus |
+| `python-complete` | Python | `brik-runner-python:3.13` | Full pipeline + PyPI/Docker publish to Nexus |
+| `java-complete` | Java | `brik-runner-java:21` | Full pipeline + Maven/Docker publish to Nexus |
+| `rust-complete` | Rust | `brik-runner-rust:1` | Full pipeline + Cargo dry-run/Docker publish to Nexus |
+| `dotnet-complete` | .NET | `brik-runner-dotnet:9.0` | Full pipeline + NuGet/Docker publish to Nexus |
+| `node-error-build` | Node.js | `brik-runner-node:22` | Intentionally broken build |
+| `node-error-test` | Node.js | `brik-runner-node:22` | Intentionally failing tests |
+| `invalid-config` | Node.js | `brik-runner-base:latest` | Invalid brik.yml (version: 99) |
+
+> Runner images are selected automatically by the init job based on `project.stack` and `project.stack_version` in `brik.yml`. The init job resolves the image and propagates it via dotenv to downstream jobs. Images are published at `ghcr.io/getbrik/brik-runner-<stack>:<version>`.
 
 ## Troubleshooting
 
@@ -302,7 +310,7 @@ docker network rm brik-net 2>/dev/null
 - [x] Gitea + Jenkins (CasC + Job DSL)
 - [x] Nexus 3 CE -- artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - [x] Automated init with smoke tests
-- [x] E2E pipeline testing -- GitLab (13 scenarios: node, python, java, rust, dotnet)
+- [x] E2E pipeline testing -- GitLab (18 scenarios: node, python, java, rust, dotnet)
 - [x] E2E pipeline testing -- Jenkins (node-minimal)
 - [x] Security stage E2E
 - [x] Deploy stage E2E

@@ -83,36 +83,39 @@ RUBY
     fi
 }
 
-# Create a Personal Access Token via rails console (stdin to avoid shell escaping issues)
+# Ensure a valid Personal Access Token exists.
+# If the current PAT (from .env) is valid, keep it.
+# Otherwise, revoke any stale token and create a fresh one.
 create_pat() {
-    log_info "Creating Personal Access Token..."
+    log_info "Checking Personal Access Token..."
 
+    # Fast path: if we already have a PAT in .env, validate it via API
+    if [[ -n "${GITLAB_PAT:-}" ]]; then
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+            "${GITLAB_URL}/api/v4/user" 2>/dev/null || echo "000")
+        if [[ "$http_code" == "200" ]]; then
+            log_ok "Existing PAT is valid"
+            return 0
+        fi
+        log_warn "Existing PAT is invalid (HTTP ${http_code}), regenerating..."
+    fi
+
+    # Revoke any existing token named brik-briklab and create a fresh one
     local pat
     pat=$(cat <<'RUBY' | docker exec -i brik-gitlab gitlab-rails runner - 2>/dev/null | tail -1
 user = User.find_by_username("root")
-existing = user.personal_access_tokens.find_by(name: "brik-briklab")
-if existing
-  puts "EXISTS"
-else
-  token = user.personal_access_tokens.create!(
-    name: "brik-briklab",
-    scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
-    expires_at: 365.days.from_now
-  )
-  puts token.token
-end
+existing = user.personal_access_tokens.active.find_by(name: "brik-briklab")
+existing&.revoke!
+token = user.personal_access_tokens.create!(
+  name: "brik-briklab",
+  scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
+  expires_at: 365.days.from_now
+)
+puts token.token
 RUBY
 )
-
-    if [[ "$pat" == "EXISTS" ]]; then
-        log_warn "Token 'brik-briklab' already exists"
-        if [[ -n "${GITLAB_PAT:-}" ]]; then
-            log_info "Using existing PAT from .env"
-        else
-            log_info "To regenerate: GitLab > User Settings > Access Tokens"
-        fi
-        return 0
-    fi
 
     if [[ -n "$pat" ]]; then
         log_ok "PAT created: ${pat:0:15}..."

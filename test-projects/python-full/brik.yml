@@ -3,6 +3,7 @@ version: 1
 project:
   name: python-full
   stack: python
+  stack_version: "3.13"
 
 release:
   strategy: semver

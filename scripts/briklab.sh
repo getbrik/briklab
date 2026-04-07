@@ -337,31 +337,22 @@ cmd_test() {
     check_prereqs
     load_env
 
-    local mode=""
+    local platform=""          # gitlab or jenkins (required)
+    local action=""            # (empty)=default, all, list, project, complete
     local project=""
-    local jenkins_job=""
-    local complete=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --all)      mode="all"; shift ;;
-            --list)     mode="list"; shift ;;
-            --complete) complete="true"; shift ;;
-            --jenkins)
-                mode="jenkins"
-                if [[ $# -ge 2 && "${2}" != --* ]]; then
-                    jenkins_job="$2"
-                    shift
-                else
-                    jenkins_job="node-minimal"
-                fi
-                shift
-                ;;
+            --gitlab)    platform="gitlab"; shift ;;
+            --jenkins)   platform="jenkins"; shift ;;
+            --all)       action="all"; shift ;;
+            --list)      action="list"; shift ;;
+            --complete)  action="complete"; shift ;;
             --project)
-                mode="project"
+                action="project"
                 project="${2:-}"
                 if [[ -z "$project" ]]; then
-                    log_error "Usage: briklab.sh test --project <name>"
+                    log_error "Usage: briklab.sh test --gitlab|--jenkins --project <name>"
                     exit 1
                 fi
                 shift 2
@@ -370,41 +361,33 @@ cmd_test() {
         esac
     done
 
-    case "$mode" in
-        list)
-            bash "${LIB_E2E}/e2e-run-suite.sh" --list
-            ;;
-        all)
-            bash "${LIB_E2E}/e2e-run-suite.sh"
-            ;;
-        project)
-            bash "${LIB_E2E}/e2e-run-suite.sh" --only "$project"
-            ;;
-        jenkins)
-            if [[ "$complete" == "true" ]]; then
-                bash "${LIB_E2E}/e2e-jenkins-suite.sh" --complete
-            else
-                log_info "=== Jenkins E2E Test ==="
-                echo ""
-                log_info "Step 1/2 - Pushing repos to Gitea..."
-                E2E_JENKINS_PROJECTS="$jenkins_job" bash "${LIB_E2E}/push-test-project-gitea.sh"
-                echo ""
-                log_info "Step 2/2 - Running Jenkins pipeline test..."
-                E2E_JENKINS_JOB="$jenkins_job" bash "${LIB_E2E}/e2e-jenkins-test.sh"
-            fi
-            ;;
-        *)
-            if [[ "$complete" == "true" ]]; then
-                # Run only the *-complete scenarios
-                for proj in node-complete python-complete java-complete rust-complete dotnet-complete; do
-                    bash "${LIB_E2E}/e2e-run-suite.sh" --only "$proj"
-                done
-            else
-                # Default: run node-minimal scenario via the suite orchestrator
-                bash "${LIB_E2E}/e2e-run-suite.sh" --only node-minimal
-            fi
-            ;;
-    esac
+    if [[ -z "$platform" ]]; then
+        log_error "Platform required. Use --gitlab or --jenkins."
+        log_info "Examples:"
+        log_info "  briklab.sh test --gitlab"
+        log_info "  briklab.sh test --jenkins --all"
+        exit 1
+    fi
+
+    if [[ "$platform" == "jenkins" ]]; then
+        local suite="${LIB_E2E}/e2e-jenkins-suite.sh"
+        case "$action" in
+            list)     bash "$suite" --list ;;
+            all)      bash "$suite" ;;
+            complete) bash "$suite" --complete ;;
+            project)  bash "$suite" --only "$project" ;;
+            *)        bash "$suite" --only node-minimal ;;
+        esac
+    else
+        local suite="${LIB_E2E}/e2e-gitlab-suite.sh"
+        case "$action" in
+            list)     bash "$suite" --list ;;
+            all)      bash "$suite" ;;
+            complete) bash "$suite" --complete ;;
+            project)  bash "$suite" --only "$project" ;;
+            *)        bash "$suite" --only node-minimal ;;
+        esac
+    fi
 }
 
 cmd_init() {
@@ -474,13 +457,17 @@ Configuration:
                      (only needed if setup failed during init)
   smoke-test         Verify that each component is reachable
 
-Testing:
-  test               Push Brik repos to GitLab and run E2E pipeline (node-minimal)
-  test --all         Run full E2E test suite (all scenarios)
-  test --complete    Run only *-complete scenarios (with Nexus artifact verification)
-  test --project X   Run a single E2E scenario by name
-  test --jenkins [X] Push repos to Gitea and run Jenkins pipeline (default: node-minimal)
-  test --list        List available E2E scenarios
+Testing (--gitlab or --jenkins required):
+  test --gitlab              Run node-minimal on GitLab
+  test --gitlab --all        Run full GitLab E2E suite
+  test --gitlab --complete   Run only *-complete scenarios
+  test --gitlab --project X  Run a single GitLab scenario
+  test --gitlab --list       List available GitLab scenarios
+  test --jenkins             Run node-minimal on Jenkins
+  test --jenkins --all       Run full Jenkins E2E suite
+  test --jenkins --complete  Run only *-complete scenarios
+  test --jenkins --project X Run a single Jenkins scenario
+  test --jenkins --list      List available Jenkins scenarios
 
 Monitoring:
   status             Show container health and access URLs
@@ -491,10 +478,11 @@ Kubernetes (optional):
   k3d-stop           Destroy the k3d cluster
 
 Typical workflow:
-  ./scripts/briklab.sh init            # First time setup (~5 min)
-  ./scripts/briklab.sh test            # Run E2E pipeline test
-  ./scripts/briklab.sh stop            # Done for the day
-  ./scripts/briklab.sh start           # Next day, just start
+  ./scripts/briklab.sh init                  # First time setup (~5 min)
+  ./scripts/briklab.sh test --gitlab         # Run GitLab E2E test
+  ./scripts/briklab.sh test --jenkins        # Run Jenkins E2E test
+  ./scripts/briklab.sh stop                  # Done for the day
+  ./scripts/briklab.sh start                 # Next day, just start
 EOF
 }
 

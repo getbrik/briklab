@@ -3,6 +3,7 @@ version: 1
 project:
   name: java-complete
   stack: java
+  stack_version: "21"
 
 release:
   strategy: semver

@@ -3,6 +3,7 @@ version: 1
 project:
   name: node-minimal
   stack: node
+  stack_version: "22"
 
 quality:
   enabled: false
