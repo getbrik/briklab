@@ -221,6 +221,10 @@ cmd_logs() {
 
 cmd_setup() {
     check_prereqs
+    if [[ ! -f "$ENV_FILE" ]]; then
+        cp "${BRIKLAB_DIR}/.env.example" "$ENV_FILE"
+        log_ok ".env created from .env.example"
+    fi
     load_env
 
     log_info "Initial briklab configuration..."

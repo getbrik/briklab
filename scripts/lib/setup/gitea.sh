@@ -18,6 +18,11 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
+# Load .env
+if [[ -f "$ENV_FILE" ]]; then
+    set -a; source "$ENV_FILE"; set +a
+fi
+
 GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-brik}"
 GITEA_ADMIN_PASSWORD="${GITEA_ADMIN_PASSWORD:-}"
@@ -151,6 +156,13 @@ create_api_token() {
     fi
 
     log_info "Generating API token..."
+
+    # Delete existing token with the same name (idempotent re-setup)
+    curl -s --max-time 10 \
+        -u "${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASSWORD}" \
+        -X DELETE \
+        "${GITEA_URL}/api/v1/users/${GITEA_ADMIN_USER}/tokens/briklab" \
+        -o /dev/null 2>/dev/null || true
 
     local response
     response=$(curl -s --max-time 10 \

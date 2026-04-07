@@ -43,11 +43,23 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 # ---------------------------------------------------------------------------
 SCENARIOS=(
     "node-minimal|node-minimal|node-minimal|300|false"
+    "python-minimal|python-minimal|python-minimal|300|false"
+    "java-minimal|java-minimal|java-minimal|300|false"
+    "rust-minimal|rust-minimal|rust-minimal|300|false"
+    "dotnet-minimal|dotnet-minimal|dotnet-minimal|300|false"
     "node-complete|node-complete|node-complete|600|false"
     "python-complete|python-complete|python-complete|600|false"
     "java-complete|java-complete|java-complete|900|false"
     "rust-complete|rust-complete|rust-complete|900|false"
     "dotnet-complete|dotnet-complete|dotnet-complete|900|false"
+    "node-full|node-full|node-full|600|false"
+    "python-full|python-full|python-full|600|false"
+    "java-full|java-full|java-full|600|false"
+    "node-security|node-security|node-security|300|false"
+    "node-deploy|node-deploy|node-deploy|600|false"
+    "error-build|node-error-build|node-error-build|300|true"
+    "error-test|node-error-test|node-error-test|300|true"
+    "error-config|invalid-config|invalid-config|300|true"
 )
 
 # ---------------------------------------------------------------------------

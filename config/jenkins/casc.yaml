@@ -1,7 +1,7 @@
 # Jenkins Configuration-as-Code for Briklab
 jenkins:
   systemMessage: "Briklab - Jenkins"
-  numExecutors: 2
+  numExecutors: 8
   mode: NORMAL
   globalNodeProperties:
     - envVars:
@@ -27,7 +27,7 @@ jenkins:
       allowsSignup: false
       users:
         - id: admin
-          password: "${JENKINS_ADMIN_PASSWORD:-Brik-Jenkins-2026!}"
+          password: "${JENKINS_ADMIN_PASSWORD:-Brik-Jenkins-2026}"
   authorizationStrategy:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
@@ -140,6 +140,198 @@ jobs:
               git {
                 remote {
                   url('http://gitea.briklab.test:3000/brik/dotnet-complete.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('python-minimal') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/python-minimal.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('java-minimal') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/java-minimal.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('rust-minimal') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/rust-minimal.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('dotnet-minimal') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/dotnet-minimal.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-full') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-full.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('python-full') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/python-full.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('java-full') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/java-full.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-security') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-security.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-error-build') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-error-build.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-error-test') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-error-test.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('invalid-config') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/invalid-config.git')
                 }
                 branches('*/main')
               }
