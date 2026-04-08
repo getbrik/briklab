@@ -68,7 +68,7 @@ user.password = "${password}"
 user.password_confirmation = "${password}"
 user.password_automatically_set = false
 user.password_expires_at = nil
-if user.save
+if user.save(validate: false)
   puts "OK"
 else
   puts "FAIL: #{user.errors.full_messages.join(', ')}"
@@ -79,7 +79,8 @@ RUBY
     if [[ "$result" == "OK" ]]; then
         log_ok "Root password configured"
     else
-        log_warn "Password configuration: ${result}"
+        log_error "Password configuration failed: ${result}"
+        exit 1
     fi
 }
 
