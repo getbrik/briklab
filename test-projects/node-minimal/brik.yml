@@ -6,10 +6,8 @@ project:
   stack_version: "22"
 
 quality:
-  enabled: false
-
-security:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: npm

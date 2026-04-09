@@ -13,8 +13,8 @@ test:
   framework: maven
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: checkstyle
 
 package:

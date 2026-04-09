@@ -6,7 +6,8 @@ project:
   stack_version: "9.0"
 
 quality:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: dotnet

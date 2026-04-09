@@ -13,12 +13,14 @@ test:
   framework: pytest
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: ruff
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}
 
 package:
   docker:

@@ -11,14 +11,22 @@ release:
 
 test:
   framework: maven
+  coverage:
+    threshold: 80
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: checkstyle
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}
+  license:
+    allowed: "MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause"
+  iac:
+    tool: checkov
 
 package:
   docker:

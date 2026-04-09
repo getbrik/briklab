@@ -13,12 +13,14 @@ test:
   framework: dotnet
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: dotnet-format
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}
 
 package:
   docker:

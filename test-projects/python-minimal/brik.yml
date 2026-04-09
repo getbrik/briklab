@@ -6,7 +6,8 @@ project:
   stack_version: "3.13"
 
 quality:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: pytest

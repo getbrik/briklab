@@ -10,7 +10,8 @@ release:
   tag_prefix: v
 
 quality:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: npm

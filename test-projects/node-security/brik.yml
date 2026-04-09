@@ -6,10 +6,13 @@ project:
   stack_version: "22"
 
 quality:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: npm
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}

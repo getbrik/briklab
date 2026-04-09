@@ -13,14 +13,16 @@ test:
   framework: cargo
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: clippy
   format:
     tool: rustfmt
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}
 
 package:
   docker:

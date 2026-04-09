@@ -6,7 +6,8 @@ project:
   stack_version: "21"
 
 quality:
-  enabled: false
+  lint:
+    enabled: false
 
 test:
   framework: maven

@@ -13,14 +13,16 @@ test:
   framework: npm
 
 quality:
-  enabled: true
   lint:
+    enabled: true
     tool: eslint
   format:
     tool: prettier
 
 security:
-  enabled: true
+  deps:
+    severity: high
+  secrets: {}
 
 package:
   docker:
