@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-deploy-failure
+  namespace: brik-nonexistent
+  labels:
+    app: node-deploy-failure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-deploy-failure
+  template:
+    metadata:
+      labels:
+        app: node-deploy-failure
+    spec:
+      containers:
+        - name: app
+          image: brik-registry:5050/brik/node-deploy-failure:latest
+          ports:
+            - containerPort: 3000

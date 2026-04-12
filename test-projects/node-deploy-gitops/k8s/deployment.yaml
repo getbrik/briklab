@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-deploy-gitops
+  namespace: brik-staging
+  labels:
+    app: node-deploy-gitops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-deploy-gitops
+  template:
+    metadata:
+      labels:
+        app: node-deploy-gitops
+    spec:
+      containers:
+        - name: app
+          image: brik-registry:5050/brik/node-deploy-gitops:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

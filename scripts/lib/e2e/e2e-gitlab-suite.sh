@@ -49,6 +49,12 @@ SCENARIOS=(
     "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-security|300"
     "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
+    "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
+    "node-deploy-rollback|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_DEPLOY_ROLLBACK_TEST=true"
+    # --- Deploy failure scenario (expect pipeline failure at deploy) ---
+    "node-deploy-failure|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
     "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"

@@ -1,0 +1,30 @@
+version: 1
+
+project:
+  name: node-deploy-ssh
+  stack: node
+  stack_version: "22"
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+quality:
+  lint:
+    enabled: false
+
+test:
+  framework: npm
+
+package:
+  docker:
+    image: brik-registry:5050/brik/node-deploy-ssh
+    dockerfile: Dockerfile
+
+deploy:
+  environments:
+    staging:
+      target: ssh
+      host: ssh-target.briklab.test
+      remote_path: /opt/app
+      restart_cmd: "echo 'app restarted'"

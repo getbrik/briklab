@@ -1,0 +1,31 @@
+version: 1
+
+project:
+  name: node-deploy-gitops
+  stack: node
+  stack_version: "22"
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+quality:
+  lint:
+    enabled: false
+
+test:
+  framework: npm
+
+package:
+  docker:
+    image: brik-registry:5050/brik/node-deploy-gitops
+    dockerfile: Dockerfile
+
+deploy:
+  workflow: trunk-based
+  environments:
+    staging:
+      target: gitops
+      config_repo: http://gitea.briklab.test:3000/brik/config-deploy.git
+      config_path: k8s
+      argocd_app: brik-e2e

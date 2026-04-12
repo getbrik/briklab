@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-deploy-k8s
+  namespace: brik-staging
+  labels:
+    app: node-deploy-k8s
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-deploy-k8s
+  template:
+    metadata:
+      labels:
+        app: node-deploy-k8s
+    spec:
+      containers:
+        - name: app
+          image: brik-registry:5050/brik/node-deploy-k8s:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

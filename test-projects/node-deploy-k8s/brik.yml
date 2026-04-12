@@ -1,0 +1,30 @@
+version: 1
+
+project:
+  name: node-deploy-k8s
+  stack: node
+  stack_version: "22"
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+quality:
+  lint:
+    enabled: false
+
+test:
+  framework: npm
+
+package:
+  docker:
+    image: brik-registry:5050/brik/node-deploy-k8s
+    dockerfile: Dockerfile
+
+deploy:
+  workflow: trunk-based
+  environments:
+    staging:
+      target: k8s
+      namespace: brik-staging
+      manifest: k8s/deployment.yaml

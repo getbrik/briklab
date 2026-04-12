@@ -1,0 +1,14 @@
+{
+  "name": "node-deploy-k8s",
+  "version": "1.0.0",
+  "description": "Node.js project for Brik deploy stage E2E testing",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --platform=node --outfile=dist/index.js",
+    "test": "node test/index.test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
+  },
+  "license": "MIT"
+}
