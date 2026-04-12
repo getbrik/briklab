@@ -12,7 +12,8 @@ Brik needs real CI/CD platforms to validate its shared libraries and runtime. Br
 - GitLab CE + Runner + Registry for GitLab CI pipelines
 - Gitea + Jenkins for Jenkins pipelines
 - Nexus 3 CE for artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
-- E2E pipeline testing with automated scenario validation on both platforms
+- SSH target container for deploy E2E testing
+- E2E pipeline testing with 24 automated scenarios on each platform
 - Managed by a Bash CLI (`scripts/briklab.sh`)
 
 For internal architecture details, see [docs/architecture.md](docs/architecture.md).
@@ -30,7 +31,8 @@ Add to `/etc/hosts`:
 
 ```
 127.0.0.1  gitlab.briklab.test registry.briklab.test
-127.0.0.1  gitea.briklab.test jenkins.briklab.test argocd.briklab.test
+127.0.0.1  gitea.briklab.test jenkins.briklab.test
+127.0.0.1  argocd.briklab.test ssh-target.briklab.test
 127.0.0.1  nexus.briklab.test
 ```
 
@@ -63,6 +65,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
 | Jenkins | 9090 (HTTP), 50000 (agent) | `admin` / `Brik-Jenkins-2026` |
 | Nexus 3 CE | 8081 (UI/API), 8082 (Docker) | `admin` / `Brik-Nexus-2026` |
+| SSH Target | 22 (internal) | `deploy` / SSH key |
 | k3d (k3s) | 6443, 8080 | - |
 | ArgoCD | 9080 | - |
 
@@ -81,6 +84,8 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 | Jenkins UI | http://jenkins.briklab.test:9090 |
 | Nexus UI | http://nexus.briklab.test:8081 |
 | Nexus Docker | http://nexus.briklab.test:8082 |
+| ArgoCD UI | http://argocd.briklab.test:9080 |
+| SSH Target | `ssh deploy@ssh-target.briklab.test` (internal only) |
 
 ### Nexus Repositories
 
@@ -169,25 +174,25 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 
 Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
 
-#### Scenarios (18 total)
+#### Scenarios (24 total)
 
 ##### Minimal stack coverage
 
 | Scenario | Stack | Trigger | Validated stages | Expected |
 |----------|-------|---------|-----------------|----------|
-| `node-minimal` | Node.js | push `main` | init, build, test, notify | pass |
-| `python-minimal` | Python | push `main` | init, build, test, notify | pass |
-| `java-minimal` | Java | push `main` | init, build, test, notify | pass |
-| `rust-minimal` | Rust | push `main` | init, build, test, notify | pass |
-| `dotnet-minimal` | .NET | push `main` | init, build, test, notify | pass |
+| `node-minimal` | Node.js | push `main` | init, build, test, deploy, notify | pass |
+| `python-minimal` | Python | push `main` | init, build, test, deploy, notify | pass |
+| `java-minimal` | Java | push `main` | init, build, test, deploy, notify | pass |
+| `rust-minimal` | Rust | push `main` | init, build, test, deploy, notify | pass |
+| `dotnet-minimal` | .NET | push `main` | init, build, test, deploy, notify | pass |
 
 ##### Full pipelines
 
 | Scenario | Stack | Trigger | Validated stages | Expected |
 |----------|-------|---------|-----------------|----------|
-| `node-full` | Node.js | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
-| `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, notify | pass |
-| `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, notify | pass |
+| `node-full` | Node.js | tag `v0.1.0` | init, release, build, quality, test, package, deploy, notify | pass |
+| `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, deploy, notify | pass |
+| `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, deploy, notify | pass |
 
 ##### Complete pipelines with Nexus publish
 
@@ -205,6 +210,19 @@ Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pip
 |----------|-------|---------|-----------------|----------|
 | `node-security` | Node.js | push `main` | init, build, security, test, notify | pass |
 | `node-deploy` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-dryrun` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-k8s` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-ssh` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-gitops` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-rollback` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+
+> `node-deploy-dryrun` reuses the `node-deploy` project with `BRIK_DRY_RUN=true`. `node-deploy-rollback` reuses `node-deploy-gitops` with `BRIK_DEPLOY_ROLLBACK_TEST=true`. CI variables are passed via the E2E framework.
+
+##### Deploy failure scenario
+
+| Scenario | Stack | Trigger | Expected failure | Expected |
+|----------|-------|---------|-----------------|----------|
+| `node-deploy-failure` | Node.js | tag `v0.1.0` | brik-deploy job fails (non-existent namespace) | fail |
 
 ##### Error scenarios
 
@@ -216,7 +234,7 @@ Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pip
 
 ### Jenkins
 
-Jenkins E2E testing pushes the Brik shared library and a test project to Gitea, then triggers a Jenkins pipeline via the REST API.
+Jenkins E2E testing mirrors the GitLab scenarios: pushes the Brik shared library and test projects to Gitea, then triggers Jenkins pipelines via the REST API.
 
 The Jenkins pipeline runs the full Brik fixed flow:
 
@@ -224,16 +242,22 @@ The Jenkins pipeline runs the full Brik fixed flow:
 Init -> Release -> Build -> Quality & Security -> Test -> Package -> Deploy -> Notify
 ```
 
-Jenkins is configured via CasC (Configuration as Code) with:
-- The Brik Jenkins Shared Library loaded from Gitea (`brik/brik` repo)
-- A `node-minimal` pipeline job that pulls from Gitea (`brik/node-minimal` repo)
+#### Scenarios (24 total)
+
+Jenkins runs the same 24 scenarios as GitLab (minimal, full, complete, security, deploy, error). The E2E framework supports CI variable injection via `buildWithParameters`.
 
 ```bash
-# Run the Jenkins E2E pipeline
+# Run the default Jenkins E2E pipeline (node-minimal)
 ./scripts/briklab.sh test --jenkins
 
-# Run a specific job (default: node-minimal)
-./scripts/briklab.sh test --jenkins node-minimal
+# Run the full Jenkins E2E suite
+./scripts/briklab.sh test --jenkins --all
+
+# Run a specific scenario
+./scripts/briklab.sh test --jenkins --project node-deploy-k8s
+
+# List available scenarios
+./scripts/briklab.sh test --jenkins --list
 ```
 
 ### Test projects
@@ -245,7 +269,11 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 | `node-minimal` | Node.js | `brik-runner-node:22` | Basic flow (init, build, test) |
 | `node-full` | Node.js | `brik-runner-node:22` | All stages (release, quality, package) |
 | `node-security` | Node.js | `brik-runner-node:22` | Security stage (npm audit) |
-| `node-deploy` | Node.js | `brik-runner-node:22` | Deploy stage validation |
+| `node-deploy` | Node.js | `brik-runner-node:22` | Deploy stage validation (compose target) |
+| `node-deploy-k8s` | Node.js | `brik-runner-node:22` | Deploy to Kubernetes (k8s target) |
+| `node-deploy-ssh` | Node.js | `brik-runner-node:22` | Deploy via SSH (ssh target) |
+| `node-deploy-gitops` | Node.js | `brik-runner-node:22` | Deploy via GitOps + ArgoCD (gitops target) |
+| `node-deploy-failure` | Node.js | `brik-runner-node:22` | Intentional deploy failure (non-existent namespace) |
 | `python-minimal` | Python | `brik-runner-python:3.13` | Python stack (pytest) |
 | `python-full` | Python | `brik-runner-python:3.13` | Full Python pipeline (ruff, pip-audit, Docker) |
 | `java-minimal` | Java | `brik-runner-java:21` | Java stack (JUnit 5) |
@@ -310,13 +338,15 @@ docker network rm brik-net 2>/dev/null
 - [x] Gitea + Jenkins (CasC + Job DSL)
 - [x] Nexus 3 CE -- artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - [x] Automated init with smoke tests
-- [x] E2E pipeline testing -- GitLab (18 scenarios: node, python, java, rust, dotnet)
-- [x] E2E pipeline testing -- Jenkins (node-minimal)
+- [x] E2E pipeline testing -- GitLab (24 scenarios: minimal, full, complete, security, deploy, error)
+- [x] E2E pipeline testing -- Jenkins (24 scenarios, same coverage as GitLab)
 - [x] Security stage E2E
-- [x] Deploy stage E2E
-- [x] Error scenario E2E (build fail, test fail, invalid config)
+- [x] Deploy stage E2E (k8s, ssh, compose, gitops, rollback, failure)
+- [x] CI variable injection for E2E scenarios (dry-run, rollback tests)
+- [x] SSH target container for deploy E2E
+- [x] Error scenario E2E (build fail, test fail, invalid config, deploy fail)
+- [x] k3d + ArgoCD integration (setup script, CLI commands, gitops E2E scenario)
 - [ ] Complete E2E scenarios with Nexus artifact verification
-- [ ] k3d + ArgoCD integration
 
 ## Related
 
