@@ -39,7 +39,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
-# Format: name|jenkins_job|projects_to_push|timeout|expect_failure
+# Format: name|jenkins_job|projects_to_push|timeout|expect_failure|ci_vars
 # ---------------------------------------------------------------------------
 SCENARIOS=(
     "node-minimal|node-minimal|node-minimal|300|false"
@@ -57,6 +57,7 @@ SCENARIOS=(
     "java-full|java-full|java-full|600|false"
     "node-security|node-security|node-security|300|false"
     "node-deploy|node-deploy|node-deploy|600|false"
+    "node-deploy-dryrun|node-deploy|node-deploy|600|false|BRIK_DRY_RUN=true"
     "error-build|node-error-build|node-error-build|300|true"
     "error-test|node-error-test|node-error-test|300|true"
     "error-config|invalid-config|invalid-config|300|true"
@@ -72,7 +73,7 @@ list_scenarios() {
     printf "  %-20s %-20s %-10s %s\n" "NAME" "JOB" "TIMEOUT" "EXPECT"
     printf "  %-20s %-20s %-10s %s\n" "----" "---" "-------" "------"
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name job _projects timeout expect_fail <<< "$scenario"
+        IFS='|' read -r name job _projects timeout expect_fail ci_vars <<< "$scenario"
         local mode="pass"
         [[ "$expect_fail" == "true" ]] && mode="fail"
         printf "  %-20s %-20s %-10s %s\n" "$name" "$job" "${timeout}s" "$mode"
@@ -82,16 +83,20 @@ list_scenarios() {
 
 run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name job _projects timeout expect_fail <<< "$scenario"
+    IFS='|' read -r name job _projects timeout expect_fail ci_vars <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
     echo -e "${BOLD}  Jenkins Scenario: ${name}${NC}"
     echo -e "${BOLD}========================================${NC}"
+    if [[ -n "${ci_vars:-}" ]]; then
+        echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
+    fi
 
     E2E_JENKINS_JOB="$job" \
     E2E_JENKINS_TIMEOUT="$timeout" \
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
+    E2E_CI_VARIABLES="${ci_vars:-}" \
         bash "${SCRIPT_DIR}/e2e-jenkins-test.sh"
 }
 
@@ -138,7 +143,7 @@ PROJECTS_TO_PUSH=""
 if [[ -n "$ONLY_SCENARIO" ]]; then
     FOUND=false
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name _job projects _timeout _expect <<< "$scenario"
+        IFS='|' read -r name _job projects _timeout _expect _ci_vars <<< "$scenario"
         if [[ "$name" == "$ONLY_SCENARIO" ]]; then
             FOUND=true
             PROJECTS_TO_PUSH="$projects"

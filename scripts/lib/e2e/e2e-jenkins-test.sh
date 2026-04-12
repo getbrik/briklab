@@ -8,6 +8,7 @@
 #   E2E_JENKINS_JOB     - Job name (default: node-minimal)
 #   E2E_JENKINS_TIMEOUT  - Timeout in seconds (default: 300)
 #   E2E_JENKINS_EXPECT_FAILURE - Set to "true" to expect failure (default: false)
+#   E2E_CI_VARIABLES     - Comma-separated KEY=VALUE pairs for build parameters (default: empty)
 #
 # Prerequisites:
 #   - briklab Jenkins must be running
@@ -129,14 +130,35 @@ NEXT_BUILD=$(jenkins_api "job/${JOB_NAME}/api/json" | \
 
 # 4. Trigger build
 log_info "Triggering build #${NEXT_BUILD}..."
+if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+    log_info "CI variables: ${E2E_CI_VARIABLES}"
+fi
 CRUMB=$(get_crumb)
+
+# Build curl args for trigger
+TRIGGER_ENDPOINT="build"
+TRIGGER_DATA=()
+if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+    TRIGGER_ENDPOINT="buildWithParameters"
+    IFS=',' read -ra _pairs <<< "$E2E_CI_VARIABLES"
+    for pair in "${_pairs[@]}"; do
+        _key="${pair%%=*}"
+        _val="${pair#*=}"
+        _key="$(echo "$_key" | tr -d '[:space:]')"
+        [[ -z "$_key" ]] && continue
+        TRIGGER_DATA+=(--data-urlencode "${_key}=${_val}")
+    done
+fi
+
 if [[ -n "$CRUMB" ]]; then
     curl -sf --max-time 30 -X POST -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
         -H "$CRUMB" \
-        "${JENKINS_URL}/job/${JOB_NAME}/build" >/dev/null 2>&1
+        ${TRIGGER_DATA[@]+"${TRIGGER_DATA[@]}"} \
+        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" >/dev/null 2>&1
 else
     curl -sf --max-time 30 -X POST -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
-        "${JENKINS_URL}/job/${JOB_NAME}/build" >/dev/null 2>&1
+        ${TRIGGER_DATA[@]+"${TRIGGER_DATA[@]}"} \
+        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" >/dev/null 2>&1
 fi
 
 # 5. Wait for build to appear in queue and start

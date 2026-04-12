@@ -20,3 +20,10 @@ package:
   docker:
     image: brik-registry:5050/brik/node-deploy
     dockerfile: Dockerfile
+
+deploy:
+  workflow: trunk-based
+  environments:
+    staging:
+      target: compose
+      compose_file: docker-compose.yml

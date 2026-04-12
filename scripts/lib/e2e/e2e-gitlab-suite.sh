@@ -32,7 +32,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
-# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job
+# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
@@ -48,6 +48,7 @@ SCENARIOS=(
     # --- Security and Deploy ---
     "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-security|300"
     "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
     "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
@@ -70,7 +71,7 @@ list_scenarios() {
     printf "  %-20s %-15s %-10s %-8s %s\n" "NAME" "PROJECT" "REF" "EXPECT" "REQUIRED JOBS"
     printf "  %-20s %-15s %-10s %-8s %s\n" "----" "-------" "---" "------" "-------------"
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
         local mode="pass"
         [[ -n "${expect_fail:-}" ]] && mode="fail"
         printf "  %-20s %-15s %-10s %-8s %s\n" "$name" "$project" "$ref" "$mode" "$required"
@@ -83,13 +84,16 @@ list_scenarios() {
 # Returns: 0 on pass, 1 on fail
 run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name project ref required optional timeout expect_fail <<< "$scenario"
+    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
     echo -e "${BOLD}  Scenario: ${name}${NC}"
     if [[ -n "${expect_fail:-}" ]]; then
         echo -e "${YELLOW}  (expect failure: ${expect_fail})${NC}"
+    fi
+    if [[ -n "${ci_vars:-}" ]]; then
+        echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
     fi
     echo -e "${BOLD}========================================${NC}"
 
@@ -111,6 +115,7 @@ run_scenario() {
     E2E_TIMEOUT="${timeout:-300}" \
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
+    E2E_CI_VARIABLES="${ci_vars:-}" \
         bash "${SCRIPT_DIR}/e2e-gitlab-test.sh"
 }
 
@@ -158,7 +163,7 @@ if [[ -n "$ONLY_SCENARIO" ]]; then
     # Find the matching scenario
     FOUND=false
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
         if [[ "$name" == "$ONLY_SCENARIO" ]]; then
             FOUND=true
             PROJECTS_TO_PUSH="$project"
@@ -177,7 +182,7 @@ else
     PROJECTS_TO_PUSH=""
     declare -A _seen_projects=()
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
         if [[ -z "${_seen_projects[$project]:-}" ]]; then
             _seen_projects["$project"]=1
             PROJECTS_TO_PUSH="${PROJECTS_TO_PUSH:+${PROJECTS_TO_PUSH},}${project}"

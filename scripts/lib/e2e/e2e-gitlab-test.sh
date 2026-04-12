@@ -12,6 +12,7 @@
 #   E2E_TIMEOUT          - Pipeline timeout in seconds (default: 300)
 #   E2E_EXPECT_FAILURE   - Set to "true" to expect the pipeline to fail (default: false)
 #   E2E_EXPECT_FAILED_JOB - Job name that must have "failed" status (used with E2E_EXPECT_FAILURE)
+#   E2E_CI_VARIABLES     - Comma-separated KEY=VALUE pairs to pass as pipeline variables (default: empty)
 #
 # Prerequisites:
 #   - briklab GitLab must be running
@@ -82,6 +83,48 @@ api_get() {
 
 api_post() {
     curl -s -H "PRIVATE-TOKEN: ${GITLAB_PAT}" -X POST "${GITLAB_URL}/api/v4/$1"
+}
+
+api_post_json() {
+    local endpoint="$1"
+    local json_body="$2"
+    curl -s -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+         -H "Content-Type: application/json" \
+         -X POST \
+         -d "$json_body" \
+         "${GITLAB_URL}/api/v4/${endpoint}"
+}
+
+# Build JSON body for pipeline trigger with optional CI variables.
+# Reads E2E_CI_VARIABLES (comma-separated KEY=VALUE pairs).
+# Output: JSON string suitable for POST /projects/:id/pipeline
+build_pipeline_trigger_json() {
+    local ref="$1"
+    local ci_vars="${E2E_CI_VARIABLES:-}"
+
+    if [[ -z "$ci_vars" ]]; then
+        printf '{"ref":"%s"}' "$ref"
+        return
+    fi
+
+    local vars_json="["
+    local first=true
+    IFS=',' read -ra pairs <<< "$ci_vars"
+    for pair in "${pairs[@]}"; do
+        local key="${pair%%=*}"
+        local value="${pair#*=}"
+        key="$(echo "$key" | tr -d '[:space:]')"
+        [[ -z "$key" ]] && continue
+        if [[ "$first" == "true" ]]; then
+            first=false
+        else
+            vars_json+=","
+        fi
+        vars_json+="{\"key\":\"${key}\",\"variable_type\":\"env_var\",\"value\":\"${value}\"}"
+    done
+    vars_json+="]"
+
+    printf '{"ref":"%s","variables":%s}' "$ref" "$vars_json"
 }
 
 # Get the status of a specific job from the jobs JSON.
@@ -161,7 +204,11 @@ log_ok "Project ID: ${PROJECT_ID}"
 
 # 2. Trigger a pipeline
 log_info "Triggering pipeline on ref '${TRIGGER_REF}'..."
-PIPELINE_RESPONSE=$(api_post "projects/${PROJECT_ID}/pipeline?ref=${TRIGGER_REF}")
+if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+    log_info "CI variables: ${E2E_CI_VARIABLES}"
+fi
+TRIGGER_JSON=$(build_pipeline_trigger_json "$TRIGGER_REF")
+PIPELINE_RESPONSE=$(api_post_json "projects/${PROJECT_ID}/pipeline" "$TRIGGER_JSON")
 PIPELINE_ID=$(echo "$PIPELINE_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
 
 if [[ -z "$PIPELINE_ID" ]]; then
