@@ -18,14 +18,20 @@ test:
 
 package:
   docker:
-    image: brik-registry:5050/brik/node-deploy-gitops
+    image: registry.briklab.test:5050/brik/node-deploy-gitops
     dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: registry.briklab.test:5050/brik/node-deploy-gitops
 
 deploy:
   workflow: trunk-based
   environments:
     staging:
       target: gitops
-      config_repo: http://gitea.briklab.test:3000/brik/config-deploy.git
-      config_path: k8s
-      argocd_app: brik-e2e
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy.git
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e

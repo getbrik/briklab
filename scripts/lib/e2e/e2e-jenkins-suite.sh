@@ -16,26 +16,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
-# Load .env
-if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-    set +a
-fi
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+reload_env
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
@@ -61,7 +45,7 @@ SCENARIOS=(
     "node-deploy-k8s|node-deploy-k8s|node-deploy-k8s|600|false"
     "node-deploy-ssh|node-deploy-ssh|node-deploy-ssh|600|false"
     "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
-    "node-deploy-rollback|node-deploy-gitops|node-deploy-gitops|900|false|BRIK_DEPLOY_ROLLBACK_TEST=true"
+    "node-deploy-rollback|node-deploy-gitops|node-deploy-gitops|900|false|BRIK_DEPLOY_ROLLBACK_TEST=true,BRIK_DEPLOY_IMAGE_TAG=rollback-test"
     "node-deploy-failure|node-deploy-failure|node-deploy-failure|600|true"
     "error-build|node-error-build|node-error-build|300|true"
     "error-test|node-error-test|node-error-test|300|true"

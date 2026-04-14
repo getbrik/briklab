@@ -1,13 +1,18 @@
 #!/bin/bash
 # SSH target entrypoint
-# Ensures authorized_keys permissions are correct, then starts sshd.
+# Copies the bind-mounted authorized_keys (read-only, root-owned) to the correct
+# location with proper ownership and permissions for sshd.
 
 set -e
 
-# Fix permissions (the file is mounted read-only, but the directory must be 700)
 chmod 700 /home/deploy/.ssh
-if [[ -f /home/deploy/.ssh/authorized_keys ]]; then
-    chmod 600 /home/deploy/.ssh/authorized_keys 2>/dev/null || true
+
+# The authorized_keys file is bind-mounted read-only at a different path.
+# Copy it with correct ownership so sshd accepts it.
+if [[ -f /home/deploy/.ssh/authorized_keys_mounted ]]; then
+    cp /home/deploy/.ssh/authorized_keys_mounted /home/deploy/.ssh/authorized_keys
+    chown deploy:deploy /home/deploy/.ssh/authorized_keys
+    chmod 600 /home/deploy/.ssh/authorized_keys
 fi
 
 # Start sshd in foreground

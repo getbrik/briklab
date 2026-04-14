@@ -8,19 +8,9 @@ BRIKLAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LIB_SETUP="${SCRIPT_DIR}/lib/setup"
 LIB_E2E="${SCRIPT_DIR}/lib/e2e"
 COMPOSE_FILE="${BRIKLAB_DIR}/docker-compose.yml"
-ENV_FILE="${BRIKLAB_DIR}/.env"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=lib/common.sh
+BRIKLAB_ROOT="$BRIKLAB_DIR" source "${SCRIPT_DIR}/lib/common.sh"
 
 # Check prerequisites
 check_prereqs() {
@@ -41,13 +31,10 @@ check_prereqs() {
     fi
 }
 
-# Load .env if present
+# Load .env if present (overrides common.sh load_env with a warning)
 load_env() {
     if [[ -f "$ENV_FILE" ]]; then
-        set -a
-        # shellcheck source=/dev/null
-        source "$ENV_FILE"
-        set +a
+        reload_env
     else
         log_warn ".env not found - using default values"
         log_info "Copy .env.example to .env: cp .env.example .env"
@@ -82,68 +69,19 @@ cmd_start() {
     check_prereqs
     load_env
 
-    log_info "Starting all containers..."
+    # Pre-create bind-mount files/dirs so Docker doesn't create them as directories
+    mkdir -p "${BRIKLAB_DIR}/data/ssh-target"
+    touch "${BRIKLAB_DIR}/data/ssh-target/authorized_keys"
+    mkdir -p "${BRIKLAB_DIR}/data/gitlab-runner"
+    mkdir -p "${BRIKLAB_DIR}/data/k3d"
+    [[ -d "${BRIKLAB_DIR}/data/k3d/kubeconfig" ]] && rm -rf "${BRIKLAB_DIR}/data/k3d/kubeconfig"
+    touch "${BRIKLAB_DIR}/data/k3d/kubeconfig"
+
+    log_info "Starting containers..."
     docker compose -f "$COMPOSE_FILE" up -d
 
     log_ok "Containers started"
-    log_info "GitLab takes 3-5 min, Nexus 2-3 min on first start"
-
-    # Ensure root password is set after GitLab becomes healthy
-    if docker ps --format '{{.Names}}' | grep -q "^brik-gitlab$"; then
-        _ensure_gitlab_password
-    fi
-
-    echo ""
     cmd_status
-}
-
-# Wait for GitLab to be healthy and set the root password.
-# This ensures the documented password always works, even after a simple 'start'.
-_ensure_gitlab_password() {
-    local max_attempts=60
-    local attempt=0
-    local health=""
-
-    log_info "Waiting for GitLab to be healthy..."
-    while [[ $attempt -lt $max_attempts ]]; do
-        health=$(docker inspect --format='{{.State.Health.Status}}' brik-gitlab 2>/dev/null || echo "unknown")
-        if [[ "$health" == "healthy" ]]; then
-            break
-        fi
-        attempt=$((attempt + 1))
-        printf "."
-        sleep 5
-    done
-    echo ""
-
-    if [[ $attempt -ge $max_attempts ]]; then
-        log_warn "GitLab not healthy after $((max_attempts * 5))s - skipping password setup"
-        return 0
-    fi
-
-    local password="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
-    log_info "Ensuring root password is set..."
-
-    local result
-    result=$(cat <<RUBY | docker exec -i brik-gitlab gitlab-rails runner - 2>/dev/null | tail -1
-user = User.find_by_username("root")
-user.password = "${password}"
-user.password_confirmation = "${password}"
-user.password_automatically_set = false
-user.password_expires_at = nil
-if user.save
-  puts "OK"
-else
-  puts "FAIL: #{user.errors.full_messages.join(', ')}"
-end
-RUBY
-)
-
-    if [[ "$result" == "OK" ]]; then
-        log_ok "Root password configured"
-    else
-        log_warn "Password setup: ${result:-no output}"
-    fi
 }
 
 cmd_stop() {
@@ -221,72 +159,89 @@ cmd_logs() {
 
 cmd_setup() {
     check_prereqs
-    if [[ ! -f "$ENV_FILE" ]]; then
-        cp "${BRIKLAB_DIR}/.env.example" "$ENV_FILE"
-        log_ok ".env created from .env.example"
-    fi
     load_env
+    # shellcheck source=lib/verify.sh
+    source "${SCRIPT_DIR}/lib/verify.sh"
 
-    log_info "Initial briklab configuration..."
-    echo ""
+    local errors=0
 
-    # GitLab setup
-    if docker ps --format '{{.Names}}' | grep -q "^brik-gitlab$"; then
-        log_info "Configuring GitLab..."
-        bash "${LIB_SETUP}/gitlab.sh"
-    else
-        log_warn "GitLab is not running - skipping"
-    fi
+    # 1. GitLab
+    _run_setup "GitLab" "gitlab.sh" "brik-gitlab" && {
+        load_env
+        verify_gitlab_pat || ((errors++)) || true
+        verify_env_set "GITLAB_RUNNER_TOKEN" || ((errors++)) || true
+    }
 
-    # Runner setup
-    if docker ps --format '{{.Names}}' | grep -q "^brik-runner$"; then
-        log_info "Registering runner..."
-        bash "${LIB_SETUP}/runner.sh"
-    else
-        log_warn "Runner is not running - skipping"
-    fi
+    # 2. Runner
+    _run_setup "Runner" "runner.sh" "brik-runner" && {
+        verify_cmd "Runner config" "docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml" || ((errors++)) || true
+    }
 
-    # Gitea setup
-    if docker ps --format '{{.Names}}' | grep -q "^brik-gitea$"; then
-        log_info "Configuring Gitea..."
-        bash "${LIB_SETUP}/gitea.sh"
-    fi
+    # 3. Gitea
+    _run_setup "Gitea" "gitea.sh" "brik-gitea" && {
+        load_env
+        verify_gitea_pat || ((errors++)) || true
+    }
 
-    # Jenkins setup
+    # 4. Jenkins
+    _run_setup "Jenkins" "jenkins.sh" "brik-jenkins" && {
+        verify_http "Jenkins login" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" || ((errors++)) || true
+    }
+
+    # 5. Nexus
+    _run_setup "Nexus" "nexus.sh" "brik-nexus" && {
+        load_env
+        verify_nexus_auth || ((errors++)) || true
+        verify_env_set "NEXUS_NPM_TOKEN" || ((errors++)) || true
+    }
+
+    # 6. SSH target
+    _run_setup "SSH target" "ssh-target.sh" "brik-ssh-target" && {
+        verify_ssh_connection || ((errors++)) || true
+    }
+
+    # 7. Restart Jenkins (to pick up Nexus env vars)
     if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$"; then
-        log_info "Configuring Jenkins..."
-        bash "${LIB_SETUP}/jenkins.sh"
+        log_info "Restarting Jenkins..."
+        docker restart brik-jenkins >/dev/null
+        _wait_for_http "Jenkins" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" 120
     fi
 
-    # Nexus setup
-    if docker ps --format '{{.Names}}' | grep -q "^brik-nexus$"; then
-        log_info "Configuring Nexus..."
-        bash "${LIB_SETUP}/nexus.sh"
+    # Summary
+    if [[ $errors -eq 0 ]]; then
+        log_ok "Setup complete -- all verifications passed"
+    else
+        log_error "Setup complete -- ${errors} verification(s) failed"
+        return 1
     fi
+}
 
-    # After Nexus setup, restart Jenkins to pick up new env vars (.env may have changed)
-    if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$" \
-       && docker ps --format '{{.Names}}' | grep -q "^brik-nexus$"; then
-        log_info "Restarting Jenkins to pick up Nexus credentials..."
-        docker restart brik-jenkins
-        local jenkins_url="http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}"
-        local attempts=0
-        while [[ $attempts -lt 60 ]]; do
-            if curl -sf "${jenkins_url}/login" -o /dev/null 2>/dev/null; then
-                break
-            fi
-            attempts=$((attempts + 1))
-            sleep 2
-        done
-        if [[ $attempts -ge 60 ]]; then
-            log_warn "Jenkins did not become ready after restart"
-        else
-            log_ok "Jenkins restarted and ready"
+# Launch a setup script if its container is running
+_run_setup() {
+    local name="$1" script="$2" container="$3"
+    if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        log_info "Configuring ${name}..."
+        bash "${LIB_SETUP}/${script}"
+    else
+        log_warn "${name} not running -- skipping"
+        return 1
+    fi
+}
+
+# Wait for an HTTP endpoint to respond
+_wait_for_http() {
+    local name="$1" url="$2" timeout="${3:-60}"
+    local elapsed=0
+    while [[ $elapsed -lt $timeout ]]; do
+        if curl -sf -o /dev/null "$url" 2>/dev/null; then
+            log_ok "${name} ready"
+            return 0
         fi
-    fi
-
-    echo ""
-    log_ok "Configuration complete"
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    log_warn "${name} not ready after ${timeout}s"
+    return 1
 }
 
 cmd_k3d_start() {
@@ -314,13 +269,15 @@ cmd_k3d_stop() {
 }
 
 cmd_clean() {
-    echo -e "${RED}WARNING: This action deletes ALL persistent data.${NC}"
-    echo -e "${RED}GitLab, Registry, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
-    echo ""
-    read -rp "Confirm deletion (type 'yes'): " confirm
-    if [[ "$confirm" != "yes" ]]; then
-        log_info "Cancelled"
-        exit 0
+    if [[ "${1:-}" != "--yes" ]]; then
+        echo -e "${RED}WARNING: This action deletes ALL persistent data.${NC}"
+        echo -e "${RED}GitLab, Registry, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
+        echo ""
+        read -rp "Confirm deletion (type 'yes'): " confirm
+        if [[ "$confirm" != "yes" ]]; then
+            log_info "Cancelled"
+            exit 0
+        fi
     fi
 
     cmd_stop
@@ -395,43 +352,39 @@ cmd_test() {
 }
 
 cmd_init() {
-    echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║       Briklab - Initialization       ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-    echo ""
-
     # 1. Prerequisites
-    log_info "Step 1/5 - Checking prerequisites"
+    log_info "Step 1 -- Prerequisites"
     check_prereqs
     log_ok "Prerequisites OK"
 
-    # 2. .env file
-    log_info "Step 2/5 - Preparing .env"
+    # 2. .env
+    log_info "Step 2 -- Environment"
     if [[ ! -f "$ENV_FILE" ]]; then
         cp "${BRIKLAB_DIR}/.env.example" "$ENV_FILE"
-        log_ok ".env created from .env.example"
-    else
-        log_warn ".env already exists - keeping it"
+        log_ok ".env created"
     fi
     load_env
 
     # 3. Start containers
-    log_info "Step 3/5 - Starting containers"
+    log_info "Step 3 -- Starting containers"
     cmd_start
 
-    # 4. Configuration
-    log_info "Step 4/5 - Configuring services"
+    # 4. Setup
+    log_info "Step 4 -- Configuring services"
     cmd_setup
 
-    # 5. Smoke tests
-    log_info "Step 5/5 - Verification"
+    # 5. k3d (if installed)
+    if command -v k3d &>/dev/null; then
+        log_info "Step 5 -- k3d cluster + ArgoCD"
+        cmd_k3d_start
+    else
+        log_warn "Step 5 -- k3d not installed, skipping"
+    fi
+
+    # 6. Smoke test
+    log_info "Step 6 -- Verification"
     cmd_smoke_test
 
-    echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║   Briklab ready - happy coding!      ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
-    echo ""
     cmd_status
 }
 
@@ -445,21 +398,22 @@ Usage: ./scripts/briklab.sh <command> [options]
 
 Getting started:
   First time? Run 'init'. It does everything automatically:
-  starts all containers, configures services, and runs smoke tests.
+  starts all containers, configures services, sets up k3d, and runs smoke tests.
 
   Already initialized? Use 'start' to restart the containers.
 
 Lifecycle:
-  init               First launch (start + setup + smoke-test)
-  start              Start all containers (+ set root password)
+  init               First launch (start + setup + k3d + smoke-test)
+  start              Start all containers
   stop               Stop all containers
   restart            Stop + start
   clean              Delete all data and volumes (irreversible)
 
 Configuration:
-  setup              Re-run GitLab/Runner/Gitea/Jenkins/Nexus configuration
-                     (only needed if setup failed during init)
+  setup              Re-run GitLab/Runner/Gitea/Jenkins/Nexus/SSH configuration
+                     with verification (only needed if setup failed during init)
   smoke-test         Verify that each component is reachable
+  preflight          Validate tokens, port-forwards, propagate to CI platforms
 
 Testing (--gitlab or --jenkins required):
   test --gitlab              Run node-minimal on GitLab
@@ -503,8 +457,9 @@ case "${1:-help}" in
     test)        cmd_test "${@:2}" ;;
     k3d-start)   cmd_k3d_start ;;
     k3d-stop)    cmd_k3d_stop ;;
-    clean)       cmd_clean ;;
+    clean)       cmd_clean "${@:2}" ;;
     smoke-test)  cmd_smoke_test ;;
+    preflight)   bash "${LIB_E2E}/preflight.sh" ;;
     help|--help|-h) cmd_help ;;
     *)
         log_error "Unknown command: ${1}"

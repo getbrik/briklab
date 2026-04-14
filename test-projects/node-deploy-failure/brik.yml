@@ -18,8 +18,12 @@ test:
 
 package:
   docker:
-    image: brik-registry:5050/brik/node-deploy-failure
+    image: registry.briklab.test:5050/brik/node-deploy-failure
     dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: registry.briklab.test:5050/brik/node-deploy-failure
 
 deploy:
   workflow: trunk-based

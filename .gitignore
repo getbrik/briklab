@@ -1,5 +1,6 @@
 # Persistent volumes
 data/
+data-backup/
 
 # Environment variables (contains secrets)
 .env

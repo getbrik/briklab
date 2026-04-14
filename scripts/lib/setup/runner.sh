@@ -3,27 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../../../.env"
+BRIKLAB_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# Load .env
-if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-    set +a
-fi
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+reload_env
 
 GITLAB_INTERNAL_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 RUNNER_TOKEN="${GITLAB_RUNNER_TOKEN:-}"
@@ -56,8 +40,12 @@ docker exec brik-runner gitlab-runner register \
     --docker-privileged=false \
     --docker-network-mode "brik-net" \
     --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
+    --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
     --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
     --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
+    --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
+    --docker-extra-hosts "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20" \
+    --docker-extra-hosts "registry.briklab.test:172.20.0.12" \
     --description "brik-docker-runner" \
     --tag-list "docker,brik" \
     --run-untagged=true \

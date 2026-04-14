@@ -32,3 +32,17 @@ echo "  authorized_keys: ${DATA_DIR}/authorized_keys"
 echo ""
 echo "The private key content can be set as a CI variable (SSH_DEPLOY_KEY)"
 echo "for deploy jobs that need SSH access to the ssh-target container."
+
+# Restart container so entrypoint copies the new authorized_keys
+if docker ps --format '{{.Names}}' | grep -q "^brik-ssh-target$"; then
+    echo "[INFO] Restarting ssh-target container..."
+    docker restart brik-ssh-target >/dev/null
+    sleep 2
+    # Verify SSH connection
+    if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+           -i "$KEY_FILE" -p "${SSH_TARGET_PORT:-2223}" deploy@localhost echo ok &>/dev/null; then
+        echo "[OK] SSH connection verified"
+    else
+        echo "[WARN] SSH connection failed -- container may need more time"
+    fi
+fi

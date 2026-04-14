@@ -3,25 +3,13 @@
 # Creates admin user, API token, and 'brik' organization
 set -euo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
-# Load .env
-if [[ -f "$ENV_FILE" ]]; then
-    set -a; source "$ENV_FILE"; set +a
-fi
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+# shellcheck source=../auth/gitea-pat.sh
+source "${SCRIPT_DIR}/../auth/gitea-pat.sh"
+reload_env
 
 GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-brik}"
@@ -140,61 +128,47 @@ create_admin_user() {
 }
 
 # Generate API token
+# Delegates to the shared auth library.
 create_api_token() {
-    # Check if token already in .env
-    if [[ -n "${GITEA_PAT:-}" ]]; then
-        local http_code
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-            -H "Authorization: token ${GITEA_PAT}" \
-            "${GITEA_URL}/api/v1/user")
-
-        if [[ "$http_code" == "200" ]]; then
-            log_info "GITEA_PAT already set and valid"
-            return 0
-        fi
-        log_warn "Existing GITEA_PAT is invalid, creating new one"
-    fi
-
     log_info "Generating API token..."
+    ensure_gitea_pat "briklab"
+}
 
-    # Delete existing token with the same name (idempotent re-setup)
-    curl -s --max-time 10 \
-        -u "${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASSWORD}" \
-        -X DELETE \
-        "${GITEA_URL}/api/v1/users/${GITEA_ADMIN_USER}/tokens/briklab" \
-        -o /dev/null 2>/dev/null || true
+# Create the GitOps config repo (used by node-deploy-gitops E2E scenario)
+create_config_deploy_repo() {
+    local org="brik"
+    local repo="config-deploy"
 
-    local response
-    response=$(curl -s --max-time 10 \
-        -u "${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASSWORD}" \
-        -X POST \
+    # Check if repo already exists
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -H "Authorization: token ${GITEA_PAT}" \
+        "${GITEA_URL}/api/v1/repos/${org}/${repo}")
+
+    if [[ "$http_code" == "200" ]]; then
+        log_info "Repo '${org}/${repo}' already exists"
+        return 0
+    fi
+
+    # Create repo under user (brik is a user, not an org) with auto-init
+    log_info "Creating repo '${org}/${repo}'..."
+    curl -sf --max-time 10 \
+        -H "Authorization: token ${GITEA_PAT}" \
         -H "Content-Type: application/json" \
-        -d '{"name":"briklab","scopes":["all"]}' \
-        "${GITEA_URL}/api/v1/users/${GITEA_ADMIN_USER}/tokens")
-
-    local token
-    token=$(echo "$response" | jq -r '.sha1 // empty' 2>/dev/null || true)
-
-    if [[ -z "$token" ]]; then
-        log_error "Failed to create token: ${response}"
+        -d "{\"name\":\"${repo}\",\"auto_init\":true,\"default_branch\":\"main\",\"description\":\"GitOps config repo for E2E deploy tests\"}" \
+        "${GITEA_URL}/api/v1/user/repos" -o /dev/null || {
+        log_error "Failed to create repo '${org}/${repo}'"
         return 1
-    fi
+    }
 
-    # Save to .env
-    if grep -q "^GITEA_PAT=" "$ENV_FILE" 2>/dev/null; then
-        sed -i.bak "s|^GITEA_PAT=.*|GITEA_PAT=${token}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
-    else
-        echo "GITEA_PAT=${token}" >> "$ENV_FILE"
-    fi
-
-    export GITEA_PAT="$token"
-    log_ok "API token saved to .env"
+    log_ok "Repo '${org}/${repo}' created"
 }
 
 # === Main ===
 wait_for_gitea
 create_admin_user
 create_api_token
+create_config_deploy_repo
 
 log_ok "Gitea configuration complete"
 echo ""

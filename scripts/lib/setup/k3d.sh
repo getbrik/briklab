@@ -2,17 +2,14 @@
 # k3d cluster creation + ArgoCD installation
 set -euo pipefail
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+# shellcheck source=../auth/argocd-portfwd.sh
+source "${SCRIPT_DIR}/../auth/argocd-portfwd.sh"
+# shellcheck source=../auth/argocd-token.sh
+source "${SCRIPT_DIR}/../auth/argocd-token.sh"
 
 K3D_API_PORT="${K3D_API_PORT:-6443}"
 K3D_HTTP_PORT="${K3D_HTTP_PORT:-8080}"
@@ -38,6 +35,23 @@ if k3d cluster list 2>/dev/null | grep -q "$CLUSTER_NAME"; then
     k3d cluster delete "$CLUSTER_NAME"
 fi
 
+# Create registries config for the external brik-registry
+REGISTRIES_FILE=$(mktemp /tmp/k3d-registries-XXXXXX.yaml)
+trap 'rm -f "$REGISTRIES_FILE"' EXIT
+
+cat > "$REGISTRIES_FILE" <<'YAML'
+mirrors:
+  "brik-registry:5000":
+    endpoint:
+      - "http://brik-registry:5000"
+  "brik-registry:5050":
+    endpoint:
+      - "http://brik-registry:5000"
+  "registry.briklab.test:5050":
+    endpoint:
+      - "http://brik-registry:5000"
+YAML
+
 # Create the k3d cluster
 log_info "Creating k3d cluster '${CLUSTER_NAME}'..."
 
@@ -46,26 +60,46 @@ k3d cluster create "$CLUSTER_NAME" \
     --port "${K3D_HTTP_PORT}:80@loadbalancer" \
     --agents 1 \
     --k3s-arg "--disable=traefik@server:0" \
+    --servers-memory "${K3D_SERVER_MEMORY:-4g}" \
+    --agents-memory "${K3D_AGENT_MEMORY:-4g}" \
     --network "brik-net" \
-    --registry-use "brik-registry:5000" \
+    --registry-config "$REGISTRIES_FILE" \
     --wait
 
 log_ok "k3d cluster created"
+
+# Export kubeconfig for CI runners (containers on brik-net)
+KUBECONFIG_DIR="${BRIKLAB_ROOT}/data/k3d"
+KUBECONFIG_FILE="${KUBECONFIG_DIR}/kubeconfig"
+mkdir -p "$KUBECONFIG_DIR"
+k3d kubeconfig get "$CLUSTER_NAME" \
+    | sed 's|https://0.0.0.0:6443|https://k3d-brik-serverlb:6443|' \
+    | sed 's|certificate-authority-data:.*|insecure-skip-tls-verify: true|' \
+    > "$KUBECONFIG_FILE"
+chmod 644 "$KUBECONFIG_FILE"
+log_ok "Kubeconfig exported to ${KUBECONFIG_FILE}"
 
 # Verify the cluster
 log_info "Verifying cluster..."
 kubectl cluster-info
 kubectl get nodes
 
+# Create namespaces used by E2E deploy tests
+kubectl create namespace brik-staging 2>/dev/null || true
+
 # Install ArgoCD
 log_info "Installing ArgoCD..."
 
 kubectl create namespace argocd 2>/dev/null || true
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# Wait for ArgoCD to be ready
+# Wait for all ArgoCD deployments to be ready
 log_info "Waiting for ArgoCD (may take 1-2 min)..."
-kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd
+for deploy in argocd-server argocd-repo-server argocd-applicationset-controller argocd-dex-server argocd-notifications-controller argocd-redis; do
+    kubectl wait --for=condition=available --timeout=180s "deployment/${deploy}" -n argocd 2>/dev/null || \
+        kubectl wait --for=condition=ready --timeout=180s "statefulset/${deploy}" -n argocd 2>/dev/null || true
+done
+kubectl wait --for=condition=ready --timeout=180s pod -l app.kubernetes.io/part-of=argocd -n argocd 2>/dev/null || true
 
 # Patch the service for NodePort
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
@@ -76,6 +110,48 @@ nohup kubectl port-forward svc/argocd-server -n argocd "${ARGOCD_PORT}:443" &>/d
 
 # Retrieve admin password
 local_argocd_password=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+
+# Save to .env for use by other scripts
+save_to_env "ARGOCD_ADMIN_PASSWORD" "$local_argocd_password"
+
+# Create ArgoCD service account and generate non-expiring API token
+log_info "Creating ArgoCD service account 'brik' and generating API token..."
+ensure_argocd_token
+
+# Create the brik-e2e ArgoCD application (used by node-deploy-gitops E2E scenario)
+log_info "Creating ArgoCD application 'brik-e2e'..."
+
+# Reload .env for Gitea password and fresh ArgoCD token
+reload_env
+
+local_gitea_password="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
+local_gitea_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy.git"
+
+kubectl create namespace brik-e2e 2>/dev/null || true
+
+kubectl apply -f - <<ARGOAPP
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: brik-e2e
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ${local_gitea_url}
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: brik-e2e
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+ARGOAPP
+log_ok "ArgoCD application 'brik-e2e' created"
 
 log_ok "ArgoCD installed"
 echo ""

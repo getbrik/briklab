@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: node-deploy-gitops
-  namespace: brik-staging
   labels:
     app: node-deploy-gitops
 spec:
@@ -17,7 +16,8 @@ spec:
     spec:
       containers:
         - name: app
-          image: brik-registry:5050/brik/node-deploy-gitops:latest
+          image: registry.briklab.test:5050/brik/node-deploy-gitops:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           resources:

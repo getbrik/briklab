@@ -1,7 +1,6 @@
-version: "3.8"
 services:
   app:
-    image: brik-registry:5050/brik/node-deploy:latest
+    image: registry.briklab.test:5050/brik/node-deploy:${IMAGE_TAG:-latest}
     ports:
       - "3000:3000"
     environment:

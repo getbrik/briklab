@@ -22,7 +22,7 @@ services:
     hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.test}
     restart: unless-stopped
     environment:
-      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD:-Brik-Gtlb-2026}
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}'
         gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2222}
@@ -140,6 +140,8 @@ services:
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-changeme_jenkins_admin}
       - NEXUS_ADMIN_PASSWORD=${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}
       - NEXUS_NPM_TOKEN=${NEXUS_NPM_TOKEN:-}
+      - ARGOCD_PORT=${ARGOCD_PORT:-9080}
+      - ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN:-}
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx4g
     ports:
       - "${JENKINS_HTTP_PORT:-9090}:${JENKINS_HTTP_PORT:-9090}"
@@ -147,6 +149,7 @@ services:
     volumes:
       - ./data/jenkins:/var/jenkins_home
       - ./config/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
+      - ./data/k3d/kubeconfig:/opt/brik/kubeconfig:ro
       # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -179,7 +182,7 @@ services:
     ports:
       - "${SSH_TARGET_PORT:-2223}:22"
     volumes:
-      - ./data/ssh-target/authorized_keys:/home/deploy/.ssh/authorized_keys:ro
+      - ./data/ssh-target/authorized_keys:/home/deploy/.ssh/authorized_keys_mounted:ro
       - ./data/ssh-target/app:/opt/app
     networks:
       brik-net:

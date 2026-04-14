@@ -4,38 +4,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/../../../.env"
 
-# Load .env
-if [[ -f "$ENV_FILE" ]]; then
-    set -a; source "$ENV_FILE"; set +a
-fi
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+# shellcheck source=../auth/gitlab-pat.sh
+source "${SCRIPT_DIR}/../auth/gitlab-pat.sh"
+reload_env
 
 GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
-
-# Save a variable to .env (add or update)
-save_to_env() {
-    local key="$1" value="$2"
-    if [[ ! -f "$ENV_FILE" ]]; then return; fi
-    if grep -q "^${key}=" "$ENV_FILE"; then
-        sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
-    else
-        echo "${key}=${value}" >> "$ENV_FILE"
-    fi
-}
+GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-Brik-Gtlb-2026}"
 
 # Wait for GitLab to be ready
 wait_for_gitlab() {
@@ -58,7 +35,7 @@ wait_for_gitlab() {
 
 # Configure root password and disable forced password change on first login
 setup_root_password() {
-    local password="${GITLAB_ROOT_PASSWORD:-Brik-Gitlab-2026!}"
+    local password="${GITLAB_ROOT_PASSWORD:-Brik-Gtlb-2026}"
     log_info "Configuring root password..."
 
     local result
@@ -85,48 +62,10 @@ RUBY
 }
 
 # Ensure a valid Personal Access Token exists.
-# If the current PAT (from .env) is valid, keep it.
-# Otherwise, revoke any stale token and create a fresh one.
+# Delegates to the shared auth library.
 create_pat() {
     log_info "Checking Personal Access Token..."
-
-    # Fast path: if we already have a PAT in .env, validate it via API
-    if [[ -n "${GITLAB_PAT:-}" ]]; then
-        local http_code
-        http_code=$(curl -sf -o /dev/null -w "%{http_code}" \
-            -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-            "${GITLAB_URL}/api/v4/user" 2>/dev/null || echo "000")
-        if [[ "$http_code" == "200" ]]; then
-            log_ok "Existing PAT is valid"
-            return 0
-        fi
-        log_warn "Existing PAT is invalid (HTTP ${http_code}), regenerating..."
-    fi
-
-    # Revoke any existing token named brik-briklab and create a fresh one
-    local pat
-    pat=$(cat <<'RUBY' | docker exec -i brik-gitlab gitlab-rails runner - 2>/dev/null | tail -1
-user = User.find_by_username("root")
-existing = user.personal_access_tokens.active.find_by(name: "brik-briklab")
-existing&.revoke!
-token = user.personal_access_tokens.create!(
-  name: "brik-briklab",
-  scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
-  expires_at: 365.days.from_now
-)
-puts token.token
-RUBY
-)
-
-    if [[ -n "$pat" ]]; then
-        log_ok "PAT created: ${pat:0:15}..."
-        save_to_env "GITLAB_PAT" "$pat"
-        export GITLAB_PAT="$pat"
-        log_ok "Token saved to .env"
-    else
-        log_error "Failed to create PAT"
-        exit 1
-    fi
+    ensure_gitlab_pat
 }
 
 # Create a test project
@@ -194,7 +133,7 @@ _set_group_variable() {
         "${GITLAB_URL}/api/v4/groups/${group_path}/variables" \
         --data-urlencode "key=${key}" \
         --data-urlencode "value=${value}" \
-        -d "protected=false&masked=${masked}")
+        -d "protected=false&masked=${masked}&variable_type=env_var")
 
     case "$http_code" in
         201) return 0 ;;
@@ -205,7 +144,7 @@ _set_group_variable() {
                 -H "PRIVATE-TOKEN: ${pat}" \
                 "${GITLAB_URL}/api/v4/groups/${group_path}/variables/${key}" \
                 --data-urlencode "value=${value}" \
-                -d "protected=false&masked=${masked}"
+                -d "protected=false&masked=${masked}&variable_type=env_var"
             return 0
             ;;
         *)
@@ -230,7 +169,7 @@ setup_nexus_ci_variables() {
     npm_token=$(printf 'admin:%s' "$nexus_password" | base64)
 
     local count=0
-    local total=8
+    local total=10
 
     # Docker registry credentials (all 5 stacks)
     _set_group_variable "NEXUS_DOCKER_USER" "admin" "false" && count=$((count + 1))
@@ -252,8 +191,25 @@ setup_nexus_ci_variables() {
     # NuGet (dotnet-complete) - format admin:password for basic auth
     _set_group_variable "NEXUS_NUGET_API_KEY" "admin:${nexus_password}" "true" && count=$((count + 1))
 
+    # kubectl extra options (skip TLS validation for k3d self-signed certs)
+    _set_group_variable "BRIK_KUBECTL_OPTS" "--insecure-skip-tls-verify --validate=false" "false" && count=$((count + 1))
+
+    # kubeconfig path (runner mounts kubeconfig at /root/.kube/config but GitLab sets HOME to build dir)
+    _set_group_variable "KUBECONFIG" "/root/.kube/config" "false" && count=$((count + 1))
+
+    # ArgoCD (GitOps deploy) - runners reach ArgoCD via host.docker.internal
+    # Uses the non-expiring API token generated by k3d.sh setup (stored in .env)
+    if [[ -n "${ARGOCD_AUTH_TOKEN:-}" ]]; then
+        local argocd_server="host.docker.internal:${ARGOCD_PORT:-9080}"
+        total=$((total + 2))
+        _set_group_variable "ARGOCD_SERVER" "$argocd_server" "false" && count=$((count + 1))
+        _set_group_variable "ARGOCD_AUTH_TOKEN" "$ARGOCD_AUTH_TOKEN" "true" && count=$((count + 1))
+    else
+        log_warn "ARGOCD_AUTH_TOKEN not found in .env -- run k3d setup first"
+    fi
+
     if [[ $count -eq $total ]]; then
-        log_ok "All ${total} Nexus CI/CD variables configured"
+        log_ok "All ${total} CI/CD variables configured"
     else
         log_warn "${count}/${total} Nexus CI/CD variables configured"
     fi

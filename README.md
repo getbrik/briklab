@@ -25,6 +25,26 @@ For internal architecture details, see [docs/architecture.md](docs/architecture.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (18 GB RAM recommended)
 - `jq` (`brew install jq`)
 
+#### K8s / Deploy E2E (optional)
+
+Required only for deploy E2E scenarios involving Kubernetes and ArgoCD (`node-deploy-k8s`, `node-deploy-gitops`, `node-deploy-rollback`, `node-deploy-failure`).
+
+**k3d** (lightweight K3s in Docker):
+
+| OS | Command |
+|----|---------|
+| macOS | `brew install k3d` |
+| Linux | `wget -q -O - https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \| bash` |
+
+**argocd CLI**:
+
+| OS | Command |
+|----|---------|
+| macOS | `brew install argocd` |
+| Linux | `curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 && sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd && rm argocd-linux-amd64` |
+
+See [k3d install docs](https://k3d.io/#installation) and [ArgoCD CLI install docs](https://argo-cd.readthedocs.io/en/stable/cli_installation/) for other methods.
+
 ### Network configuration
 
 Add to `/etc/hosts`:
@@ -59,7 +79,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 
 | Service | Port(s) | Credentials |
 |---------|---------|-------------|
-| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Brik-Gitlab-2026!` |
+| GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Brik-Gtlb-2026` |
 | GitLab Runner | - | - |
 | Docker Registry | 5050 | - |
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
@@ -67,7 +87,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 | Nexus 3 CE | 8081 (UI/API), 8082 (Docker) | `admin` / `Brik-Nexus-2026` |
 | SSH Target | 22 (internal) | `deploy` / SSH key |
 | k3d (k3s) | 6443, 8080 | - |
-| ArgoCD | 9080 | - |
+| ArgoCD | 9080 | `admin` / (dynamic, see `k3d-start` output) |
 
 > **macOS note:** the registry uses port 5050 because AirPlay Receiver occupies port 5000.
 
@@ -84,7 +104,7 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 | Jenkins UI | http://jenkins.briklab.test:9090 |
 | Nexus UI | http://nexus.briklab.test:8081 |
 | Nexus Docker | http://nexus.briklab.test:8082 |
-| ArgoCD UI | http://argocd.briklab.test:9080 |
+| ArgoCD UI | https://argocd.briklab.test:9080 |
 | SSH Target | `ssh deploy@ssh-target.briklab.test` (internal only) |
 
 ### Nexus Repositories
@@ -291,6 +311,19 @@ Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platfo
 
 > Runner images are selected automatically by the init job based on `project.stack` and `project.stack_version` in `brik.yml`. The init job resolves the image and propagates it via dotenv to downstream jobs. Images are published at `ghcr.io/getbrik/brik-runner-<stack>:<version>`.
 
+## Known Issues (E2E)
+
+Full suite run on 2026-04-14
+
+| Issue | Affected scenarios | Root cause |
+|-------|-------------------|------------|
+| Nexus registry auth | all `*-complete` (Package fail) | Runners lack `docker login` to Nexus Docker registry |
+| Compose deploy auth | `node-deploy` (Deploy fail) | Runner Docker daemon not authenticated to GitLab registry for `docker compose pull` |
+| SSH host key | `node-deploy-ssh` (Deploy fail) | SSH target host key not in runner's `known_hosts` |
+| Node lint config | `node-complete` (Verify fail) | eslint configuration issue in test project |
+| Rollback design | `node-deploy-rollback` | Known design issue (see `deploy-remaining-issues.md`) |
+| Runner saturation | `node-minimal`, `python-minimal` (GitLab timeout) | Single runner overwhelmed by 24 concurrent pipelines |
+
 ## Troubleshooting
 
 **GitLab won't start** -- Check Docker Desktop has at least 18 GB RAM allocated. First start takes 3-5 minutes. Check logs: `./scripts/briklab.sh logs gitlab`
@@ -332,6 +365,42 @@ docker rmi sonatype/nexus3:3.90.2-alpine
 docker network rm brik-net 2>/dev/null
 ```
 
+## Script Architecture
+
+Briklab scripts are organized into reusable libraries under `scripts/lib/`:
+
+```
+scripts/
+  briklab.sh                    # CLI entry point
+  lib/
+    common.sh                   # Shared utilities (logging, retry, env loading)
+    verify.sh                   # Environment verification
+    auth/
+      gitlab-pat.sh             # GitLab PAT management
+      gitea-pat.sh              # Gitea PAT management
+      argocd-token.sh           # ArgoCD token retrieval
+      argocd-portfwd.sh         # ArgoCD port-forward management
+    setup/
+      gitlab.sh                 # GitLab CE configuration
+      runner.sh                 # GitLab Runner registration
+      gitea.sh                  # Gitea configuration
+      jenkins.sh                # Jenkins CasC + Job DSL
+      nexus.sh                  # Nexus repository creation
+      k3d.sh                    # k3d cluster + ArgoCD install
+      ssh-target.sh             # SSH target container setup
+      smoke-test.sh             # Post-setup health checks
+    e2e/
+      preflight.sh              # Pre-flight checks before E2E runs
+      push-test-project-gitlab.sh  # Push repos to GitLab
+      push-test-project-gitea.sh   # Push repos to Gitea
+      e2e-gitlab-suite.sh       # GitLab E2E scenario runner
+      e2e-gitlab-test.sh        # GitLab single pipeline test
+      e2e-jenkins-suite.sh      # Jenkins E2E scenario runner
+      e2e-jenkins-test.sh       # Jenkins single pipeline test
+```
+
+Auth libraries are reusable -- each validates and caches credentials, and can be sourced from any script.
+
 ## Status
 
 - [x] GitLab CE + Runner + Registry
@@ -346,7 +415,10 @@ docker network rm brik-net 2>/dev/null
 - [x] SSH target container for deploy E2E
 - [x] Error scenario E2E (build fail, test fail, invalid config, deploy fail)
 - [x] k3d + ArgoCD integration (setup script, CLI commands, gitops E2E scenario)
+- [x] Script refactoring into reusable libraries (auth, setup, e2e)
 - [ ] Complete E2E scenarios with Nexus artifact verification
+- [ ] Registry auth for runners (Nexus Docker push from *-complete scenarios)
+- [ ] SSH host key provisioning for deploy-ssh scenarios
 
 ## Related
 

@@ -22,6 +22,14 @@ jenkins:
             value: "dummy-dry-run-token"
           - key: NEXUS_NUGET_API_KEY
             value: "admin:${NEXUS_ADMIN_PASSWORD}"
+          - key: BRIK_KUBECTL_OPTS
+            value: "--insecure-skip-tls-verify --validate=false"
+          - key: ARGOCD_SERVER
+            value: "host.docker.internal:${ARGOCD_PORT}"
+          - key: ARGOCD_AUTH_TOKEN
+            value: "${ARGOCD_AUTH_TOKEN}"
+          - key: ARGOCD_INSECURE
+            value: "true"
   securityRealm:
     local:
       allowsSignup: false
@@ -284,6 +292,70 @@ jobs:
               git {
                 remote {
                   url('http://gitea.briklab.test:3000/brik/node-deploy.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-k8s') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-k8s.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-ssh') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-ssh.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-gitops') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-gitops.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-failure') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-failure.git')
                 }
                 branches('*/main')
               }
