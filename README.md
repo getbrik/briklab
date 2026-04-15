@@ -359,7 +359,7 @@ For the complete list of known issues and solutions, see [docs/architecture.md -
 
 # Full removal: after clean, remove Docker images manually
 docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding registry:3.0
-docker rmi gitea/gitea:1.25.5-rootless
+docker rmi gitea/gitea:1.25.5
 docker rmi briklab-jenkins  # custom-built Jenkins image
 docker rmi sonatype/nexus3:3.90.2-alpine
 docker network rm brik-net 2>/dev/null
