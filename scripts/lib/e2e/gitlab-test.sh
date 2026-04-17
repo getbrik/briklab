@@ -14,6 +14,8 @@
 #   E2E_EXPECT_FAILED_JOB - Job name that must have "failed" status (used with E2E_EXPECT_FAILURE)
 #   E2E_CI_VARIABLES     - Comma-separated KEY=VALUE pairs to pass as pipeline variables (default: empty)
 #   E2E_SKIP_LOG_CHECK   - Set to "true" to skip job log validation (default: false)
+#   E2E_EXPECTED_ERROR_PATTERN - Regex pattern expected in the failed job log (for error scenarios)
+#   E2E_EXPECT_SUCCESS_JOBS - Comma-separated jobs that must succeed even in failure mode
 #
 # Prerequisites:
 #   - briklab GitLab must be running
@@ -192,9 +194,30 @@ for job_name in "${REQUIRED_JOBS[@]}"; do
     fi
 done
 
-# 8. Check expected failed job
+# 8. Check expected failed job and error pattern
 if [[ "$EXPECT_FAILURE" == "true" && -n "$EXPECT_FAILED_JOB" ]]; then
     assert.job_status "$JOBS" "$EXPECT_FAILED_JOB" "failed"
+
+    # Validate error pattern in the failed job's log
+    if [[ -n "${E2E_EXPECTED_ERROR_PATTERN:-}" ]]; then
+        local_job_id=$(echo "$JOBS" | jq -r \
+            --arg name "$EXPECT_FAILED_JOB" \
+            '[.[] | select(.name == $name)][0].id // empty' 2>/dev/null || true)
+        if [[ -n "$local_job_id" ]]; then
+            FAILED_LOG=$(e2e.gitlab.get_job_log "$PROJECT_ID" "$local_job_id")
+            assert.job_log_contains "$FAILED_LOG" "$E2E_EXPECTED_ERROR_PATTERN"
+        fi
+    fi
+
+    # Verify jobs that should have succeeded before the failure
+    if [[ -n "${E2E_EXPECT_SUCCESS_JOBS:-}" ]]; then
+        IFS=',' read -ra _success_jobs <<< "$E2E_EXPECT_SUCCESS_JOBS"
+        for sj in "${_success_jobs[@]}"; do
+            sj="$(echo "$sj" | tr -d '[:space:]')"
+            [[ -z "$sj" ]] && continue
+            assert.job_status "$JOBS" "$sj" "success"
+        done
+    fi
 fi
 
 # 9. Check optional jobs (warn only, do not assert)
