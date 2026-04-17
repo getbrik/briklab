@@ -47,7 +47,7 @@ SCENARIOS=(
     "node-deploy-k8s|node-deploy-k8s|node-deploy-k8s|600|false"
     "node-deploy-ssh|node-deploy-ssh|node-deploy-ssh|600|false"
     "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
-    "node-deploy-rollback|node-deploy-gitops|node-deploy-gitops|900|false|BRIK_DEPLOY_ROLLBACK_TEST=true,BRIK_DEPLOY_IMAGE_TAG=rollback-test|node-deploy-gitops"
+    "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false|||node-deploy-gitops"
     "node-deploy-failure|node-deploy-failure|node-deploy-failure|600|true"
     "error-build|node-error-build|node-error-build|300|true"
     "error-test|node-error-test|node-error-test|300|true"
@@ -82,6 +82,12 @@ run_scenario() {
     echo -e "${BOLD}========================================${NC}"
     if [[ -n "${ci_vars:-}" ]]; then
         echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
+    fi
+
+    # Multi-step rollback scenario: delegate to dedicated script
+    if [[ "$name" == "node-deploy-rollback" ]]; then
+        E2E_JENKINS_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/e2e-jenkins-rollback-test.sh"
+        return $?
     fi
 
     E2E_JENKINS_JOB="$job" \

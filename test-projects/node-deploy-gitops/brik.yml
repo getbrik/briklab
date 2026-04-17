@@ -33,8 +33,8 @@ deploy:
   environments:
     staging:
       target: gitops
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy.git
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-gitops.git
       path: k8s
       source: k8s
       controller: argocd
-      app_name: brik-e2e
+      app_name: brik-e2e-gitops

@@ -228,9 +228,9 @@ Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pip
 | `node-deploy-k8s` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
 | `node-deploy-ssh` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
 | `node-deploy-gitops` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-rollback` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
+| `node-deploy-rollback` | Node.js | multi-step | v0.1.0 deploy, v0.2.0 deploy, config revert | pass |
 
-> `node-deploy-dryrun` reuses the `node-deploy` project with `BRIK_DRY_RUN=true`. `node-deploy-rollback` reuses `node-deploy-gitops` with `BRIK_DEPLOY_ROLLBACK_TEST=true`. CI variables are passed via the E2E framework.
+> `node-deploy-dryrun` reuses the `node-deploy` project with `BRIK_DRY_RUN=true`. `node-deploy-rollback` uses `node-deploy-gitops-rollback` with a 3-step commit chain: deploy v0.1.0, deploy v0.2.0, revert config repo to verify ArgoCD rolls back to v0.1.0 image.
 
 ##### Deploy failure scenario
 

@@ -1,7 +1,7 @@
 version: 1
 
 project:
-  name: node-deploy-k8s
+  name: node-deploy-gitops-rollback
   stack: node
   stack_version: "22"
 
@@ -18,12 +18,12 @@ test:
 
 package:
   docker:
-    image: nexus.briklab.test:8082/brik/node-deploy-k8s
+    image: nexus.briklab.test:8082/brik/node-deploy-gitops-rollback
     dockerfile: Dockerfile
 
 publish:
   docker:
-    image: nexus.briklab.test:8082/brik/node-deploy-k8s
+    image: nexus.briklab.test:8082/brik/node-deploy-gitops-rollback
     registry: nexus.briklab.test:8082
     username_var: BRIK_PUBLISH_DOCKER_USER
     password_var: BRIK_PUBLISH_DOCKER_PASSWORD
@@ -32,6 +32,9 @@ deploy:
   workflow: trunk-based
   environments:
     staging:
-      target: k8s
-      namespace: brik-e2e-k8s
-      manifest: k8s/deployment.yaml
+      target: gitops
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-rollback.git
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e-rollback

@@ -52,7 +52,7 @@ SCENARIOS=(
     "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
-    "node-deploy-rollback|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_DEPLOY_ROLLBACK_TEST=true,BRIK_DEPLOY_IMAGE_TAG=rollback-test|node-deploy-gitops"
+    "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # --- Deploy failure scenario (expect pipeline failure at deploy) ---
     "node-deploy-failure|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
@@ -102,6 +102,12 @@ run_scenario() {
         echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
     fi
     echo -e "${BOLD}========================================${NC}"
+
+    # Multi-step rollback scenario: delegate to dedicated script
+    if [[ "$name" == "node-deploy-rollback" ]]; then
+        E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/e2e-gitlab-rollback-test.sh"
+        return $?
+    fi
 
     local project_encoded
     project_encoded="brik%2F${project}"

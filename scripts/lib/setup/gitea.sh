@@ -134,10 +134,12 @@ create_api_token() {
     ensure_gitea_pat "briklab"
 }
 
-# Create the GitOps config repo (used by node-deploy-gitops E2E scenario)
+# Create a GitOps config-deploy repo on Gitea.
+# Args: $1 = repo name, $2 = description
 create_config_deploy_repo() {
     local org="brik"
-    local repo="config-deploy"
+    local repo="$1"
+    local description="${2:-GitOps config repo for E2E deploy tests}"
 
     # Check if repo already exists
     local http_code
@@ -155,7 +157,7 @@ create_config_deploy_repo() {
     curl -sf --max-time 10 \
         -H "Authorization: token ${GITEA_PAT}" \
         -H "Content-Type: application/json" \
-        -d "{\"name\":\"${repo}\",\"auto_init\":true,\"default_branch\":\"main\",\"description\":\"GitOps config repo for E2E deploy tests\"}" \
+        -d "{\"name\":\"${repo}\",\"auto_init\":true,\"default_branch\":\"main\",\"description\":\"${description}\"}" \
         "${GITEA_URL}/api/v1/user/repos" -o /dev/null || {
         log_error "Failed to create repo '${org}/${repo}'"
         return 1
@@ -168,7 +170,8 @@ create_config_deploy_repo() {
 wait_for_gitea
 create_admin_user
 create_api_token
-create_config_deploy_repo
+create_config_deploy_repo "config-deploy-gitops" "GitOps config repo for E2E gitops deploy tests"
+create_config_deploy_repo "config-deploy-rollback" "GitOps config repo for E2E rollback deploy tests"
 
 log_ok "Gitea configuration complete"
 echo ""
