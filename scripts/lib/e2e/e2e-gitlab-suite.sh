@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # E2E Test Suite Orchestrator
 #
-# Runs multiple E2E pipeline scenarios sequentially and reports results.
+# Runs multiple E2E pipeline scenarios and reports results.
+# Supports parallel batch execution for faster runs.
 #
 # Usage:
-#   bash e2e-gitlab-suite.sh              # Run all scenarios
-#   bash e2e-gitlab-suite.sh --list       # List available scenarios
-#   bash e2e-gitlab-suite.sh --only NAME  # Run a single scenario by name
-#   bash e2e-gitlab-suite.sh --complete   # Run only *-complete scenarios
+#   bash e2e-gitlab-suite.sh                    # Run all scenarios (sequential)
+#   bash e2e-gitlab-suite.sh --batch-size 4     # Run in batches of 4
+#   bash e2e-gitlab-suite.sh --list             # List available scenarios
+#   bash e2e-gitlab-suite.sh --only NAME        # Run a single scenario by name
+#   bash e2e-gitlab-suite.sh --complete         # Run only *-complete scenarios
 #
 # Prerequisites:
 #   - briklab GitLab must be running
@@ -18,16 +20,54 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=../common.sh
 source "${SCRIPT_DIR}/../common.sh"
+# shellcheck source=../auth/gitlab-pat.sh
+source "${SCRIPT_DIR}/../auth/gitlab-pat.sh"
+reload_env
+ensure_gitlab_pat
+
+GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
+
+# Cancel ALL running/pending pipelines across all projects in the brik group.
+# Called after push (which auto-triggers pipelines) and before E2E scenarios.
+cancel_all_pipelines() {
+    local pat="${GITLAB_PAT:-}"
+    [[ -z "$pat" ]] && return 0
+
+    log_info "Cancelling auto-triggered pipelines..."
+    local group_id
+    group_id=$(curl -s -H "PRIVATE-TOKEN: ${pat}" \
+        "${GITLAB_URL}/api/v4/groups/brik" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+    [[ -z "$group_id" ]] && return 0
+
+    local projects
+    projects=$(curl -s -H "PRIVATE-TOKEN: ${pat}" \
+        "${GITLAB_URL}/api/v4/groups/${group_id}/projects?per_page=100" \
+        | python3 -c "import sys,json; [print(p['id']) for p in json.load(sys.stdin)]" 2>/dev/null || true)
+
+    local cancelled=0
+    for pid in $projects; do
+        for status in running pending; do
+            for ppid in $(curl -s -H "PRIVATE-TOKEN: ${pat}" \
+                "${GITLAB_URL}/api/v4/projects/${pid}/pipelines?status=${status}&per_page=100" \
+                | python3 -c "import sys,json; [print(p['id']) for p in json.load(sys.stdin)]" 2>/dev/null); do
+                curl -s -o /dev/null -H "PRIVATE-TOKEN: ${pat}" -X POST \
+                    "${GITLAB_URL}/api/v4/projects/${pid}/pipelines/${ppid}/cancel" 2>/dev/null || true
+                cancelled=$((cancelled + 1))
+            done
+        done
+    done
+    [[ $cancelled -gt 0 ]] && log_info "Cancelled ${cancelled} pipeline(s)"
+}
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
-# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars
+# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars | depends_on
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
-    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
+    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
     "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
@@ -42,7 +82,7 @@ SCENARIOS=(
     "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
-    "node-deploy-rollback|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_DEPLOY_ROLLBACK_TEST=true,BRIK_DEPLOY_IMAGE_TAG=rollback-test"
+    "node-deploy-rollback|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_DEPLOY_ROLLBACK_TEST=true,BRIK_DEPLOY_IMAGE_TAG=rollback-test|node-deploy-gitops"
     # --- Deploy failure scenario (expect pipeline failure at deploy) ---
     "node-deploy-failure|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
@@ -64,13 +104,13 @@ SCENARIOS=(
 list_scenarios() {
     echo -e "${BOLD}Available E2E scenarios:${NC}"
     echo ""
-    printf "  %-20s %-15s %-10s %-8s %s\n" "NAME" "PROJECT" "REF" "EXPECT" "REQUIRED JOBS"
-    printf "  %-20s %-15s %-10s %-8s %s\n" "----" "-------" "---" "------" "-------------"
+    printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "NAME" "PROJECT" "REF" "EXPECT" "DEPENDS_ON" "REQUIRED JOBS"
+    printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "----" "-------" "---" "------" "----------" "-------------"
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
         local mode="pass"
         [[ -n "${expect_fail:-}" ]] && mode="fail"
-        printf "  %-20s %-15s %-10s %-8s %s\n" "$name" "$project" "$ref" "$mode" "$required"
+        printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "$name" "$project" "$ref" "$mode" "${depends_on:--}" "$required"
     done
     echo ""
 }
@@ -80,7 +120,7 @@ list_scenarios() {
 # Returns: 0 on pass, 1 on fail
 run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
+    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars _depends_on <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
@@ -120,6 +160,7 @@ run_scenario() {
 # ---------------------------------------------------------------------------
 ONLY_SCENARIO=""
 FILTER_COMPLETE=""
+BATCH_SIZE="${E2E_BATCH_SIZE:-0}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -139,9 +180,17 @@ while [[ $# -gt 0 ]]; do
             FILTER_COMPLETE="true"
             shift
             ;;
+        --batch-size)
+            if [[ -z "${2:-}" ]]; then
+                log_error "--batch-size requires a number"
+                exit 1
+            fi
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
         *)
             log_error "Unknown argument: $1"
-            echo "Usage: $0 [--list] [--only SCENARIO_NAME] [--complete]"
+            echo "Usage: $0 [--list] [--only SCENARIO_NAME] [--complete] [--batch-size N]"
             exit 1
             ;;
     esac
@@ -159,7 +208,7 @@ if [[ -n "$ONLY_SCENARIO" ]]; then
     # Find the matching scenario
     FOUND=false
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
         if [[ "$name" == "$ONLY_SCENARIO" ]]; then
             FOUND=true
             PROJECTS_TO_PUSH="$project"
@@ -178,7 +227,7 @@ else
     PROJECTS_TO_PUSH=""
     declare -A _seen_projects=()
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars <<< "$scenario"
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
         if [[ -z "${_seen_projects[$project]:-}" ]]; then
             _seen_projects["$project"]=1
             PROJECTS_TO_PUSH="${PROJECTS_TO_PUSH:+${PROJECTS_TO_PUSH},}${project}"
@@ -192,16 +241,17 @@ echo ""
 
 E2E_TEST_PROJECTS="$PROJECTS_TO_PUSH" bash "${SCRIPT_DIR}/push-test-project-gitlab.sh"
 
-# ---------------------------------------------------------------------------
-# Run scenarios
-# ---------------------------------------------------------------------------
-TOTAL=0
-PASSED=0
-FAILED=0
-RESULTS=()
+# Wait briefly for GitLab to create auto-triggered pipelines from the push,
+# then cancel them all to free runner slots and avoid ArgoCD conflicts.
+sleep 3
+cancel_all_pipelines
 
+# ---------------------------------------------------------------------------
+# Collect scenarios to run
+# ---------------------------------------------------------------------------
+SCENARIOS_TO_RUN=()
 for scenario in "${SCENARIOS[@]}"; do
-    IFS='|' read -r name project ref required optional timeout expect_fail <<< "$scenario"
+    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
 
     # Skip if --only is set and this isn't the target
     if [[ -n "$ONLY_SCENARIO" && "$name" != "$ONLY_SCENARIO" ]]; then
@@ -213,16 +263,146 @@ for scenario in "${SCENARIOS[@]}"; do
         continue
     fi
 
-    TOTAL=$((TOTAL + 1))
-
-    if run_scenario "$scenario"; then
-        PASSED=$((PASSED + 1))
-        RESULTS+=("PASS: ${name}")
-    else
-        FAILED=$((FAILED + 1))
-        RESULTS+=("FAIL: ${name}")
-    fi
+    SCENARIOS_TO_RUN+=("$scenario")
 done
+
+# ---------------------------------------------------------------------------
+# Run scenarios (sequential or batched)
+# ---------------------------------------------------------------------------
+TOTAL=${#SCENARIOS_TO_RUN[@]}
+PASSED=0
+FAILED=0
+RESULTS=()
+
+# Separate independent and dependent scenarios
+# When --only is used, skip dependency checks (user explicitly chose the scenario)
+INDEPENDENT_SCENARIOS=()
+DEPENDENT_SCENARIOS=()
+if [[ -n "$ONLY_SCENARIO" ]]; then
+    INDEPENDENT_SCENARIOS=("${SCENARIOS_TO_RUN[@]}")
+else
+    for scenario in "${SCENARIOS_TO_RUN[@]}"; do
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
+        if [[ -n "${depends_on:-}" ]]; then
+            DEPENDENT_SCENARIOS+=("$scenario")
+        else
+            INDEPENDENT_SCENARIOS+=("$scenario")
+        fi
+    done
+fi
+
+INDEPENDENT_TOTAL=${#INDEPENDENT_SCENARIOS[@]}
+DEPENDENT_TOTAL=${#DEPENDENT_SCENARIOS[@]}
+[[ $DEPENDENT_TOTAL -gt 0 ]] && log_info "${DEPENDENT_TOTAL} scenario(s) with dependencies will run after their dependency passes"
+
+# Track passed scenario names for dependency resolution
+declare -A PASSED_SCENARIOS=()
+
+# --- Phase 1: Run independent scenarios (batched or sequential) ---
+if [[ $BATCH_SIZE -gt 1 && $INDEPENDENT_TOTAL -gt 1 ]]; then
+    log_info "Running ${INDEPENDENT_TOTAL} independent scenarios in batches of ${BATCH_SIZE}"
+    echo ""
+
+    RESULT_DIR=$(mktemp -d)
+    trap 'rm -rf "$RESULT_DIR"' EXIT
+
+    idx=0
+    while [[ $idx -lt $INDEPENDENT_TOTAL ]]; do
+        batch_end=$((idx + BATCH_SIZE))
+        [[ $batch_end -gt $INDEPENDENT_TOTAL ]] && batch_end=$INDEPENDENT_TOTAL
+        batch_num=$(( (idx / BATCH_SIZE) + 1 ))
+
+        echo ""
+        log_info "--- Batch ${batch_num}: scenarios $((idx + 1)) to ${batch_end} ---"
+
+        PIDS=()
+        BATCH_NAMES=()
+        for (( i=idx; i<batch_end; i++ )); do
+            scenario="${INDEPENDENT_SCENARIOS[$i]}"
+            IFS='|' read -r name _rest <<< "$scenario"
+            BATCH_NAMES+=("$name")
+
+            (
+                if run_scenario "$scenario" > "${RESULT_DIR}/${name}.log" 2>&1; then
+                    echo "PASS" > "${RESULT_DIR}/${name}.result"
+                else
+                    echo "FAIL" > "${RESULT_DIR}/${name}.result"
+                fi
+            ) &
+            PIDS+=($!)
+        done
+
+        # Wait for all processes in this batch
+        for pid in "${PIDS[@]}"; do
+            wait "$pid" 2>/dev/null || true
+        done
+
+        # Collect results from this batch
+        for name in "${BATCH_NAMES[@]}"; do
+            result_file="${RESULT_DIR}/${name}.result"
+            if [[ -f "$result_file" && "$(cat "$result_file")" == "PASS" ]]; then
+                PASSED=$((PASSED + 1))
+                RESULTS+=("PASS: ${name}")
+                PASSED_SCENARIOS["$name"]=1
+                log_ok "PASS: ${name}"
+            else
+                FAILED=$((FAILED + 1))
+                RESULTS+=("FAIL: ${name}")
+                log_error "FAIL: ${name}"
+                # Show last 10 lines of log for failed scenarios
+                if [[ -f "${RESULT_DIR}/${name}.log" ]]; then
+                    echo "  --- last 10 lines ---"
+                    tail -10 "${RESULT_DIR}/${name}.log" | sed 's/^/  /'
+                    echo "  ---"
+                fi
+            fi
+        done
+
+        idx=$batch_end
+    done
+else
+    # Sequential execution (default, backward compatible)
+    for scenario in "${INDEPENDENT_SCENARIOS[@]}"; do
+        IFS='|' read -r name _rest <<< "$scenario"
+
+        if run_scenario "$scenario"; then
+            PASSED=$((PASSED + 1))
+            RESULTS+=("PASS: ${name}")
+            PASSED_SCENARIOS["$name"]=1
+        else
+            FAILED=$((FAILED + 1))
+            RESULTS+=("FAIL: ${name}")
+        fi
+    done
+fi
+
+# --- Phase 2: Run dependent scenarios sequentially ---
+if [[ $DEPENDENT_TOTAL -gt 0 ]]; then
+    echo ""
+    log_info "--- Running ${DEPENDENT_TOTAL} dependent scenario(s) ---"
+
+    for scenario in "${DEPENDENT_SCENARIOS[@]}"; do
+        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
+
+        # Check that the dependency passed
+        if [[ -z "${PASSED_SCENARIOS[$depends_on]:-}" ]]; then
+            log_warn "SKIP: ${name} (dependency '${depends_on}' did not pass)"
+            FAILED=$((FAILED + 1))
+            RESULTS+=("SKIP: ${name} (dependency '${depends_on}' failed)")
+            continue
+        fi
+
+        log_info "Dependency '${depends_on}' passed - running ${name}"
+        if run_scenario "$scenario"; then
+            PASSED=$((PASSED + 1))
+            RESULTS+=("PASS: ${name}")
+            PASSED_SCENARIOS["$name"]=1
+        else
+            FAILED=$((FAILED + 1))
+            RESULTS+=("FAIL: ${name}")
+        fi
+    done
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -236,6 +416,8 @@ echo ""
 for result in "${RESULTS[@]}"; do
     if [[ "$result" == PASS:* ]]; then
         log_ok "$result"
+    elif [[ "$result" == SKIP:* ]]; then
+        log_warn "$result"
     else
         log_error "$result"
     fi

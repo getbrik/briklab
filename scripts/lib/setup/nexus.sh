@@ -135,6 +135,41 @@ enable_anonymous_access() {
     fi
 }
 
+# Accept the CE EULA (required since Nexus 3.78+, blocks Docker registry otherwise)
+accept_eula() {
+    local eula_status
+    eula_status=$(curl -sf -u "admin:${NEXUS_NEW_PASSWORD}" \
+        "${NEXUS_URL}/service/rest/v1/system/eula" 2>/dev/null || echo '{}')
+
+    local accepted
+    accepted=$(echo "$eula_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('accepted', True))" 2>/dev/null || echo "true")
+
+    if [[ "$accepted" == "True" || "$accepted" == "true" ]]; then
+        log_info "EULA already accepted"
+        return 0
+    fi
+
+    log_info "Accepting Nexus CE EULA..."
+    local disclaimer
+    disclaimer=$(echo "$eula_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('disclaimer', ''))" 2>/dev/null)
+
+    local json_body
+    json_body=$(DISCLAIMER="$disclaimer" python3 -c 'import json,os; print(json.dumps({"accepted": True, "disclaimer": os.environ["DISCLAIMER"]}))')
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d "$json_body" \
+        "${NEXUS_URL}/service/rest/v1/system/eula")
+
+    if [[ "$http_code" == "204" ]]; then
+        log_ok "EULA accepted"
+    else
+        log_warn "EULA acceptance returned HTTP ${http_code}"
+    fi
+}
+
 # Create a hosted repository via Nexus REST API
 # Usage: create_repo <format> <name> <json_body>
 create_repo() {
@@ -245,6 +280,7 @@ wait_for_nexus
 change_admin_password
 enable_token_realms
 enable_anonymous_access
+accept_eula
 create_repositories
 
 # Save config to .env
