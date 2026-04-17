@@ -34,7 +34,7 @@ ensure_gitlab_pat
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
-# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars | depends_on
+# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars | depends_on | error_pattern | success_jobs
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
@@ -53,20 +53,20 @@ SCENARIOS=(
     "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
     "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "node-deploy-helm|node-deploy-helm|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
-    # --- Deploy failure scenario (expect pipeline failure at deploy) ---
-    "node-deploy-failure|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
     "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
-    # --- Error scenarios (expect pipeline failure) ---
-    "error-build|node-error-build|main|brik-init||300|brik-build"
-    "error-test|node-error-test|main|brik-init,brik-build||300|brik-test"
-    "error-config|invalid-config|main|||300|brik-init"
+    # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
+    "error-build|node-error-build|main|brik-init||300|brik-build|||npm ERR!|SyntaxError|brik-init"
+    "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL|test.*failed|brik-init,brik-build"
+    "error-config|invalid-config|main|||300|brik-init|||validat|invalid|schema"
+    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent|NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
 )
 
 # ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ _suite_list_scenarios() {
 
 _suite_run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars _depends_on <<< "$scenario"
+    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars _depends_on error_pattern success_jobs <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
@@ -103,6 +103,9 @@ _suite_run_scenario() {
     fi
     if [[ -n "${ci_vars:-}" ]]; then
         echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
+    fi
+    if [[ -n "${error_pattern:-}" ]]; then
+        echo -e "${YELLOW}  Error pattern: ${error_pattern}${NC}"
     fi
     echo -e "${BOLD}========================================${NC}"
 
@@ -128,6 +131,8 @@ _suite_run_scenario() {
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
+    E2E_EXPECTED_ERROR_PATTERN="${error_pattern:-}" \
+    E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"
 }
 

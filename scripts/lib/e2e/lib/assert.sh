@@ -390,6 +390,31 @@ assert.k8s_pod_running() {
     fi
 }
 
+# Helm
+assert.helm_release_exists() {
+    local namespace="$1" release="$2"
+    if type e2e.k8s.helm_release_exists &>/dev/null; then
+        if e2e.k8s.helm_release_exists "$namespace" "$release"; then
+            assert._pass "Helm release exists: ${namespace}/${release}"
+        else
+            assert._fail "Helm release exists: ${namespace}/${release}" "not found"
+        fi
+    else
+        assert._fail "Helm release exists: ${namespace}/${release}" "k8s.sh not loaded"
+    fi
+}
+
+assert.helm_release_status() {
+    local namespace="$1" release="$2" expected="$3"
+    if type e2e.k8s.helm_release_status &>/dev/null; then
+        local actual
+        actual=$(e2e.k8s.helm_release_status "$namespace" "$release")
+        assert.equals "Helm release status: ${namespace}/${release}" "$expected" "$actual"
+    else
+        assert._fail "Helm release status: ${namespace}/${release}" "k8s.sh not loaded"
+    fi
+}
+
 # ArgoCD
 assert.argocd_app_synced() {
     local app_name="$1"

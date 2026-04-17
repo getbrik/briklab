@@ -296,6 +296,7 @@ _E2E_TEST_PROJECTS=(
     node-deploy
     node-deploy-k8s
     node-deploy-ssh
+    node-deploy-helm
     node-deploy-gitops
     node-deploy-gitops-rollback
     node-deploy-failure
