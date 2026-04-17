@@ -45,7 +45,7 @@ load_env() {
 
 # Reload Jenkins CasC configuration without a full restart.
 # Use when only CasC YAML changed (e.g. new job definitions).
-# For env var changes (e.g. NEXUS_NPM_TOKEN), a full restart is needed.
+# For env var changes (e.g. BRIK_PUBLISH_NPM_TOKEN), a full restart is needed.
 jenkins_reload_casc() {
     local jenkins_url="http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}"
     local crumb

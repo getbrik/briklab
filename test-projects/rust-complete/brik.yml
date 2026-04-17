@@ -33,5 +33,5 @@ publish:
   docker:
     image: nexus.briklab.test:8082/brik/rust-complete
     registry: nexus.briklab.test:8082
-    username_var: NEXUS_DOCKER_USER
-    password_var: NEXUS_DOCKER_PASSWORD
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD

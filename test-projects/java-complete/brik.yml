@@ -37,9 +37,9 @@ publish:
   docker:
     image: nexus.briklab.test:8082/brik/java-complete
     registry: nexus.briklab.test:8082
-    username_var: NEXUS_DOCKER_USER
-    password_var: NEXUS_DOCKER_PASSWORD
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   maven:
     repository: http://nexus.briklab.test:8081/repository/brik-maven/
-    username_var: NEXUS_MAVEN_USER
-    password_var: NEXUS_MAVEN_PASSWORD
+    username_var: BRIK_PUBLISH_MAVEN_USER
+    password_var: BRIK_PUBLISH_MAVEN_PASSWORD

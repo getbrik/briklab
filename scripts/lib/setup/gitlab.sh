@@ -172,24 +172,24 @@ setup_nexus_ci_variables() {
     local total=14
 
     # Docker registry credentials (all 5 stacks)
-    _set_group_variable "NEXUS_DOCKER_USER" "admin" "false" && count=$((count + 1))
-    _set_group_variable "NEXUS_DOCKER_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_DOCKER_USER" "admin" "false" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_DOCKER_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
 
     # npm (node-complete)
-    _set_group_variable "NEXUS_NPM_TOKEN" "$npm_token" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_NPM_TOKEN" "$npm_token" "true" && count=$((count + 1))
 
     # PyPI (python-complete) - format admin:password for basic auth
-    _set_group_variable "NEXUS_PYPI_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_PYPI_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
 
     # Maven (java-complete)
-    _set_group_variable "NEXUS_MAVEN_USER" "admin" "false" && count=$((count + 1))
-    _set_group_variable "NEXUS_MAVEN_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_MAVEN_USER" "admin" "false" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_MAVEN_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
 
     # Cargo (rust-complete) - dummy token for dry-run
-    _set_group_variable "NEXUS_CARGO_TOKEN" "dummy-dry-run-token" "false" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_CARGO_TOKEN" "dummy-dry-run-token" "false" && count=$((count + 1))
 
     # NuGet (dotnet-complete) - format admin:password for basic auth
-    _set_group_variable "NEXUS_NUGET_API_KEY" "admin:${nexus_password}" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_NUGET_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
 
     # Brik registry credentials (deploy projects, Nexus Docker hosted registry)
     _set_group_variable "BRIK_REGISTRY_HOST" "nexus.briklab.test:8082" "false" && count=$((count + 1))

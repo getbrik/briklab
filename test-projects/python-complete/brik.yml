@@ -31,8 +31,8 @@ publish:
   docker:
     image: nexus.briklab.test:8082/brik/python-complete
     registry: nexus.briklab.test:8082
-    username_var: NEXUS_DOCKER_USER
-    password_var: NEXUS_DOCKER_PASSWORD
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   pypi:
     repository: http://nexus.briklab.test:8081/repository/brik-pypi/
-    token_var: NEXUS_PYPI_TOKEN
+    token_var: BRIK_PUBLISH_PYPI_TOKEN

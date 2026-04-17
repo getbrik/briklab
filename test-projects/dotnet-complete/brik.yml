@@ -31,8 +31,8 @@ publish:
   docker:
     image: nexus.briklab.test:8082/brik/dotnet-complete
     registry: nexus.briklab.test:8082
-    username_var: NEXUS_DOCKER_USER
-    password_var: NEXUS_DOCKER_PASSWORD
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   nuget:
     source: http://nexus.briklab.test:8081/repository/brik-nuget/
-    api_key_var: NEXUS_NUGET_API_KEY
+    token_var: BRIK_PUBLISH_NUGET_TOKEN

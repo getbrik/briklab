@@ -33,8 +33,8 @@ publish:
   docker:
     image: nexus.briklab.test:8082/brik/node-complete
     registry: nexus.briklab.test:8082
-    username_var: NEXUS_DOCKER_USER
-    password_var: NEXUS_DOCKER_PASSWORD
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   npm:
     registry: http://nexus.briklab.test:8081/repository/brik-npm/
-    token_var: NEXUS_NPM_TOKEN
+    token_var: BRIK_PUBLISH_NPM_TOKEN
