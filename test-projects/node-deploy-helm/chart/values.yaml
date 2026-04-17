@@ -1,0 +1,15 @@
+replicaCount: 1
+
+image:
+  repository: nexus.briklab.test:8082/brik/node-deploy-helm
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi

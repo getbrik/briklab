@@ -69,6 +69,27 @@ e2e.k8s.service_exists() {
 }
 
 # ---------------------------------------------------------------------------
+# Helm
+# ---------------------------------------------------------------------------
+
+# Check if a Helm release exists in a namespace.
+# Args: $1 = namespace, $2 = release name
+# Returns: 0 if exists, 1 otherwise
+e2e.k8s.helm_release_exists() {
+    local namespace="$1" release="$2"
+    helm list -n "$namespace" -q 2>/dev/null | grep -q "^${release}$"
+}
+
+# Get the status of a Helm release.
+# Args: $1 = namespace, $2 = release name
+# Output: status string on stdout (deployed, failed, etc.)
+e2e.k8s.helm_release_status() {
+    local namespace="$1" release="$2"
+    helm status "$release" -n "$namespace" -o json 2>/dev/null | \
+        jq -r '.info.status // empty' 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
 

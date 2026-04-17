@@ -31,7 +31,7 @@ reload_env
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
-# Format: name|jenkins_job|projects_to_push|timeout|expect_failure|ci_vars|depends_on
+# Format: name|jenkins_job|projects_to_push|timeout|expect_failure|ci_vars|depends_on|error_pattern
 # ---------------------------------------------------------------------------
 SCENARIOS=(
     "node-minimal|node-minimal|node-minimal|300|false"
@@ -52,12 +52,13 @@ SCENARIOS=(
     "node-deploy-dryrun|node-deploy|node-deploy|600|false|BRIK_DRY_RUN=true"
     "node-deploy-k8s|node-deploy-k8s|node-deploy-k8s|600|false"
     "node-deploy-ssh|node-deploy-ssh|node-deploy-ssh|600|false"
+    "node-deploy-helm|node-deploy-helm|node-deploy-helm|600|false"
     "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
     "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false||node-deploy-gitops"
-    "node-deploy-failure|node-deploy-failure|node-deploy-failure|600|true"
-    "error-build|node-error-build|node-error-build|300|true"
-    "error-test|node-error-test|node-error-test|300|true"
-    "error-config|invalid-config|invalid-config|300|true"
+    "error-build|node-error-build|node-error-build|300|true||npm ERR!|SyntaxError"
+    "error-test|node-error-test|node-error-test|300|true||FAIL|test.*failed"
+    "error-config|invalid-config|invalid-config|300|true||validat|invalid|schema"
+    "error-deploy|node-deploy-failure|node-deploy-failure|600|true||brik-nonexistent|NotFound"
 )
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ _suite_list_scenarios() {
 
 _suite_run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name job _projects timeout expect_fail ci_vars _depends_on <<< "$scenario"
+    IFS='|' read -r name job _projects timeout expect_fail ci_vars _depends_on error_pattern <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
@@ -92,6 +93,9 @@ _suite_run_scenario() {
     echo -e "${BOLD}========================================${NC}"
     if [[ -n "${ci_vars:-}" ]]; then
         echo -e "${BLUE}  CI vars: ${ci_vars}${NC}"
+    fi
+    if [[ -n "${error_pattern:-}" ]]; then
+        echo -e "${YELLOW}  Error pattern: ${error_pattern}${NC}"
     fi
 
     # Multi-step rollback scenario: delegate to dedicated script
@@ -104,6 +108,7 @@ _suite_run_scenario() {
     E2E_JENKINS_TIMEOUT="$timeout" \
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
+    E2E_EXPECTED_ERROR_PATTERN="${error_pattern:-}" \
         bash "${SCRIPT_DIR}/jenkins-test.sh"
 }
 
