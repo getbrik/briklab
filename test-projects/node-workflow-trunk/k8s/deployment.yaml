@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-workflow-trunk
+  namespace: brik-e2e-workflow
+  labels:
+    app: node-workflow-trunk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-workflow-trunk
+  template:
+    metadata:
+      labels:
+        app: node-workflow-trunk
+    spec:
+      containers:
+        - name: app
+          image: nexus.briklab.test:8082/brik/node-workflow-trunk:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

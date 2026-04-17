@@ -55,6 +55,11 @@ SCENARIOS=(
     "node-deploy-helm|node-deploy-helm|node-deploy-helm|600|false"
     "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
     "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false||node-deploy-gitops"
+    # --- Workflow scenarios (push-driven, sequential) ---
+    "workflow-trunk-main|node-workflow-trunk|node-workflow-trunk|600|false"
+    "workflow-trunk-tag|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-main"
+    "workflow-trunk-feature|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-tag"
+    # --- Error scenarios ---
     "error-build|node-error-build|node-error-build|300|true||npm ERR!|SyntaxError"
     "error-test|node-error-test|node-error-test|300|true||FAIL|test.*failed"
     "error-config|invalid-config|invalid-config|300|true||validat|invalid|schema"
@@ -104,10 +109,17 @@ _suite_run_scenario() {
         return $?
     fi
 
+    # Auto-detect push mode for workflow scenarios
+    local trigger_mode="${E2E_TRIGGER_MODE:-api}"
+    if [[ "$name" == workflow-* ]]; then
+        trigger_mode="push"
+    fi
+
     E2E_JENKINS_JOB="$job" \
     E2E_JENKINS_TIMEOUT="$timeout" \
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
+    E2E_TRIGGER_MODE="$trigger_mode" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern:-}" \
         bash "${SCRIPT_DIR}/jenkins-test.sh"
 }
