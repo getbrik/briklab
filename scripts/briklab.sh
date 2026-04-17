@@ -291,6 +291,70 @@ cmd_smoke_test() {
     bash "${LIB_SETUP}/smoke-test.sh"
 }
 
+cmd_reset() {
+    check_prereqs
+    load_env
+
+    # Source reset library
+    source "${LIB_E2E}/lib/reset.sh"
+
+    local what=""              # repos, k8s, argocd, artifacts, (empty)=all
+    local only=""              # specific repo name
+    local platform=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --gitlab)    platform="gitlab"; shift ;;
+            --jenkins)   platform="gitea"; shift ;;  # Jenkins uses Gitea repos
+            --repos)     what="repos"; shift ;;
+            --k8s)       what="k8s"; shift ;;
+            --argocd)    what="argocd"; shift ;;
+            --artifacts) what="artifacts"; shift ;;
+            --only)
+                only="${2:-}"
+                if [[ -z "$only" ]]; then
+                    log_error "--only requires a project name"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            *)
+                log_error "Unknown reset option: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    case "$what" in
+        repos)
+            if [[ -z "$platform" ]]; then
+                log_error "--repos requires --gitlab or --jenkins"
+                exit 1
+            fi
+            e2e.reset.all_repos "$platform" "$only"
+            ;;
+        k8s)
+            e2e.reset.all_deploy_namespaces
+            ;;
+        argocd)
+            e2e.reset.all_argocd_apps
+            ;;
+        artifacts)
+            e2e.reset.nexus_artifacts
+            e2e.reset.registry_images
+            ;;
+        "")
+            # Full reset -- platform required
+            if [[ -z "$platform" ]]; then
+                log_error "Full reset requires --gitlab or --jenkins"
+                log_info "Or use a targeted reset: --repos, --k8s, --argocd, --artifacts"
+                exit 1
+            fi
+            e2e.reset.all "$platform"
+            ;;
+    esac
+}
+
 cmd_test() {
     check_prereqs
     load_env
@@ -434,6 +498,16 @@ Testing (--gitlab or --jenkins required):
   test --jenkins --list      List available Jenkins scenarios
   --batch-size N             Run scenarios in parallel batches of N
 
+Reset (clean test state between runs):
+  reset --gitlab             Full reset (repos + k8s + ArgoCD + artifacts)
+  reset --jenkins            Full reset (repos + k8s + ArgoCD + artifacts)
+  reset --gitlab --repos     Reset all GitLab repos to baseline
+  reset --jenkins --repos    Reset all Jenkins/Gitea repos to baseline
+  reset --gitlab --repos --only <name>  Reset a single repo
+  reset --k8s                Clean all E2E k8s namespaces
+  reset --argocd             Delete all E2E ArgoCD apps
+  reset --artifacts          Clean Nexus + Docker registry artifacts
+
 Monitoring:
   status             Show container health and access URLs
   logs <service>     Tail logs (gitlab, runner, gitea, jenkins, nexus, ssh-target)
@@ -462,6 +536,7 @@ case "${1:-help}" in
     logs)        cmd_logs "${2:-}" ;;
     setup)       cmd_setup ;;
     test)        cmd_test "${@:2}" ;;
+    reset)       cmd_reset "${@:2}" ;;
     k3d-start)   cmd_k3d_start ;;
     k3d-stop)    cmd_k3d_stop ;;
     clean)       cmd_clean "${@:2}" ;;

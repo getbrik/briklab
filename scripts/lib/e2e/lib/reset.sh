@@ -279,13 +279,111 @@ e2e.reset.registry_images() {
 }
 
 # ---------------------------------------------------------------------------
+# Repo reset (all test projects)
+# ---------------------------------------------------------------------------
+
+# All test projects that have a template directory in test-projects/
+_E2E_TEST_PROJECTS=(
+    node-minimal
+    python-minimal
+    java-minimal
+    rust-minimal
+    dotnet-minimal
+    node-full
+    python-full
+    java-full
+    node-security
+    node-deploy
+    node-deploy-k8s
+    node-deploy-ssh
+    node-deploy-gitops
+    node-deploy-gitops-rollback
+    node-deploy-failure
+    node-complete
+    python-complete
+    java-complete
+    rust-complete
+    dotnet-complete
+    node-error-build
+    node-error-test
+    invalid-config
+)
+
+# Config repos (gitops/rollback) -- reset to empty baseline
+_E2E_CONFIG_REPOS=(
+    config-deploy-gitops
+    config-deploy-rollback
+)
+
+# Reset all test project repos to their baseline template.
+# Args: $1 = platform (gitlab|gitea), $2 = optional single project name
+e2e.reset.all_repos() {
+    local platform="$1"
+    local only="${2:-}"
+    local project_root
+    project_root="$(cd "${_E2E_RESET_LIB_DIR}/../../../.." && pwd)"
+    local template_root="${project_root}/test-projects"
+
+    local errors=0
+
+    if [[ -n "$only" ]]; then
+        # Single repo reset
+        local template_dir="${template_root}/${only}"
+        if [[ -d "$template_dir" ]]; then
+            e2e.reset.repo "$platform" "$only" "$template_dir" || ((errors++)) || true
+        else
+            # Maybe it's a config repo
+            case "$only" in
+                config-deploy-*)
+                    e2e.reset.gitops_config_repo "$platform" "$only" || ((errors++)) || true
+                    ;;
+                *)
+                    log_error "Unknown project: ${only} (no template at ${template_dir})"
+                    return 1
+                    ;;
+            esac
+        fi
+    else
+        # All test projects
+        log_info "Resetting all test project repos (${platform})..."
+        for project in "${_E2E_TEST_PROJECTS[@]}"; do
+            local template_dir="${template_root}/${project}"
+            if [[ -d "$template_dir" ]]; then
+                e2e.reset.repo "$platform" "$project" "$template_dir" || ((errors++)) || true
+            else
+                log_warn "Template missing for ${project}, skipping"
+            fi
+        done
+
+        # Config repos
+        log_info "Resetting config repos..."
+        for repo in "${_E2E_CONFIG_REPOS[@]}"; do
+            e2e.reset.gitops_config_repo "$platform" "$repo" || ((errors++)) || true
+        done
+    fi
+
+    if [[ $errors -gt 0 ]]; then
+        log_error "${errors} repo(s) failed to reset"
+        return 1
+    fi
+    log_ok "All repos reset"
+}
+
+# ---------------------------------------------------------------------------
 # Full reset
 # ---------------------------------------------------------------------------
 
-# Reset everything: namespaces, ArgoCD apps, Nexus artifacts, Docker images.
-# Does NOT reset repos (that requires template dirs and platform info).
+# Reset everything: repos, namespaces, ArgoCD apps, Nexus artifacts, Docker images.
+# Args: $1 = platform (gitlab|gitea) -- required for repo reset
 e2e.reset.all() {
+    local platform="${1:-}"
+
     log_info "=== Full E2E reset ==="
+    if [[ -n "$platform" ]]; then
+        e2e.reset.all_repos "$platform"
+    else
+        log_warn "No platform specified -- skipping repo reset"
+    fi
     e2e.reset.all_deploy_namespaces
     e2e.reset.all_argocd_apps
     e2e.reset.nexus_artifacts
