@@ -19,6 +19,5 @@ quality:
 
 package:
   docker:
-    # brik-registry resolves inside the brik-net Docker network (GitLab runner)
-    image: registry.briklab.test:5050/brik/node-full
+    image: nexus.briklab.test:8082/brik/node-full
     dockerfile: Dockerfile

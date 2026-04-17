@@ -1,5 +1,5 @@
 # Briklab - Local CI/CD test infrastructure for Brik
-# GitLab CE + Runner + Registry + Gitea + Jenkins + Nexus + SSH target
+# GitLab CE + Runner + Gitea + Jenkins + Nexus + SSH target
 # K8s cluster is managed separately via k3d (see scripts/lib/setup/k3d.sh)
 #
 # Usage:
@@ -30,7 +30,7 @@ services:
         puma['worker_processes'] = 2
         sidekiq['concurrency'] = 5
         prometheus_monitoring['enable'] = false
-        # Integrated registry disabled (using a separate registry)
+        # Integrated registry disabled (using Nexus Docker hosted registry on port 8082)
         registry['enable'] = false
         # Disable unnecessary services
         gitlab_kas['enable'] = false
@@ -45,7 +45,7 @@ services:
     networks:
       brik-net:
         ipv4_address: 172.20.0.10
-    mem_limit: 8g
+    mem_limit: ${GITLAB_MEM_LIMIT:-12g}
     shm_size: "256m"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:${GITLAB_HTTP_PORT:-8929}/users/sign_in"]
@@ -67,7 +67,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/gitlab-runner:/etc/gitlab-runner
-    mem_limit: 512m
+    mem_limit: ${GITLAB_RUNNER_MEM_LIMIT:-1g}
     networks:
       brik-net:
         ipv4_address: 172.20.0.11
@@ -75,26 +75,6 @@ services:
       - "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10"
       - "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30"
       - "ssh-target.briklab.test:172.20.0.41"
-
-  # --- Docker Registry ---
-  registry:
-    image: registry:3.0
-    container_name: brik-registry
-    restart: unless-stopped
-    ports:
-      - "${REGISTRY_PORT:-5050}:5000"
-    volumes:
-      - ./config/registry/config.yml:/etc/docker/registry/config.yml:ro
-      - ./data/registry:/var/lib/registry
-    networks:
-      brik-net:
-        ipv4_address: 172.20.0.12
-    mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/v2/"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
   # --- Gitea ---
   gitea:
@@ -158,7 +138,6 @@ services:
     extra_hosts:
       - "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10"
       - "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20"
-      - "registry.briklab.test:172.20.0.12"
       - "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30"
       - "ssh-target.briklab.test:172.20.0.41"
     mem_limit: 6g

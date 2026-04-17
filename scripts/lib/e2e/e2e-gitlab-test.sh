@@ -129,11 +129,11 @@ else:
 ' 2>/dev/null || echo "unknown"
 }
 
-# Validate a Docker image exists in the briklab registry.
+# Validate a Docker image exists in the Nexus Docker registry.
 # Args: $1 = image path (e.g. brik/node-full)
 validate_registry_image() {
     local image_path="$1"
-    local registry_url="http://${REGISTRY_HOSTNAME:-registry.briklab.test}:${REGISTRY_PORT:-5050}"
+    local registry_url="http://${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
     local result
     result=$(curl -sf "${registry_url}/v2/${image_path}/tags/list" 2>/dev/null) || {
         log_warn "Registry unreachable or image not found: ${registry_url}/v2/${image_path}"
@@ -185,7 +185,15 @@ if [[ -z "$PROJECT_ID" ]]; then
 fi
 log_ok "Project ID: ${PROJECT_ID}"
 
-# 2. Trigger a pipeline
+# 2. Cancel any running/pending pipelines to free the runner queue
+for cancel_status in running pending; do
+    for ppid in $(api_get "projects/${PROJECT_ID}/pipelines?status=${cancel_status}&per_page=100" \
+        | python3 -c "import sys,json; [print(p['id']) for p in json.load(sys.stdin)]" 2>/dev/null); do
+        api_post "projects/${PROJECT_ID}/pipelines/${ppid}/cancel" >/dev/null 2>&1 || true
+    done
+done
+
+# 3. Trigger a pipeline
 log_info "Triggering pipeline on ref '${TRIGGER_REF}'..."
 if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
     log_info "CI variables: ${E2E_CI_VARIABLES}"

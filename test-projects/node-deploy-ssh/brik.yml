@@ -18,7 +18,7 @@ test:
 
 package:
   docker:
-    image: registry.briklab.test:5050/brik/node-deploy-ssh
+    image: nexus.briklab.test:8082/brik/node-deploy-ssh
     dockerfile: Dockerfile
 
 deploy:

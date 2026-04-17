@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
         - name: app
-          image: registry.briklab.test:5050/brik/node-deploy-failure:latest
+          image: nexus.briklab.test:8082/brik/node-deploy-failure:latest
           ports:
             - containerPort: 3000

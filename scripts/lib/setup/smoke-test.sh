@@ -74,16 +74,15 @@ else
     skip "GitLab Runner"
 fi
 
-# === Registry ===
+# === Nexus Docker Registry ===
 echo ""
-echo -e "${BLUE}Docker Registry:${NC}"
-if is_running "brik-registry"; then
-    REGISTRY_PORT="${REGISTRY_PORT:-5050}"
-    REGISTRY_HOST="${REGISTRY_HOSTNAME:-registry.briklab.test}"
-    check "Registry v2 API" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/"
-    check "Registry catalog" "curl -sf http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/_catalog"
+echo -e "${BLUE}Nexus Docker Registry:${NC}"
+if is_running "brik-nexus"; then
+    NEXUS_DOCKER_PORT="${NEXUS_DOCKER_PORT:-8082}"
+    NEXUS_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}"
+    check "Nexus Docker v2 API" "curl -sf -u admin:${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026} http://${NEXUS_HOST}:${NEXUS_DOCKER_PORT}/v2/"
 else
-    skip "Docker Registry"
+    skip "Nexus Docker Registry"
 fi
 
 # === Gitea ===

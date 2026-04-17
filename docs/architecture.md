@@ -18,11 +18,10 @@ All services run together via a single `docker-compose.yml`:
 |-----------|-------------|
 | GitLab CE | 8 GB |
 | GitLab Runner | 512 MB |
-| Docker Registry | 512 MB |
 | Gitea | 512 MB |
 | Jenkins | 6 GB |
 | Nexus 3 CE | 2 GB |
-| **Total** | **~18 GB** |
+| **Total** | **~17 GB** |
 
 ---
 
@@ -52,11 +51,11 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
  brik-net (172.20.0.0/16)
 +-----------------------------------------------------------------+
 |                                                                  |
-|  +------------------+   +------------------+   +--------------+  |
-|  |   GitLab CE      |   |  GitLab Runner   |   |  Registry    |  |
-|  |   172.20.0.10    |   |  172.20.0.11     |   | 172.20.0.12  |  |
-|  |   :8929, :2222   |   |  (no port)       |   |   :5050      |  |
-|  +------------------+   +------------------+   +--------------+  |
+|  +------------------+   +------------------+                     |
+|  |   GitLab CE      |   |  GitLab Runner   |                     |
+|  |   172.20.0.10    |   |  172.20.0.11     |                     |
+|  |   :8929, :2222   |   |  (no port)       |                     |
+|  +------------------+   +------------------+                     |
 |                                                                  |
 |  +------------------+   +------------------+   +--------------+  |
 |  |   Gitea          |   |  Jenkins         |   |  Nexus 3 CE  |  |
@@ -71,7 +70,6 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 |---------|-------|----|-------|
 | GitLab CE | `gitlab/gitlab-ce` | 172.20.0.10 | 8929, 2222 |
 | GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | - |
-| Docker Registry | `registry:3.0` | 172.20.0.12 | 5050 |
 | Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 |
 | Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 |
 | Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 |
@@ -157,8 +155,7 @@ The `smoke-test.sh` script verifies each component after setup. Each check outpu
 | GitLab API v4 | `curl /api/v4/version` | HTTP != 000 |
 | Runner container | `gitlab-runner --version` | Executable |
 | Runner registered | `grep "url" config.toml` | Present |
-| Registry v2 API | `curl /v2/` | HTTP 200 |
-| Registry catalog | `curl /v2/_catalog` | HTTP 200 |
+| Nexus Docker v2 API | `curl /v2/` (port 8082) | HTTP 200 |
 | Gitea HTTP | `curl /` | HTTP 200 |
 | Gitea API | `curl /api/v1/version` | HTTP 200 |
 | Jenkins HTTP | `curl /login` | HTTP 200 |
@@ -175,7 +172,7 @@ A summary line shows total / PASS / FAIL / SKIP counts. Exit code is non-zero if
 
 ```
 briklab/
-|-- docker-compose.yml            # All services (GitLab + Runner + Registry + Gitea + Jenkins + Nexus)
+|-- docker-compose.yml            # All services (GitLab + Runner + Gitea + Jenkins + Nexus)
 |-- .env.example                  # Variables template
 |-- scripts/
 |   |-- briklab.sh                # Main CLI
@@ -211,7 +208,6 @@ briklab/
 |   |-- node-error-test/          # Error: intentionally failing tests
 |   +-- invalid-config/           # Error: invalid brik.yml (version: 99)
 |-- config/
-|   |-- registry/config.yml       # Registry HTTP config
 |   +-- jenkins/
 |       |-- plugins.txt           # Required plugins
 |       +-- casc.yaml             # Jenkins Configuration-as-Code
@@ -238,12 +234,6 @@ briklab/
 | `GITLAB_RUNNER_JOB_MEMORY` | `512m` | Memory limit per CI job container |
 | `GITLAB_PAT` | *(auto-generated)* | Personal Access Token |
 | `GITLAB_RUNNER_TOKEN` | *(auto-generated)* | Runner registration token |
-
-### Docker Registry
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REGISTRY_PORT` | `5050` | Registry port (5050 to avoid macOS AirPlay conflict) |
 
 ### Gitea
 
@@ -296,7 +286,6 @@ briklab/
 | `grafana['enable']` crashes GitLab | Option removed in GitLab 18.x | Removed from `GITLAB_OMNIBUS_CONFIG` |
 | `/-/readiness` returns 404 | Endpoint removed in GitLab 18.x | Healthcheck uses `/users/sign_in` instead |
 | `create!` causes shell error | `!` is interpreted by bash/zsh | Rails runner via stdin (`cat <<'RUBY'`) |
-| Port 5000 already in use (macOS) | AirPlay Receiver occupies port 5000 | Registry uses port 5050 |
 | Runner `image_pull_failure` | Bleeding edge helper tag not published | Explicit `helper_image` in config.toml |
 | Root password rejected | GitLab 18.x requires strong password | Default `Brik-Gtlb-2026` meets requirements |
 | Forced password change at login | `password_automatically_set = true` | Rails runner sets `password_automatically_set = false` |

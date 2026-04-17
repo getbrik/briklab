@@ -9,7 +9,7 @@ Local Docker infrastructure for testing [Brik](https://github.com/getbrik/brik) 
 Brik needs real CI/CD platforms to validate its shared libraries and runtime. Briklab provides that infrastructure locally via Docker Compose -- no cloud accounts, no shared servers.
 
 - One command to set up everything (`init`)
-- GitLab CE + Runner + Registry for GitLab CI pipelines
+- GitLab CE + Runner for GitLab CI pipelines
 - Gitea + Jenkins for Jenkins pipelines
 - Nexus 3 CE for artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - SSH target container for deploy E2E testing
@@ -50,10 +50,9 @@ See [k3d install docs](https://k3d.io/#installation) and [ArgoCD CLI install doc
 Add to `/etc/hosts`:
 
 ```
-127.0.0.1  gitlab.briklab.test registry.briklab.test
+127.0.0.1  gitlab.briklab.test nexus.briklab.test
 127.0.0.1  gitea.briklab.test jenkins.briklab.test
 127.0.0.1  argocd.briklab.test ssh-target.briklab.test
-127.0.0.1  nexus.briklab.test
 ```
 
 Add to Docker Desktop (Settings > Docker Engine):
@@ -61,7 +60,6 @@ Add to Docker Desktop (Settings > Docker Engine):
 ```json
 {
   "insecure-registries": [
-    "registry.briklab.test:5050",
     "nexus.briklab.test:8082"
   ]
 }
@@ -81,15 +79,12 @@ Add to Docker Desktop (Settings > Docker Engine):
 |---------|---------|-------------|
 | GitLab CE | 8929 (HTTP), 2222 (SSH) | `root` / `Brik-Gtlb-2026` |
 | GitLab Runner | - | - |
-| Docker Registry | 5050 | - |
 | Gitea | 3000 (HTTP), 222 (SSH) | `brik` / `Brik-Gitea-2026` |
 | Jenkins | 9090 (HTTP), 50000 (agent) | `admin` / `Brik-Jenkins-2026` |
 | Nexus 3 CE | 8081 (UI/API), 8082 (Docker) | `admin` / `Brik-Nexus-2026` |
 | SSH Target | 22 (internal) | `deploy` / SSH key |
 | k3d (k3s) | 6443, 8080 | - |
 | ArgoCD | 9080 | `admin` / (dynamic, see `k3d-start` output) |
-
-> **macOS note:** the registry uses port 5050 because AirPlay Receiver occupies port 5000.
 
 Default credentials are defined in `.env`. Modify them **before** the first `init`.
 
@@ -99,7 +94,6 @@ Default credentials are defined in `.env`. Modify them **before** the first `ini
 |---------|-----|
 | GitLab UI | http://gitlab.briklab.test:8929 |
 | GitLab SSH | `ssh://git@gitlab.briklab.test:2222` |
-| Docker Registry | http://registry.briklab.test:5050/v2/_catalog |
 | Gitea UI | http://gitea.briklab.test:3000 |
 | Jenkins UI | http://jenkins.briklab.test:9090 |
 | Nexus UI | http://nexus.briklab.test:8081 |
@@ -163,7 +157,7 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 | Command | Description |
 |---------|-------------|
 | `briklab.sh status` | Show container health and access URLs |
-| `briklab.sh logs <service>` | Tail logs (gitlab, runner, registry, gitea, jenkins, nexus) |
+| `briklab.sh logs <service>` | Tail logs (gitlab, runner, gitea, jenkins, nexus, ssh-target) |
 
 ### Kubernetes
 
@@ -330,10 +324,6 @@ Full suite run on 2026-04-14
 
 **Runner errors (`runner_system_failure` / `image_pull_failure`)** -- Verify `helper_image` is present in the runner's `config.toml`. Check logs: `./scripts/briklab.sh logs runner`. If needed, re-run `./scripts/briklab.sh setup`.
 
-**Port 5000 already in use (macOS)** -- AirPlay Receiver occupies port 5000. Briklab uses 5050 by default. To free 5000: Settings > General > AirDrop & Handoff > AirPlay Receiver, uncheck.
-
-**Registry unreachable** -- Verify `"insecure-registries": ["registry.briklab.test:5050"]` in Docker Desktop settings. Test: `curl http://registry.briklab.test:5050/v2/`
-
 **Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `images/jenkins/plugins.txt` includes all required plugins. To reload CasC without restarting Jenkins, use the `jenkins_reload_casc` helper in `briklab.sh` (only works for CasC YAML changes; env var changes require a full restart).
 
 **Jenkins pipeline can't find Brik library** -- The Brik shared library must be pushed to Gitea before triggering a pipeline. Run `./scripts/briklab.sh setup` to ensure Gitea is configured, then push repos with the E2E test command.
@@ -358,7 +348,7 @@ For the complete list of known issues and solutions, see [docs/architecture.md -
 ./scripts/briklab.sh clean
 
 # Full removal: after clean, remove Docker images manually
-docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding registry:3.0
+docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding
 docker rmi gitea/gitea:1.25.5
 docker rmi briklab-jenkins  # custom-built Jenkins image
 docker rmi sonatype/nexus3:3.90.2-alpine
@@ -403,7 +393,7 @@ Auth libraries are reusable -- each validates and caches credentials, and can be
 
 ## Status
 
-- [x] GitLab CE + Runner + Registry
+- [x] GitLab CE + Runner
 - [x] Gitea + Jenkins (CasC + Job DSL)
 - [x] Nexus 3 CE -- artifact publishing (npm, Maven, PyPI, NuGet, Docker, raw)
 - [x] Automated init with smoke tests
