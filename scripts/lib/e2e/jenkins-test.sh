@@ -10,6 +10,7 @@
 #   E2E_JENKINS_EXPECT_FAILURE - Set to "true" to expect failure (default: false)
 #   E2E_CI_VARIABLES     - Comma-separated KEY=VALUE pairs for build parameters (default: empty)
 #   E2E_SKIP_LOG_CHECK   - Set to "true" to skip build log validation (default: false)
+#   E2E_EXPECTED_ERROR_PATTERN - Regex pattern expected in the console log (for error scenarios)
 #
 # Prerequisites:
 #   - briklab Jenkins must be running
@@ -158,6 +159,12 @@ fi
 # 6. Assert build result
 if [[ "$EXPECT_FAILURE" == "true" ]]; then
     assert.build_failed "$FINAL_RESULT"
+
+    # Validate error pattern in the console log
+    if [[ -n "${E2E_EXPECTED_ERROR_PATTERN:-}" ]]; then
+        CONSOLE_LOG=$(e2e.jenkins.get_console_log "$JOB_NAME" "$BUILD_NUMBER")
+        assert.build_log_contains "$CONSOLE_LOG" "$E2E_EXPECTED_ERROR_PATTERN"
+    fi
 else
     assert.build_succeeded "$FINAL_RESULT"
 fi
