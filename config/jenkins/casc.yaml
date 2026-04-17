@@ -6,21 +6,21 @@ jenkins:
   globalNodeProperties:
     - envVars:
         env:
-          - key: NEXUS_DOCKER_USER
+          - key: BRIK_PUBLISH_DOCKER_USER
             value: "admin"
-          - key: NEXUS_DOCKER_PASSWORD
+          - key: BRIK_PUBLISH_DOCKER_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
-          - key: NEXUS_NPM_TOKEN
+          - key: BRIK_PUBLISH_NPM_TOKEN
             value: "${NEXUS_NPM_TOKEN}"
-          - key: NEXUS_PYPI_TOKEN
+          - key: BRIK_PUBLISH_PYPI_TOKEN
             value: "admin:${NEXUS_ADMIN_PASSWORD}"
-          - key: NEXUS_MAVEN_USER
+          - key: BRIK_PUBLISH_MAVEN_USER
             value: "admin"
-          - key: NEXUS_MAVEN_PASSWORD
+          - key: BRIK_PUBLISH_MAVEN_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
-          - key: NEXUS_CARGO_TOKEN
+          - key: BRIK_PUBLISH_CARGO_TOKEN
             value: "dummy-dry-run-token"
-          - key: NEXUS_NUGET_API_KEY
+          - key: BRIK_PUBLISH_NUGET_TOKEN
             value: "admin:${NEXUS_ADMIN_PASSWORD}"
           - key: BRIK_REGISTRY_HOST
             value: "nexus.briklab.test:8082"
