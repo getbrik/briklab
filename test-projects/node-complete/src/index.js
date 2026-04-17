@@ -1,4 +1,4 @@
-const http = require("http");
+const http = require('http');
 
 function add(a, b) {
   return a + b;
@@ -10,8 +10,8 @@ function multiply(a, b) {
 
 if (require.main === module) {
   const server = http.createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", result: add(1, 2) }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', result: add(1, 2) }));
   });
 
   const port = process.env.PORT || 3000;

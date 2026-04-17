@@ -133,25 +133,44 @@ if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
     done
 fi
 
+TRIGGER_HTTP_CODE=""
 if [[ -n "$CRUMB" ]]; then
-    curl -sf --max-time 30 -X POST -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
+    TRIGGER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST \
+        -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
         -H "$CRUMB" \
         ${TRIGGER_DATA[@]+"${TRIGGER_DATA[@]}"} \
-        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" >/dev/null 2>&1
+        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" 2>/dev/null)
 else
-    curl -sf --max-time 30 -X POST -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
+    TRIGGER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST \
+        -b "$COOKIE_JAR" -u "${JENKINS_USER}:${JENKINS_PASSWORD}" \
         ${TRIGGER_DATA[@]+"${TRIGGER_DATA[@]}"} \
-        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" >/dev/null 2>&1
+        "${JENKINS_URL}/job/${JOB_NAME}/${TRIGGER_ENDPOINT}" 2>/dev/null)
+fi
+
+if [[ "$TRIGGER_HTTP_CODE" != "200" && "$TRIGGER_HTTP_CODE" != "201" ]]; then
+    log_warn "Trigger returned HTTP ${TRIGGER_HTTP_CODE} (expected 200 or 201)"
 fi
 
 # 5. Wait for build to appear in queue and start
+# Poll for the expected build number, but also check if a newer build appeared
+# (buildWithParameters may race with nextBuildNumber)
 log_info "Waiting for build to start..."
 ELAPSED=0
 BUILD_STARTED=false
-while [[ $ELAPSED -lt 60 ]]; do
+while [[ $ELAPSED -lt 90 ]]; do
     if jenkins_api "job/${JOB_NAME}/${NEXT_BUILD}/api/json" &>/dev/null; then
         BUILD_STARTED=true
         break
+    fi
+    # Check if nextBuildNumber advanced past our expected number
+    CURRENT_NEXT=$(jenkins_api "job/${JOB_NAME}/api/json" 2>/dev/null | \
+        jq -r '.nextBuildNumber // 0' 2>/dev/null || echo "0")
+    if [[ "$CURRENT_NEXT" -gt "$NEXT_BUILD" ]]; then
+        # A build was created - it might be ours (build number could have shifted)
+        if jenkins_api "job/${JOB_NAME}/${NEXT_BUILD}/api/json" &>/dev/null; then
+            BUILD_STARTED=true
+            break
+        fi
     fi
     printf "."
     sleep 3
@@ -160,7 +179,7 @@ done
 echo ""
 
 if [[ "$BUILD_STARTED" != "true" ]]; then
-    log_error "Build #${NEXT_BUILD} did not start within 60s"
+    log_error "Build #${NEXT_BUILD} did not start within 90s (trigger HTTP: ${TRIGGER_HTTP_CODE})"
     exit 1
 fi
 
