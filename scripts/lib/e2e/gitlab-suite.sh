@@ -62,6 +62,10 @@ SCENARIOS=(
     "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
     "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
+    # --- Workflow scenarios (push-driven, sequential) ---
+    "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||||workflow-trunk-main"
+    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600||||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     "error-build|node-error-build|main|brik-init||300|brik-build|||npm ERR!|SyntaxError|brik-init"
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL|test.*failed|brik-init,brik-build"
@@ -123,10 +127,17 @@ _suite_run_scenario() {
         e2e_expect_failed_job="$expect_fail"
     fi
 
+    # Auto-detect push mode for workflow scenarios or branch: refs
+    local trigger_mode="${E2E_TRIGGER_MODE:-api}"
+    if [[ "$name" == workflow-* || "$ref" == branch:* ]]; then
+        trigger_mode="push"
+    fi
+
     E2E_PROJECT_PATH="$project_encoded" \
     E2E_REQUIRED_JOBS="$required" \
     E2E_OPTIONAL_JOBS="${optional:-}" \
     E2E_TRIGGER_REF="$ref" \
+    E2E_TRIGGER_MODE="$trigger_mode" \
     E2E_TIMEOUT="${timeout:-300}" \
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \

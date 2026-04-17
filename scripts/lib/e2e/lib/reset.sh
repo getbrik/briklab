@@ -305,6 +305,7 @@ _E2E_TEST_PROJECTS=(
     java-complete
     rust-complete
     dotnet-complete
+    node-workflow-trunk
     node-error-build
     node-error-test
     invalid-config

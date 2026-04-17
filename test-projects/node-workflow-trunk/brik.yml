@@ -1,0 +1,45 @@
+version: 1
+
+project:
+  name: node-workflow-trunk
+  stack: node
+  stack_version: "22"
+
+release:
+  strategy: semver
+  tag_prefix: v
+
+quality:
+  lint:
+    enabled: false
+
+test:
+  framework: npm
+
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-workflow-trunk
+    dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-workflow-trunk
+    registry: nexus.briklab.test:8082
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
+
+deploy:
+  workflow: trunk-based
+  environments:
+    staging:
+      target: k8s
+      namespace: brik-e2e-workflow
+      manifest: k8s/deployment.yaml
+      when:
+        ref: main
+    production:
+      target: k8s
+      namespace: brik-e2e-workflow
+      manifest: k8s/deployment.yaml
+      when:
+        ref: tag
