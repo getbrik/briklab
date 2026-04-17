@@ -88,25 +88,51 @@ if [[ "$JOB_FOUND" != "true" ]]; then
 fi
 log_ok "Job '${JOB_NAME}' found"
 
-# 3. Trigger build
-log_info "Triggering build..."
-if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
-    log_info "CI variables: ${E2E_CI_VARIABLES}"
+# 3. Determine trigger mode
+TRIGGER_MODE="${E2E_TRIGGER_MODE:-api}"
+
+if [[ "$TRIGGER_MODE" == "push" ]]; then
+    # CI variables not supported in push mode -- fallback to API
+    if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+        log_warn "Push mode + CI variables: falling back to API trigger"
+        TRIGGER_MODE="api"
+    fi
 fi
 
-BUILD_NUMBER=$(e2e.jenkins.trigger_build "$JOB_NAME" "${E2E_CI_VARIABLES:-}") || {
-    log_error "Failed to trigger build"
-    exit 1
-}
+if [[ "$TRIGGER_MODE" == "push" ]]; then
+    # Push-driven trigger
+    # shellcheck source=lib/git.sh
+    source "${SCRIPT_DIR}/lib/git.sh"
 
-BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
-log_ok "Build #${BUILD_NUMBER} started"
-echo "  URL: ${BUILD_URL}"
-echo ""
+    log_info "Triggering via git push (ref: main)..."
+    PUSH_SHA=$(e2e.git.trigger_via_push "gitea" "$JOB_NAME" "main")
+    log_ok "Push SHA: ${PUSH_SHA}"
 
-# 4. Poll for completion
-log_info "Waiting for build completion (timeout: ${TIMEOUT_SECONDS}s)..."
-FINAL_RESULT=$(e2e.jenkins.wait_build "$JOB_NAME" "$BUILD_NUMBER" "$TIMEOUT_SECONDS") || true
+    log_info "Waiting for build triggered by SHA ${PUSH_SHA:0:8}..."
+    BUILD_NUMBER=$(e2e.jenkins.wait_build_by_sha "$JOB_NAME" "$PUSH_SHA" 90 "$TIMEOUT_SECONDS")
+
+    BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    FINAL_RESULT=$(e2e.jenkins.get_build_result "$JOB_NAME" "$BUILD_NUMBER")
+else
+    # API trigger (default, unchanged)
+    log_info "Triggering build..."
+    if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+        log_info "CI variables: ${E2E_CI_VARIABLES}"
+    fi
+
+    BUILD_NUMBER=$(e2e.jenkins.trigger_build "$JOB_NAME" "${E2E_CI_VARIABLES:-}") || {
+        log_error "Failed to trigger build"
+        exit 1
+    }
+
+    BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    log_ok "Build #${BUILD_NUMBER} started"
+    echo "  URL: ${BUILD_URL}"
+    echo ""
+
+    log_info "Waiting for build completion (timeout: ${TIMEOUT_SECONDS}s)..."
+    FINAL_RESULT=$(e2e.jenkins.wait_build "$JOB_NAME" "$BUILD_NUMBER" "$TIMEOUT_SECONDS") || true
+fi
 echo ""
 
 if [[ -z "$FINAL_RESULT" || "$FINAL_RESULT" == "TIMEOUT" ]]; then
@@ -114,7 +140,8 @@ if [[ -z "$FINAL_RESULT" || "$FINAL_RESULT" == "TIMEOUT" ]]; then
     exit 1
 fi
 
-log_info "Build result: ${FINAL_RESULT}"
+log_ok "Build #${BUILD_NUMBER}: ${FINAL_RESULT}"
+echo "  URL: ${BUILD_URL}"
 echo ""
 
 # 5. Show stage information (via wfapi if available)

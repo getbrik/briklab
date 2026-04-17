@@ -183,6 +183,119 @@ e2e.git.push_branch() {
     return "$push_result"
 }
 
+# ---------------------------------------------------------------------------
+# Push-driven trigger
+# ---------------------------------------------------------------------------
+
+# Trigger a CI pipeline by pushing a commit (instead of API trigger).
+# Clones the repo, writes a trigger file, commits, and pushes.
+# For tag refs, deletes remote tag first, then creates and pushes.
+# For branch refs, creates and pushes the branch.
+#
+# Args: $1 = platform (gitlab|gitea), $2 = project name, $3 = trigger ref
+#        trigger_ref format: "main", "vX.Y.Z" (tag), "branch:feat/xxx"
+# Output: commit SHA on stdout
+e2e.git.trigger_via_push() {
+    local platform="$1" project_name="$2" trigger_ref="$3"
+
+    # Build remote URL and credentials based on platform
+    local remote_url username token
+    case "$platform" in
+        gitlab)
+            local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
+            remote_url="${gitlab_url}/brik/${project_name}.git"
+            username="root"
+            token="$GITLAB_PAT"
+            ;;
+        gitea)
+            local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+            remote_url="${gitea_url}/brik/${project_name}.git"
+            username="${GITEA_ADMIN_USER:-brik}"
+            token="$GITEA_PAT"
+            ;;
+        *)
+            log_error "Unknown platform: ${platform}"
+            return 1
+            ;;
+    esac
+
+    # Clone the repo
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    local askpass_script
+    askpass_script=$(mktemp)
+    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$askpass_script"
+    chmod +x "$askpass_script"
+
+    local result=0
+    local sha=""
+    (
+        cd "$tmp_dir" || exit 1
+
+        GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+            git -c "credential.username=${username}" \
+            clone "$remote_url" repo >/dev/null 2>&1 || exit 1
+        cd repo || exit 1
+
+        # Write trigger file to ensure a new commit
+        printf '%s %s\n' "$(date +%s)" "$trigger_ref" > .brik-trigger
+        git add -A >/dev/null 2>&1
+        git commit -m "trigger: ${trigger_ref}" >/dev/null 2>&1
+
+        case "$trigger_ref" in
+            v[0-9]*)
+                # Tag push: push main first, then delete+recreate tag
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push origin main >/dev/null 2>&1 || exit 1
+
+                # Delete remote tag if it exists (to re-trigger)
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push origin ":refs/tags/${trigger_ref}" >/dev/null 2>&1 || true
+
+                git tag -f "$trigger_ref" >/dev/null 2>&1
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push origin "$trigger_ref" >/dev/null 2>&1 || exit 1
+                ;;
+            branch:*)
+                local branch_name="${trigger_ref#branch:}"
+                git checkout -b "$branch_name" >/dev/null 2>&1
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push -u origin "$branch_name" >/dev/null 2>&1 || exit 1
+                ;;
+            *)
+                # Default: push to main (or whatever ref name)
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push origin main >/dev/null 2>&1 || exit 1
+                ;;
+        esac
+
+        # Output the SHA
+        git rev-parse HEAD
+    ) > "${tmp_dir}/.sha" 2>/dev/null || result=1
+
+    sha=$(cat "${tmp_dir}/.sha" 2>/dev/null | tail -1)
+
+    rm -f "$askpass_script"
+    rm -rf "$tmp_dir"
+
+    if [[ $result -ne 0 || -z "$sha" ]]; then
+        log_error "Failed to trigger via push for ${project_name}"
+        return 1
+    fi
+
+    echo "$sha"
+}
+
+# ---------------------------------------------------------------------------
+# Utility
+# ---------------------------------------------------------------------------
+
 # Reset a repo to its baseline state (initial commit + tag).
 # Force-pushes to overwrite remote history.
 # Args: $1 = repo dir, $2 = remote URL, $3 = username, $4 = token

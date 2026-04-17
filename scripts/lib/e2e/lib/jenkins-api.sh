@@ -181,6 +181,56 @@ e2e.jenkins.wait_build() {
     return 1
 }
 
+# Wait for a build triggered by a specific Git SHA to appear, then wait for completion.
+# Args: $1 = job name, $2 = commit SHA, $3 = timeout for discovery (default 90),
+#        $4 = timeout for build completion (default 300)
+# Output: build number on stdout
+e2e.jenkins.wait_build_by_sha() {
+    local job_name="$1" sha="$2"
+    local discover_timeout="${3:-90}"
+    local completion_timeout="${4:-300}"
+    local poll_interval=5
+    local elapsed=0
+    local build_number=""
+
+    # Phase 1: discover build by SHA
+    while [[ $elapsed -lt $discover_timeout ]]; do
+        local builds_json
+        builds_json=$(e2e.jenkins.api_get "job/${job_name}/api/json?tree=builds[number,actions[lastBuiltRevision[SHA1]],building,result]" 2>/dev/null || true)
+
+        if [[ -n "$builds_json" ]]; then
+            # Find a build matching the SHA in lastBuiltRevision
+            build_number=$(echo "$builds_json" | jq -r --arg sha "$sha" '
+                .builds[]? |
+                select(.actions[]?.lastBuiltRevision?.SHA1 == $sha) |
+                .number
+            ' 2>/dev/null | head -1 || true)
+
+            if [[ -n "$build_number" ]]; then
+                break
+            fi
+        fi
+
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+
+    if [[ -z "$build_number" ]]; then
+        echo "" >&2
+        log_error "No build found for SHA ${sha} after ${discover_timeout}s"
+        return 1
+    fi
+
+    log_info "Build #${build_number} found for SHA ${sha:0:8}"
+
+    # Phase 2: wait for build completion
+    local result
+    result=$(e2e.jenkins.wait_build "$job_name" "$build_number" "$completion_timeout")
+
+    echo "$build_number"
+}
+
 # Get the result of a completed build.
 # Args: $1 = job name, $2 = build number
 # Output: result string on stdout (SUCCESS, FAILURE, UNSTABLE, ABORTED, etc.)

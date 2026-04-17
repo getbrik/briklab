@@ -245,6 +245,47 @@ e2e.gitlab.wait_pipeline() {
     return 1
 }
 
+# Wait for a pipeline triggered by a specific SHA to appear, then wait for completion.
+# Args: $1 = project ID, $2 = commit SHA, $3 = timeout for discovery (default 60),
+#        $4 = timeout for pipeline completion (default 300)
+# Output: "pipeline_id status" on stdout
+e2e.gitlab.wait_pipeline_by_sha() {
+    local project_id="$1" sha="$2"
+    local discover_timeout="${3:-60}"
+    local completion_timeout="${4:-300}"
+    local poll_interval=5
+    local elapsed=0
+    local pipeline_id=""
+
+    # Phase 1: discover pipeline triggered by this SHA
+    while [[ $elapsed -lt $discover_timeout ]]; do
+        pipeline_id=$(e2e.gitlab.api_get "projects/${project_id}/pipelines?sha=${sha}&per_page=1" | \
+            jq -r '.[0].id // empty' 2>/dev/null || true)
+
+        if [[ -n "$pipeline_id" ]]; then
+            break
+        fi
+
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+
+    if [[ -z "$pipeline_id" ]]; then
+        echo "" >&2
+        log_error "No pipeline found for SHA ${sha} after ${discover_timeout}s"
+        return 1
+    fi
+
+    log_info "Pipeline #${pipeline_id} found for SHA ${sha:0:8}"
+
+    # Phase 2: wait for pipeline completion
+    local status
+    status=$(e2e.gitlab.wait_pipeline "$project_id" "$pipeline_id" "$completion_timeout")
+
+    echo "${pipeline_id} ${status}"
+}
+
 # Cancel pipelines with a given status.
 # Args: $1 = project ID, $2 = status filter (running|pending)
 e2e.gitlab.cancel_pipelines() {
