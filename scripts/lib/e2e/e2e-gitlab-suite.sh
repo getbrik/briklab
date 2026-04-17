@@ -25,39 +25,9 @@ source "${SCRIPT_DIR}/../auth/gitlab-pat.sh"
 reload_env
 ensure_gitlab_pat
 
-GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-
-# Cancel ALL running/pending pipelines across all projects in the brik group.
-# Called after push (which auto-triggers pipelines) and before E2E scenarios.
-cancel_all_pipelines() {
-    local pat="${GITLAB_PAT:-}"
-    [[ -z "$pat" ]] && return 0
-
-    log_info "Cancelling auto-triggered pipelines..."
-    local group_id
-    group_id=$(curl -s -H "PRIVATE-TOKEN: ${pat}" \
-        "${GITLAB_URL}/api/v4/groups/brik" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
-    [[ -z "$group_id" ]] && return 0
-
-    local projects
-    projects=$(curl -s -H "PRIVATE-TOKEN: ${pat}" \
-        "${GITLAB_URL}/api/v4/groups/${group_id}/projects?per_page=100" \
-        | python3 -c "import sys,json; [print(p['id']) for p in json.load(sys.stdin)]" 2>/dev/null || true)
-
-    local cancelled=0
-    for pid in $projects; do
-        for status in running pending; do
-            for ppid in $(curl -s -H "PRIVATE-TOKEN: ${pat}" \
-                "${GITLAB_URL}/api/v4/projects/${pid}/pipelines?status=${status}&per_page=100" \
-                | python3 -c "import sys,json; [print(p['id']) for p in json.load(sys.stdin)]" 2>/dev/null); do
-                curl -s -o /dev/null -H "PRIVATE-TOKEN: ${pat}" -X POST \
-                    "${GITLAB_URL}/api/v4/projects/${pid}/pipelines/${ppid}/cancel" 2>/dev/null || true
-                cancelled=$((cancelled + 1))
-            done
-        done
-    done
-    [[ $cancelled -gt 0 ]] && log_info "Cancelled ${cancelled} pipeline(s)"
-}
+# Source E2E libraries
+# shellcheck source=lib/gitlab-api.sh
+source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
@@ -244,7 +214,8 @@ E2E_TEST_PROJECTS="$PROJECTS_TO_PUSH" bash "${SCRIPT_DIR}/push-test-project-gitl
 # Wait briefly for GitLab to create auto-triggered pipelines from the push,
 # then cancel them all to free runner slots and avoid ArgoCD conflicts.
 sleep 3
-cancel_all_pipelines
+log_info "Cancelling auto-triggered pipelines..."
+e2e.gitlab.cancel_all_group_pipelines "brik"
 
 # ---------------------------------------------------------------------------
 # Collect scenarios to run
