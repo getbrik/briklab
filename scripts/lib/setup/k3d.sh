@@ -79,7 +79,9 @@ kubectl cluster-info
 kubectl get nodes
 
 # Create namespaces used by E2E deploy tests
-kubectl create namespace brik-staging 2>/dev/null || true
+for ns in brik-e2e-k8s brik-e2e-gitops brik-e2e-helm brik-e2e-rollback brik-e2e-workflow; do
+    kubectl create namespace "$ns" 2>/dev/null || true
+done
 
 # Install ArgoCD
 log_info "Installing ArgoCD..."
@@ -112,32 +114,32 @@ export ARGOCD_ADMIN_PASSWORD="$local_argocd_password"
 log_info "Creating ArgoCD service account 'brik' and generating API token..."
 ensure_argocd_token
 
-# Create the brik-e2e ArgoCD application (used by node-deploy-gitops E2E scenario)
-log_info "Creating ArgoCD application 'brik-e2e'..."
+# Create ArgoCD applications for E2E deploy scenarios
+log_info "Creating ArgoCD applications for E2E..."
 
 # Reload .env for Gitea password and fresh ArgoCD token
 reload_env
 
 local_gitea_password="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
-local_gitea_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy.git"
 
-kubectl create namespace brik-e2e 2>/dev/null || true
+# brik-e2e-gitops: used by node-deploy-gitops E2E scenario
+local_gitops_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy-gitops.git"
 
 kubectl apply -f - <<ARGOAPP
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: brik-e2e
+  name: brik-e2e-gitops
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: ${local_gitea_url}
+    repoURL: ${local_gitops_url}
     targetRevision: main
     path: k8s
   destination:
     server: https://kubernetes.default.svc
-    namespace: brik-e2e
+    namespace: brik-e2e-gitops
   syncPolicy:
     automated:
       prune: true
@@ -145,7 +147,34 @@ spec:
     syncOptions:
       - CreateNamespace=true
 ARGOAPP
-log_ok "ArgoCD application 'brik-e2e' created"
+log_ok "ArgoCD application 'brik-e2e-gitops' created"
+
+# brik-e2e-rollback: used by node-deploy-gitops-rollback E2E scenario
+local_rollback_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy-rollback.git"
+
+kubectl apply -f - <<ARGOAPP
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: brik-e2e-rollback
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ${local_rollback_url}
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: brik-e2e-rollback
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+ARGOAPP
+log_ok "ArgoCD application 'brik-e2e-rollback' created"
 
 log_ok "ArgoCD installed"
 echo ""

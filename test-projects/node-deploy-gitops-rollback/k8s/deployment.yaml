@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: node-deploy-k8s
-  namespace: brik-e2e-k8s
+  name: node-deploy-gitops-rollback
   labels:
-    app: node-deploy-k8s
+    app: node-deploy-gitops-rollback
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: node-deploy-k8s
+      app: node-deploy-gitops-rollback
   template:
     metadata:
       labels:
-        app: node-deploy-k8s
+        app: node-deploy-gitops-rollback
     spec:
       containers:
         - name: app
-          image: nexus.briklab.test:8082/brik/node-deploy-k8s:latest
+          image: nexus.briklab.test:8082/brik/node-deploy-gitops-rollback:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           resources:

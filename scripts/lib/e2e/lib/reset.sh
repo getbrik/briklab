@@ -158,17 +158,110 @@ e2e.reset.all_argocd_apps() {
     done
 }
 
-# Reset the gitops config-deploy repo to baseline.
-# Args: $1 = platform (gitlab|gitea), $2 = template dir
+# Reset a gitops config-deploy repo to baseline (empty repo with just a README).
+# This reproduces the state after setup/gitea.sh creates the repo.
+# The deploy pipeline (brik-lib deploy.gitops) will populate it on first run.
+# Args: $1 = platform (gitlab|gitea), $2 = repo name
 e2e.reset.gitops_config_repo() {
-    local platform="${1:-gitea}" template_dir="${2:-}"
+    local platform="${1:-gitea}" repo_name="${2:-config-deploy-gitops}"
 
-    if [[ -z "$template_dir" ]]; then
-        log_warn "No template dir specified for gitops config repo reset"
-        return 1
+    log_info "Resetting gitops config repo: ${repo_name} (${platform})"
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    (
+        cd "$tmp_dir" || exit 1
+        git init -b main >/dev/null 2>&1
+        echo "# ${repo_name}" > README.md
+        git add -A >/dev/null 2>&1
+        git commit -m "Initial config" >/dev/null 2>&1
+    )
+
+    local push_result=0
+    case "$platform" in
+        gitea)
+            local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+            local gitea_user="${GITEA_ADMIN_USER:-brik}"
+            e2e.git.push "$tmp_dir" "${gitea_url}/brik/${repo_name}.git" "$gitea_user" "$GITEA_PAT" "--force" || push_result=1
+            ;;
+        gitlab)
+            local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
+            local encoded_path
+            encoded_path=$(printf '%s' "brik/${repo_name}" | jq -sRr @uri 2>/dev/null || \
+                python3 -c "import urllib.parse; print(urllib.parse.quote('brik/${repo_name}', safe=''))" 2>/dev/null)
+            e2e.gitlab.api_delete "projects/${encoded_path}/protected_branches/main"
+            e2e.git.push "$tmp_dir" "${gitlab_url}/brik/${repo_name}.git" "root" "$GITLAB_PAT" "--force" || push_result=1
+            ;;
+        *)
+            log_error "Unknown platform: ${platform}"
+            push_result=1
+            ;;
+    esac
+
+    rm -rf "$tmp_dir"
+
+    if [[ $push_result -eq 0 ]]; then
+        log_ok "Config repo reset: ${repo_name}"
+    else
+        log_error "Failed to reset config repo: ${repo_name}"
     fi
+    return "$push_result"
+}
 
-    e2e.reset.repo "$platform" "config-deploy" "$template_dir"
+# Rollback a config-deploy repo to a specific deploy commit.
+# Finds the commit matching the given image tag pattern and force-pushes
+# a reset to that state. This handles intermediate commits from
+# auto-triggered builds (e.g. Jenkins webhook builds).
+# Args: $1 = repo name, $2 = image tag pattern to revert to (e.g. ":0.1.0")
+e2e.reset.rollback_config_repo() {
+    local repo_name="$1" target_tag="$2"
+
+    log_info "Rolling back ${repo_name} to deploy with tag '${target_tag}'..."
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    local gitea_user="${GITEA_ADMIN_USER:-brik}"
+    local gitea_password="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
+    local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+    local remote_url="http://${gitea_user}:${gitea_password}@${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/${repo_name}.git"
+
+    local result=0
+    (
+        cd "$tmp_dir" || exit 1
+        git clone "$remote_url" repo >/dev/null 2>&1
+        cd repo || exit 1
+
+        # Find the commit that deployed the target tag
+        local target_commit
+        target_commit=$(git log --all --oneline --grep="deploy: update to ${target_tag}" --format="%H" | head -1)
+
+        if [[ -z "$target_commit" ]]; then
+            echo "ERROR: No commit found matching 'deploy: update to ${target_tag}'" >&2
+            exit 1
+        fi
+
+        git reset --hard "$target_commit" >/dev/null 2>&1
+        git push --force origin main >/dev/null 2>&1
+    ) || result=1
+
+    rm -rf "$tmp_dir"
+
+    if [[ $result -eq 0 ]]; then
+        log_ok "Config repo rolled back to ${target_tag}"
+    else
+        log_error "Failed to rollback config repo to ${target_tag}"
+    fi
+    return "$result"
+}
+
+# Reset all gitops config-deploy repos.
+# Args: $1 = platform (gitlab|gitea)
+e2e.reset.all_gitops_config_repos() {
+    local platform="${1:-gitea}"
+
+    for repo in config-deploy-gitops config-deploy-rollback; do
+        e2e.reset.gitops_config_repo "$platform" "$repo"
+    done
 }
 
 # Reset Nexus test artifacts.

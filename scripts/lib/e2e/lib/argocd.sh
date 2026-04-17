@@ -104,6 +104,71 @@ e2e.argocd.get_app_status() {
     e2e.argocd.api_get "/api/v1/applications/${app_name}" 2>/dev/null
 }
 
+# Force ArgoCD to re-fetch the git repo and invalidate its manifest cache.
+# This is necessary when a commit is pushed and we need ArgoCD to see it immediately
+# rather than waiting for the default polling interval (3 minutes).
+# Args: $1 = app name
+# Returns: 0 on success, 1 on failure
+e2e.argocd.hard_refresh() {
+    local app_name="$1"
+    curl -sf --max-time 30 -k \
+        -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
+        "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}?refresh=hard" &>/dev/null
+}
+
+# Trigger a sync on an ArgoCD application.
+# Performs a hard refresh first to ensure ArgoCD sees the latest commits,
+# then triggers a sync. The auto-sync policy (selfHeal + prune) handles the rest.
+# Args: $1 = app name
+# Returns: 0 on success, 1 on failure
+e2e.argocd.trigger_sync() {
+    local app_name="$1"
+    # Hard refresh to pick up latest commits from git
+    e2e.argocd.hard_refresh "$app_name" || true
+    sleep 2
+    curl -sf --max-time 30 -k \
+        -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -X POST \
+        "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}/sync" \
+        -d '{}' &>/dev/null
+}
+
+# Wait for ArgoCD app image to change from a known value.
+# Polls until the image differs from previous_image or timeout.
+# Args: $1 = app name, $2 = previous image, $3 = timeout (seconds, default 180)
+# Output: new image on stdout
+# Returns: 0 if changed, 1 if timeout
+e2e.argocd.wait_image_change() {
+    local app_name="$1" previous_image="$2" timeout="${3:-180}"
+    local poll_interval=10
+    local elapsed=0
+
+    while [[ $elapsed -lt $timeout ]]; do
+        local current
+        current=$(e2e.argocd.get_app_image "$app_name")
+        if [[ -n "$current" && "$current" != "$previous_image" ]]; then
+            echo "$current"
+            return 0
+        fi
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+
+    echo "" >&2
+    # Return whatever image we got (even if unchanged)
+    e2e.argocd.get_app_image "$app_name"
+    return 1
+}
+
+# Extract the tag portion from a full image reference (e.g. "registry/name:tag" -> "tag").
+# Args: $1 = full image reference
+# Output: tag on stdout
+e2e.argocd.extract_image_tag() {
+    echo "${1##*:}"
+}
+
 # Wait for an ArgoCD application to be synced and healthy.
 # Args: $1 = app name, $2 = timeout (seconds, default 120)
 # Returns: 0 if synced+healthy, 1 if timeout

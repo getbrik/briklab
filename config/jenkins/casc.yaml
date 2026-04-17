@@ -357,6 +357,22 @@ jobs:
         }
       }
   - script: >
+      pipelineJob('node-deploy-gitops-rollback') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-gitops-rollback.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
       pipelineJob('node-deploy-failure') {
         definition {
           cpsScm {
