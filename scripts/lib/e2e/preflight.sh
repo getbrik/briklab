@@ -11,7 +11,7 @@
 #
 # What it does:
 #   1. Loads .env
-#   2. Checks Docker services (GitLab, Gitea, Jenkins, Registry)
+#   2. Checks Docker services (GitLab, Gitea, Jenkins, Nexus)
 #   3. Checks k3d cluster and ArgoCD port-forward
 #   4. Validates/refreshes GitLab PAT
 #   5. Validates/refreshes Gitea PAT
@@ -48,7 +48,7 @@ check_docker_services() {
     log_info "Checking Docker services..."
     local failed=0
 
-    for svc in brik-gitlab brik-gitea brik-jenkins brik-registry; do
+    for svc in brik-gitlab brik-gitea brik-jenkins brik-nexus; do
         if docker inspect --format='{{.State.Running}}' "$svc" 2>/dev/null | grep -q "true"; then
             log_ok "$svc running"
         else
@@ -76,6 +76,7 @@ check_k3d_and_argocd() {
     # Check ArgoCD pods
     local ready
     ready=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server \
+        --field-selector=status.phase=Running \
         -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
     if [[ "$ready" != "True" ]]; then
         log_warn "ArgoCD server pod not ready, waiting..."

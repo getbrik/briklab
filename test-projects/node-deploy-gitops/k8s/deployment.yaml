@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: registry.briklab.test:5050/brik/node-deploy-gitops:latest
+          image: nexus.briklab.test:8082/brik/node-deploy-gitops:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

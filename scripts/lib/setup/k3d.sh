@@ -35,21 +35,15 @@ if k3d cluster list 2>/dev/null | grep -q "$CLUSTER_NAME"; then
     k3d cluster delete "$CLUSTER_NAME"
 fi
 
-# Create registries config for the external brik-registry
+# Create registries config for the Nexus Docker hosted registry
 REGISTRIES_FILE=$(mktemp /tmp/k3d-registries-XXXXXX.yaml)
 trap 'rm -f "$REGISTRIES_FILE"' EXIT
 
 cat > "$REGISTRIES_FILE" <<'YAML'
 mirrors:
-  "brik-registry:5000":
+  "nexus.briklab.test:8082":
     endpoint:
-      - "http://brik-registry:5000"
-  "brik-registry:5050":
-    endpoint:
-      - "http://brik-registry:5000"
-  "registry.briklab.test:5050":
-    endpoint:
-      - "http://brik-registry:5000"
+      - "http://brik-nexus:8082"
 YAML
 
 # Create the k3d cluster
@@ -104,15 +98,15 @@ kubectl wait --for=condition=ready --timeout=180s pod -l app.kubernetes.io/part-
 # Patch the service for NodePort
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
 
-# Background port-forward
-log_info "Starting ArgoCD port-forward on :${ARGOCD_PORT}..."
-nohup kubectl port-forward svc/argocd-server -n argocd "${ARGOCD_PORT}:443" &>/dev/null &
+# Start and verify port-forward
+ensure_argocd_port_forward
 
 # Retrieve admin password
 local_argocd_password=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
 
-# Save to .env for use by other scripts
+# Save to .env and export for current shell (needed by ensure_argocd_token)
 save_to_env "ARGOCD_ADMIN_PASSWORD" "$local_argocd_password"
+export ARGOCD_ADMIN_PASSWORD="$local_argocd_password"
 
 # Create ArgoCD service account and generate non-expiring API token
 log_info "Creating ArgoCD service account 'brik' and generating API token..."

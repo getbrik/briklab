@@ -19,5 +19,5 @@ quality:
 
 package:
   docker:
-    image: registry.briklab.test:5050/brik/java-full
+    image: nexus.briklab.test:8082/brik/java-full
     dockerfile: Dockerfile

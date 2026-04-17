@@ -103,19 +103,17 @@ cmd_status() {
     echo ""
 
     local gitlab_port="${GITLAB_HTTP_PORT:-8929}"
-    local registry_port="${REGISTRY_PORT:-5050}"
     local gitea_port="${GITEA_HTTP_PORT:-3000}"
     local jenkins_port="${JENKINS_HTTP_PORT:-9090}"
     local nexus_port="${NEXUS_HTTP_PORT:-8081}"
     local gitlab_host="${GITLAB_HOSTNAME:-gitlab.briklab.test}"
-    local registry_host="${REGISTRY_HOSTNAME:-registry.briklab.test}"
     local gitea_host="${GITEA_HOSTNAME:-gitea.briklab.test}"
     local jenkins_host="${JENKINS_HOSTNAME:-jenkins.briklab.test}"
     local nexus_host="${NEXUS_HOSTNAME:-nexus.briklab.test}"
 
     # Check each container
     local health=""
-    for container in brik-gitlab brik-runner brik-registry brik-gitea brik-jenkins brik-nexus; do
+    for container in brik-gitlab brik-runner brik-gitea brik-jenkins brik-nexus; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
             health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null | tr -d '[:space:]')
             health="${health:-none}"
@@ -133,7 +131,6 @@ cmd_status() {
     echo ""
     echo -e "${BLUE}Access URLs:${NC}"
     echo "  GitLab   : http://${gitlab_host}:${gitlab_port}"
-    echo "  Registry : http://${registry_host}:${registry_port}/v2/_catalog"
     echo "  Gitea    : http://${gitea_host}:${gitea_port}"
     echo "  Jenkins  : http://${jenkins_host}:${jenkins_port}"
     echo "  Nexus    : http://${nexus_host}:${nexus_port}"
@@ -144,7 +141,7 @@ cmd_logs() {
     local service="${1:-}"
     if [[ -z "$service" ]]; then
         log_error "Usage: briklab.sh logs <service>"
-        log_info "Services: gitlab, gitlab-runner, registry, gitea, jenkins, nexus"
+        log_info "Services: gitlab, gitlab-runner, gitea, jenkins, nexus, ssh-target"
         exit 1
     fi
 
@@ -271,7 +268,7 @@ cmd_k3d_stop() {
 cmd_clean() {
     if [[ "${1:-}" != "--yes" ]]; then
         echo -e "${RED}WARNING: This action deletes ALL persistent data.${NC}"
-        echo -e "${RED}GitLab, Registry, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
+        echo -e "${RED}GitLab, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
         echo ""
         read -rp "Confirm deletion (type 'yes'): " confirm
         if [[ "$confirm" != "yes" ]]; then
@@ -301,6 +298,7 @@ cmd_test() {
     local platform=""          # gitlab or jenkins (required)
     local action=""            # (empty)=default, all, list, project, complete
     local project=""
+    local batch_args=()
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -309,6 +307,14 @@ cmd_test() {
             --all)       action="all"; shift ;;
             --list)      action="list"; shift ;;
             --complete)  action="complete"; shift ;;
+            --batch-size)
+                batch_args=(--batch-size "${2:-}")
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--batch-size requires a number"
+                    exit 1
+                fi
+                shift 2
+                ;;
             --project)
                 action="project"
                 project="${2:-}"
@@ -334,8 +340,8 @@ cmd_test() {
         local suite="${LIB_E2E}/e2e-jenkins-suite.sh"
         case "$action" in
             list)     bash "$suite" --list ;;
-            all)      bash "$suite" ;;
-            complete) bash "$suite" --complete ;;
+            all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
+            complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
             project)  bash "$suite" --only "$project" ;;
             *)        bash "$suite" --only node-minimal ;;
         esac
@@ -343,8 +349,8 @@ cmd_test() {
         local suite="${LIB_E2E}/e2e-gitlab-suite.sh"
         case "$action" in
             list)     bash "$suite" --list ;;
-            all)      bash "$suite" ;;
-            complete) bash "$suite" --complete ;;
+            all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
+            complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
             project)  bash "$suite" --only "$project" ;;
             *)        bash "$suite" --only node-minimal ;;
         esac
@@ -426,10 +432,11 @@ Testing (--gitlab or --jenkins required):
   test --jenkins --complete  Run only *-complete scenarios
   test --jenkins --project X Run a single Jenkins scenario
   test --jenkins --list      List available Jenkins scenarios
+  --batch-size N             Run scenarios in parallel batches of N
 
 Monitoring:
   status             Show container health and access URLs
-  logs <service>     Tail logs (gitlab, runner, registry, gitea, jenkins, nexus)
+  logs <service>     Tail logs (gitlab, runner, gitea, jenkins, nexus, ssh-target)
 
 Kubernetes (optional):
   k3d-start          Create k3d cluster + install ArgoCD

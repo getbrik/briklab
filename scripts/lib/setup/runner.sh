@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# GitLab Runner registration with Docker executor
+# GitLab Runner registration and configuration with Docker executor
+#
+# - Registers the runner if not already registered
+# - Always applies tuning parameters (concurrent, memory, etc.) from .env
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,7 +17,7 @@ RUNNER_TOKEN="${GITLAB_RUNNER_TOKEN:-}"
 HELPER_IMAGE="${GITLAB_RUNNER_HELPER_IMAGE:-gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding}"
 RUNNER_CONCURRENT="${GITLAB_RUNNER_CONCURRENT:-4}"
 RUNNER_REQUEST_CONCURRENCY="${GITLAB_RUNNER_REQUEST_CONCURRENCY:-${RUNNER_CONCURRENT}}"
-RUNNER_JOB_MEMORY="${GITLAB_RUNNER_JOB_MEMORY:-512m}"
+RUNNER_JOB_MEMORY="${GITLAB_RUNNER_JOB_MEMORY:-1g}"
 DEFAULT_IMAGE="alpine:3.21"
 
 if [[ -z "$RUNNER_TOKEN" ]]; then
@@ -23,59 +26,84 @@ if [[ -z "$RUNNER_TOKEN" ]]; then
     exit 1
 fi
 
-# Check if the runner is already registered
+# ---------------------------------------------------------------------------
+# Step 1: Register runner if not already registered
+# ---------------------------------------------------------------------------
 if docker exec brik-runner cat /etc/gitlab-runner/config.toml 2>/dev/null | grep -q "url"; then
-    log_warn "Runner already registered - nothing to do"
-    exit 0
+    log_info "Runner already registered - skipping registration"
+else
+    log_info "Registering Docker executor runner..."
+
+    docker exec brik-runner gitlab-runner register \
+        --non-interactive \
+        --url "${GITLAB_INTERNAL_URL}" \
+        --registration-token "${RUNNER_TOKEN}" \
+        --executor docker \
+        --docker-image "${DEFAULT_IMAGE}" \
+        --docker-privileged=false \
+        --docker-network-mode "brik-net" \
+        --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
+        --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
+        --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
+        --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
+        --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
+        --docker-extra-hosts "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20" \
+        --description "brik-docker-runner" \
+        --tag-list "docker,brik" \
+        --run-untagged=true \
+        --locked=false
+
+    log_ok "Runner registered"
 fi
 
-log_info "Registering Docker executor runner..."
+# ---------------------------------------------------------------------------
+# Step 2: Apply tuning parameters (always, even if already registered)
+# ---------------------------------------------------------------------------
+log_info "Applying runner configuration..."
 
-docker exec brik-runner gitlab-runner register \
-    --non-interactive \
-    --url "${GITLAB_INTERNAL_URL}" \
-    --registration-token "${RUNNER_TOKEN}" \
-    --executor docker \
-    --docker-image "${DEFAULT_IMAGE}" \
-    --docker-privileged=false \
-    --docker-network-mode "brik-net" \
-    --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
-    --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
-    --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
-    --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
-    --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
-    --docker-extra-hosts "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20" \
-    --docker-extra-hosts "registry.briklab.test:172.20.0.12" \
-    --description "brik-docker-runner" \
-    --tag-list "docker,brik" \
-    --run-untagged=true \
-    --locked=false
-
-# Set concurrent jobs (gitlab-runner register always defaults to 1)
+# Set concurrent jobs
 log_info "Setting concurrent = ${RUNNER_CONCURRENT}..."
 docker exec brik-runner sed -i \
     "s/^concurrent = .*/concurrent = ${RUNNER_CONCURRENT}/" \
     /etc/gitlab-runner/config.toml
 
-# Set request_concurrency (how many jobs the runner requests in parallel)
+# Set request_concurrency
 log_info "Setting request_concurrency = ${RUNNER_REQUEST_CONCURRENCY}..."
-docker exec brik-runner sed -i \
-    "/executor = \"docker\"/a\\  request_concurrency = ${RUNNER_REQUEST_CONCURRENCY}" \
-    /etc/gitlab-runner/config.toml
+if docker exec brik-runner grep -q "request_concurrency" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s/request_concurrency = .*/request_concurrency = ${RUNNER_REQUEST_CONCURRENCY}/" \
+        /etc/gitlab-runner/config.toml
+else
+    docker exec brik-runner sed -i \
+        "/executor = \"docker\"/a\\  request_concurrency = ${RUNNER_REQUEST_CONCURRENCY}" \
+        /etc/gitlab-runner/config.toml
+fi
 
-# Add helper_image (bleeding edge image requires an explicit helper)
+# Set helper_image
 log_info "Configuring helper_image..."
-docker exec brik-runner sed -i \
-    "/image = \"${DEFAULT_IMAGE}\"/a\\    helper_image = \"${HELPER_IMAGE}\"" \
-    /etc/gitlab-runner/config.toml
+if docker exec brik-runner grep -q "helper_image" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s|helper_image = .*|helper_image = \"${HELPER_IMAGE}\"|" \
+        /etc/gitlab-runner/config.toml
+else
+    docker exec brik-runner sed -i \
+        "/image = \"${DEFAULT_IMAGE}\"/a\\    helper_image = \"${HELPER_IMAGE}\"" \
+        /etc/gitlab-runner/config.toml
+fi
 
-# Set per-job memory limit to prevent OOM with concurrent execution
+# Set per-job memory limit
 log_info "Setting job memory limit = ${RUNNER_JOB_MEMORY}..."
-docker exec brik-runner sed -i \
-    "/shm_size = 0/a\\    memory = \"${RUNNER_JOB_MEMORY}\"" \
-    /etc/gitlab-runner/config.toml
+if docker exec brik-runner grep -q 'memory = ' /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s/memory = .*/memory = \"${RUNNER_JOB_MEMORY}\"/" \
+        /etc/gitlab-runner/config.toml
+else
+    docker exec brik-runner sed -i \
+        "/shm_size = 0/a\\    memory = \"${RUNNER_JOB_MEMORY}\"" \
+        /etc/gitlab-runner/config.toml
+fi
 
-# Allow flexible pull policies for job containers (needed for local/cached images)
+# Allow flexible pull policies for job containers
 log_info "Setting allowed pull policies..."
 if ! docker exec brik-runner grep -q "allowed_pull_policies" /etc/gitlab-runner/config.toml 2>/dev/null; then
     docker exec brik-runner sed -i \
@@ -83,7 +111,9 @@ if ! docker exec brik-runner grep -q "allowed_pull_policies" /etc/gitlab-runner/
         /etc/gitlab-runner/config.toml 2>/dev/null || true
 fi
 
-# Verification
+# ---------------------------------------------------------------------------
+# Step 3: Verification
+# ---------------------------------------------------------------------------
 errors=0
 if ! docker exec brik-runner grep -q "helper_image" /etc/gitlab-runner/config.toml; then
     log_warn "helper_image not added - jobs may fail"
@@ -103,9 +133,9 @@ if ! docker exec brik-runner grep -q "memory = \"${RUNNER_JOB_MEMORY}\"" /etc/gi
 fi
 
 if [[ $errors -eq 0 ]]; then
-    log_ok "Runner registered successfully"
+    log_ok "Runner configured successfully"
 else
-    log_warn "Runner registered with ${errors} warning(s)"
+    log_warn "Runner configured with ${errors} warning(s)"
 fi
 
 echo ""

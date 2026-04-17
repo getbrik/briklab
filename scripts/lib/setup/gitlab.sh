@@ -169,7 +169,7 @@ setup_nexus_ci_variables() {
     npm_token=$(printf 'admin:%s' "$nexus_password" | base64)
 
     local count=0
-    local total=10
+    local total=14
 
     # Docker registry credentials (all 5 stacks)
     _set_group_variable "NEXUS_DOCKER_USER" "admin" "false" && count=$((count + 1))
@@ -190,6 +190,44 @@ setup_nexus_ci_variables() {
 
     # NuGet (dotnet-complete) - format admin:password for basic auth
     _set_group_variable "NEXUS_NUGET_API_KEY" "admin:${nexus_password}" "true" && count=$((count + 1))
+
+    # Brik registry credentials (deploy projects, Nexus Docker hosted registry)
+    _set_group_variable "BRIK_REGISTRY_HOST" "nexus.briklab.test:8082" "false" && count=$((count + 1))
+    _set_group_variable "BRIK_REGISTRY_USER" "admin" "false" && count=$((count + 1))
+    _set_group_variable "BRIK_REGISTRY_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
+
+    # SSH deploy: skip strict host key checking (local lab only)
+    _set_group_variable "BRIK_SSH_STRICT_HOST_KEY" "no" "false" && count=$((count + 1))
+
+    # SSH deploy key (for node-deploy-ssh E2E test)
+    local root_dir="${SCRIPT_DIR}/../../.."
+    local ssh_key_file="${root_dir}/data/ssh-target/deploy_key"
+    if [[ -f "$ssh_key_file" ]]; then
+        total=$((total + 1))
+        local ssh_key_content
+        ssh_key_content=$(cat "$ssh_key_file")
+        # SSH keys contain newlines and special chars: can't be masked, use file type
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "PRIVATE-TOKEN: ${pat}" \
+            "${GITLAB_URL}/api/v4/groups/brik/variables" \
+            --data-urlencode "key=SSH_PRIVATE_KEY" \
+            --data-urlencode "value=${ssh_key_content}" \
+            -d "protected=false&masked=false&variable_type=file")
+        case "$http_code" in
+            201) count=$((count + 1)) ;;
+            400|409)
+                curl -s -o /dev/null \
+                    -X PUT \
+                    -H "PRIVATE-TOKEN: ${pat}" \
+                    "${GITLAB_URL}/api/v4/groups/brik/variables/SSH_PRIVATE_KEY" \
+                    --data-urlencode "value=${ssh_key_content}" \
+                    -d "protected=false&masked=false&variable_type=file"
+                count=$((count + 1))
+                ;;
+            *) log_warn "SSH_PRIVATE_KEY creation returned HTTP ${http_code}" ;;
+        esac
+    fi
 
     # kubectl extra options (skip TLS validation for k3d self-signed certs)
     _set_group_variable "BRIK_KUBECTL_OPTS" "--insecure-skip-tls-verify --validate=false" "false" && count=$((count + 1))

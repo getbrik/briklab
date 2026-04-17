@@ -18,8 +18,15 @@ test:
 
 package:
   docker:
-    image: registry.briklab.test:5050/brik/node-deploy
+    image: nexus.briklab.test:8082/brik/node-deploy
     dockerfile: Dockerfile
+
+publish:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-deploy
+    registry: nexus.briklab.test:8082
+    username_var: NEXUS_DOCKER_USER
+    password_var: NEXUS_DOCKER_PASSWORD
 
 deploy:
   workflow: trunk-based
