@@ -17,7 +17,7 @@
 #
 # Prerequisites:
 #   - briklab GitLab must be running
-#   - push-test-project-gitlab.sh must have been run
+#   - gitlab-push.sh must have been run
 #   - GITLAB_PAT must be set in .env
 set -euo pipefail
 
@@ -25,8 +25,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=../common.sh
 source "${SCRIPT_DIR}/../common.sh"
-# shellcheck source=../auth/gitlab-pat.sh
-source "${SCRIPT_DIR}/../auth/gitlab-pat.sh"
+# shellcheck source=lib/auth.sh
+source "${SCRIPT_DIR}/lib/auth.sh"
 reload_env
 
 # Source E2E libraries
@@ -90,7 +90,7 @@ log_info "Looking up project ${PROJECT_NAME}..."
 PROJECT_ID=$(e2e.gitlab.get_project_id "$PROJECT_PATH")
 
 if [[ -z "$PROJECT_ID" ]]; then
-    log_error "Project ${PROJECT_NAME} not found. Run push-test-project-gitlab.sh first."
+    log_error "Project ${PROJECT_NAME} not found. Run gitlab-push.sh first."
     exit 1
 fi
 log_ok "Project ID: ${PROJECT_ID}"

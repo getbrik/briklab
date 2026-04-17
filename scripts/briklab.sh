@@ -157,8 +157,8 @@ cmd_logs() {
 cmd_setup() {
     check_prereqs
     load_env
-    # shellcheck source=lib/verify.sh
-    source "${SCRIPT_DIR}/lib/verify.sh"
+    # shellcheck source=lib/infra-verify.sh
+    source "${SCRIPT_DIR}/lib/infra-verify.sh"
 
     local errors=0
 
@@ -337,7 +337,7 @@ cmd_test() {
     fi
 
     if [[ "$platform" == "jenkins" ]]; then
-        local suite="${LIB_E2E}/e2e-jenkins-suite.sh"
+        local suite="${LIB_E2E}/jenkins-suite.sh"
         case "$action" in
             list)     bash "$suite" --list ;;
             all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
@@ -346,7 +346,7 @@ cmd_test() {
             *)        bash "$suite" --only node-minimal ;;
         esac
     else
-        local suite="${LIB_E2E}/e2e-gitlab-suite.sh"
+        local suite="${LIB_E2E}/gitlab-suite.sh"
         case "$action" in
             list)     bash "$suite" --list ;;
             all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
@@ -419,7 +419,7 @@ Configuration:
   setup              Re-run GitLab/Runner/Gitea/Jenkins/Nexus/SSH configuration
                      with verification (only needed if setup failed during init)
   smoke-test         Verify that each component is reachable
-  preflight          Validate tokens, port-forwards, propagate to CI platforms
+  infra-refresh      Validate tokens, port-forwards, propagate to CI platforms
 
 Testing (--gitlab or --jenkins required):
   test --gitlab              Run node-minimal on GitLab
@@ -466,7 +466,7 @@ case "${1:-help}" in
     k3d-stop)    cmd_k3d_stop ;;
     clean)       cmd_clean "${@:2}" ;;
     smoke-test)  cmd_smoke_test ;;
-    preflight)   bash "${LIB_E2E}/preflight.sh" ;;
+    infra-refresh) bash "${SCRIPT_DIR}/lib/infra-refresh.sh" ;;
     help|--help|-h) cmd_help ;;
     *)
         log_error "Unknown command: ${1}"

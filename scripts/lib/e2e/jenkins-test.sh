@@ -13,7 +13,7 @@
 #
 # Prerequisites:
 #   - briklab Jenkins must be running
-#   - Repos must be pushed to Gitea (push-test-project-gitea.sh)
+#   - Repos must be pushed to Gitea (gitea-push.sh)
 #   - Job must exist (defined via CasC or seed job)
 set -euo pipefail
 

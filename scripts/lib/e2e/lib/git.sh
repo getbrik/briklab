@@ -2,7 +2,7 @@
 # E2E Git Operations Library
 #
 # Reusable functions for Git operations in E2E tests.
-# Extracted from push-test-project-gitlab.sh and push-test-project-gitea.sh.
+# Extracted from gitlab-push.sh and gitea-push.sh.
 #
 # These functions simulate developer actions (commit, push, tag) on test repos.
 

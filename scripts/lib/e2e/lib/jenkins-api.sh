@@ -2,7 +2,7 @@
 # E2E Jenkins API Library
 #
 # Reusable functions for interacting with the Jenkins API.
-# Extracted from e2e-jenkins-test.sh.
+# Extracted from jenkins-test.sh.
 #
 # Prerequisites:
 #   - JENKINS_ADMIN_PASSWORD must be set (via .env)

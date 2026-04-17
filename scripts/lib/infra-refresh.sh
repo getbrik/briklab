@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Preflight checks for E2E tests.
+# Infrastructure refresh for briklab.
 #
 # Validates and refreshes all tokens, ensures port-forwards are active,
 # and verifies that all services are reachable. Designed to be run before
 # E2E tests without needing to recreate the briklab infrastructure.
 #
 # Usage:
-#   bash preflight.sh                  # Run all checks
-#   source preflight.sh && preflight   # Use as a function
+#   bash infra-refresh.sh                        # Run all checks
+#   source infra-refresh.sh && infra_refresh     # Use as a function
 #
 # What it does:
 #   1. Loads .env
@@ -23,22 +23,16 @@
 # Exit code: 0 if all checks pass, 1 if any critical check fails.
 set -euo pipefail
 
-_PREFLIGHT_LOADED="${_PREFLIGHT_LOADED:-}"
+_INFRA_REFRESH_LOADED="${_INFRA_REFRESH_LOADED:-}"
 
 # Resolve paths
-PREFLIGHT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$PREFLIGHT_DIR/../../.." && pwd)"
+INFRA_REFRESH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$INFRA_REFRESH_DIR/../.." && pwd)"
 
-# shellcheck source=../common.sh
-source "${PREFLIGHT_DIR}/../common.sh"
-# shellcheck source=../auth/gitlab-pat.sh
-source "${PREFLIGHT_DIR}/../auth/gitlab-pat.sh"
-# shellcheck source=../auth/gitea-pat.sh
-source "${PREFLIGHT_DIR}/../auth/gitea-pat.sh"
-# shellcheck source=../auth/argocd-portfwd.sh
-source "${PREFLIGHT_DIR}/../auth/argocd-portfwd.sh"
-# shellcheck source=../auth/argocd-token.sh
-source "${PREFLIGHT_DIR}/../auth/argocd-token.sh"
+# shellcheck source=common.sh
+source "${INFRA_REFRESH_DIR}/common.sh"
+# shellcheck source=e2e/lib/auth.sh
+source "${INFRA_REFRESH_DIR}/e2e/lib/auth.sh"
 
 # ---------------------------------------------------------------------------
 # 1. Docker services
@@ -202,12 +196,12 @@ propagate_to_jenkins() {
 }
 
 # ---------------------------------------------------------------------------
-# Main: preflight
+# Main: infra_refresh
 # ---------------------------------------------------------------------------
 
-preflight() {
+infra_refresh() {
     echo -e "${BOLD}========================================${NC}"
-    echo -e "${BOLD}  Briklab E2E Preflight${NC}"
+    echo -e "${BOLD}  Briklab Infrastructure Refresh${NC}"
     echo -e "${BOLD}========================================${NC}"
     echo ""
 
@@ -247,7 +241,7 @@ preflight() {
     # Summary
     echo -e "${BOLD}========================================${NC}"
     if [[ $errors -eq 0 ]]; then
-        log_ok "All preflight checks passed -- .env is up to date"
+        log_ok "All checks passed -- .env is up to date"
     else
         log_error "${errors} check(s) failed"
     fi
@@ -257,10 +251,10 @@ preflight() {
 }
 
 # Run directly if not sourced
-if [[ "${_PREFLIGHT_LOADED}" != "1" ]]; then
-    _PREFLIGHT_LOADED=1
+if [[ "${_INFRA_REFRESH_LOADED}" != "1" ]]; then
+    _INFRA_REFRESH_LOADED=1
     if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-        preflight
+        infra_refresh
         exit $?
     fi
 fi
