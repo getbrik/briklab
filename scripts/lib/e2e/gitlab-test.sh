@@ -99,30 +99,59 @@ log_ok "Project ID: ${PROJECT_ID}"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
 
-# 3. Trigger a pipeline
-log_info "Triggering pipeline on ref '${TRIGGER_REF}'..."
-if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
-    log_info "CI variables: ${E2E_CI_VARIABLES}"
-fi
-PIPELINE_ID=$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "$TRIGGER_REF" "${E2E_CI_VARIABLES:-}")
+# 3. Determine trigger mode
+TRIGGER_MODE="${E2E_TRIGGER_MODE:-api}"
 
-if [[ -z "$PIPELINE_ID" ]]; then
-    log_error "Failed to trigger pipeline"
+if [[ "$TRIGGER_MODE" == "push" ]]; then
+    # CI variables not supported in push mode -- fallback to API
+    if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+        log_warn "Push mode + CI variables: falling back to API trigger"
+        TRIGGER_MODE="api"
+    fi
+fi
+
+if [[ "$TRIGGER_MODE" == "push" ]]; then
+    # Push-driven trigger
+    # shellcheck source=lib/git.sh
+    source "${SCRIPT_DIR}/lib/git.sh"
+
+    PROJECT_SHORT="${PROJECT_NAME#brik/}"
+
+    log_info "Triggering via git push (ref: ${TRIGGER_REF})..."
+    PUSH_SHA=$(e2e.git.trigger_via_push "gitlab" "$PROJECT_SHORT" "$TRIGGER_REF")
+    log_ok "Push SHA: ${PUSH_SHA}"
+
+    log_info "Waiting for pipeline triggered by SHA ${PUSH_SHA:0:8}..."
+    PIPELINE_RESULT=$(e2e.gitlab.wait_pipeline_by_sha "$PROJECT_ID" "$PUSH_SHA" 60 "$TIMEOUT_SECONDS")
+    PIPELINE_ID=$(echo "$PIPELINE_RESULT" | cut -d' ' -f1)
+    FINAL_STATUS=$(echo "$PIPELINE_RESULT" | cut -d' ' -f2)
+else
+    # API trigger (default, unchanged)
+    log_info "Triggering pipeline on ref '${TRIGGER_REF}'..."
+    if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
+        log_info "CI variables: ${E2E_CI_VARIABLES}"
+    fi
+    PIPELINE_ID=$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "$TRIGGER_REF" "${E2E_CI_VARIABLES:-}")
+
+    if [[ -z "$PIPELINE_ID" ]]; then
+        log_error "Failed to trigger pipeline"
+        exit 1
+    fi
+    log_ok "Pipeline triggered: #${PIPELINE_ID}"
+    echo "  URL: ${GITLAB_URL}/${PROJECT_NAME}/-/pipelines/${PIPELINE_ID}"
+    echo ""
+
+    log_info "Waiting for pipeline completion (timeout: ${TIMEOUT_SECONDS}s)..."
+    FINAL_STATUS=$(e2e.gitlab.wait_pipeline "$PROJECT_ID" "$PIPELINE_ID" "$TIMEOUT_SECONDS") || true
+fi
+echo ""
+
+if [[ -z "$PIPELINE_ID" || -z "$FINAL_STATUS" || "$FINAL_STATUS" == "timeout" ]]; then
+    log_error "Pipeline timed out or failed to trigger"
     exit 1
 fi
-log_ok "Pipeline triggered: #${PIPELINE_ID}"
+log_ok "Pipeline #${PIPELINE_ID} finished: ${FINAL_STATUS}"
 echo "  URL: ${GITLAB_URL}/${PROJECT_NAME}/-/pipelines/${PIPELINE_ID}"
-echo ""
-
-# 4. Poll for completion
-log_info "Waiting for pipeline completion (timeout: ${TIMEOUT_SECONDS}s)..."
-FINAL_STATUS=$(e2e.gitlab.wait_pipeline "$PROJECT_ID" "$PIPELINE_ID" "$TIMEOUT_SECONDS") || true
-echo ""
-
-if [[ -z "$FINAL_STATUS" || "$FINAL_STATUS" == "timeout" ]]; then
-    log_error "Pipeline timed out after ${TIMEOUT_SECONDS}s"
-    exit 1
-fi
 
 # 5. Get job details
 log_info "Pipeline status: ${FINAL_STATUS}"
