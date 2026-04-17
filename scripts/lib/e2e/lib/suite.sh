@@ -8,6 +8,7 @@
 #   _suite_get_name    scenario_string  -> echo name
 #   _suite_get_project scenario_string  -> echo project_name
 #   _suite_get_depends_on scenario_string -> echo dependency_name (or empty)
+#   _suite_get_group   scenario_string  -> echo group_letter (optional, default "")
 #   _suite_run_scenario scenario_string -> return 0/1
 #   _suite_list_scenarios               -> display scenario table
 #   _suite_push_projects projects_csv   -> push projects to VCS
@@ -23,11 +24,13 @@ _E2E_SUITE_LOADED=1
 # ---------------------------------------------------------------------------
 
 # Parse CLI arguments into module-level variables.
-# Sets: _SUITE_ONLY, _SUITE_COMPLETE, _SUITE_BATCH_SIZE
+# Sets: _SUITE_ONLY, _SUITE_COMPLETE, _SUITE_BATCH_SIZE, _SUITE_GROUPS, _SUITE_PARALLEL_GROUPS
 e2e.suite.parse_args() {
     _SUITE_ONLY=""
     _SUITE_COMPLETE=""
     _SUITE_BATCH_SIZE="${E2E_BATCH_SIZE:-0}"
+    _SUITE_GROUPS=""
+    _SUITE_PARALLEL_GROUPS=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -55,9 +58,24 @@ e2e.suite.parse_args() {
                 _SUITE_BATCH_SIZE="$2"
                 shift 2
                 ;;
+            --groups)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--groups requires comma-separated group letters (e.g. A,D,H)"
+                    exit 1
+                fi
+                _SUITE_GROUPS="$2"
+                shift 2
+                ;;
+            --parallel-groups)
+                _SUITE_PARALLEL_GROUPS="true"
+                if [[ "$_SUITE_BATCH_SIZE" -eq 0 ]]; then
+                    _SUITE_BATCH_SIZE=4
+                fi
+                shift
+                ;;
             *)
                 log_error "Unknown argument: $1"
-                echo "Usage: $0 [--list] [--only SCENARIO_NAME] [--complete] [--batch-size N]"
+                echo "Usage: $0 [--list] [--only NAME] [--complete] [--batch-size N] [--groups A,D,H] [--parallel-groups]"
                 exit 1
                 ;;
         esac
@@ -127,11 +145,20 @@ e2e.suite.collect_projects() {
 # Scenario filtering
 # ---------------------------------------------------------------------------
 
-# Filter scenarios based on --only / --complete flags.
+# Filter scenarios based on --only / --complete / --groups flags.
 # Args: scenarios array name (nameref), output array name (nameref)
 e2e.suite.collect_scenarios() {
     local -n _src_ref=$1
     local -n _dst_ref=$2
+
+    # Parse --groups into an associative array for O(1) lookup
+    declare -A _group_filter=()
+    if [[ -n "$_SUITE_GROUPS" ]]; then
+        IFS=',' read -ra _groups <<< "$_SUITE_GROUPS"
+        for g in "${_groups[@]}"; do
+            _group_filter["$(echo "$g" | tr -d '[:space:]')"]=1
+        done
+    fi
 
     _dst_ref=()
     for scenario in "${_src_ref[@]}"; do
@@ -146,6 +173,17 @@ e2e.suite.collect_scenarios() {
         # Skip if --complete and this isn't a *-complete scenario
         if [[ "$_SUITE_COMPLETE" == "true" && "$name" != *-complete ]]; then
             continue
+        fi
+
+        # Skip if --groups is set and this scenario's group isn't in the filter
+        if [[ ${#_group_filter[@]} -gt 0 ]]; then
+            local group=""
+            if type _suite_get_group &>/dev/null; then
+                group=$(_suite_get_group "$scenario")
+            fi
+            if [[ -z "$group" || -z "${_group_filter[$group]:-}" ]]; then
+                continue
+            fi
         fi
 
         _dst_ref+=("$scenario")

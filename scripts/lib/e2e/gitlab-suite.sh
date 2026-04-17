@@ -81,6 +81,31 @@ _suite_get_name() { IFS='|' read -r name _ <<< "$1"; echo "$name"; }
 _suite_get_project() { IFS='|' read -r _ project _ <<< "$1"; echo "$project"; }
 _suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ _ _ dep <<< "$1"; echo "${dep:-}"; }
 
+# Group mapping by scenario name prefix:
+#   A: stack-minimal (node-minimal, python-minimal, etc.)
+#   B: full pipelines (node-full, python-full, etc.)
+#   C: complete pipelines (node-complete, python-complete, etc.)
+#   D: security
+#   E: deploy (compose, k8s, ssh, helm)
+#   F: gitops + rollback (sequential)
+#   G: workflow (sequential)
+#   H: error scenarios
+_suite_get_group() {
+    local name
+    IFS='|' read -r name _ <<< "$1"
+    case "$name" in
+        *-minimal)           echo "A" ;;
+        *-full)              echo "B" ;;
+        *-complete)          echo "C" ;;
+        *-security)          echo "D" ;;
+        *-deploy-gitops|*-deploy-rollback) echo "F" ;;
+        *-deploy*)           echo "E" ;;
+        workflow-*)          echo "G" ;;
+        error-*)             echo "H" ;;
+        *)                   echo "" ;;
+    esac
+}
+
 _suite_list_scenarios() {
     echo -e "${BOLD}Available E2E scenarios:${NC}"
     echo ""

@@ -360,9 +360,10 @@ cmd_test() {
     load_env
 
     local platform=""          # gitlab or jenkins (required)
-    local action=""            # (empty)=default, all, list, project, complete
+    local action=""            # (empty)=default, all, list, project, complete, groups
     local project=""
     local batch_args=()
+    local group_args=()
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -378,6 +379,19 @@ cmd_test() {
                     exit 1
                 fi
                 shift 2
+                ;;
+            --groups)
+                action="groups"
+                group_args=(--groups "${2:-}")
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--groups requires comma-separated group letters (e.g. A,D,H)"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --parallel-groups)
+                group_args+=(--parallel-groups)
+                shift
                 ;;
             --project)
                 action="project"
@@ -402,23 +416,18 @@ cmd_test() {
 
     if [[ "$platform" == "jenkins" ]]; then
         local suite="${LIB_E2E}/jenkins-suite.sh"
-        case "$action" in
-            list)     bash "$suite" --list ;;
-            all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
-            complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
-            project)  bash "$suite" --only "$project" ;;
-            *)        bash "$suite" --only node-minimal ;;
-        esac
     else
         local suite="${LIB_E2E}/gitlab-suite.sh"
-        case "$action" in
-            list)     bash "$suite" --list ;;
-            all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
-            complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
-            project)  bash "$suite" --only "$project" ;;
-            *)        bash "$suite" --only node-minimal ;;
-        esac
     fi
+
+    case "$action" in
+        list)     bash "$suite" --list ;;
+        all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
+        complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
+        project)  bash "$suite" --only "$project" ;;
+        groups)   bash "$suite" ${group_args[@]+"${group_args[@]}"} ${batch_args[@]+"${batch_args[@]}"} ;;
+        *)        bash "$suite" --only node-minimal ;;
+    esac
 }
 
 cmd_init() {
@@ -497,6 +506,9 @@ Testing (--gitlab or --jenkins required):
   test --jenkins --project X Run a single Jenkins scenario
   test --jenkins --list      List available Jenkins scenarios
   --batch-size N             Run scenarios in parallel batches of N
+  --groups A,D,H             Run only scenarios in specified groups
+  --parallel-groups          Auto-batch independent groups in parallel
+Groups: A=stack, B=full, C=complete, D=security, E=deploy, F=gitops, G=workflow, H=error
 
 Reset (clean test state between runs):
   reset --gitlab             Full reset (repos + k8s + ArgoCD + artifacts)
