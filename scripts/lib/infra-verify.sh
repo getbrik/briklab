@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify.sh - Reusable verification functions for briklab
+# infra-verify.sh - Reusable verification functions for briklab
 # Source this file, then call verify_* functions.
 # Each function returns 0 on success, 1 on failure, and logs the result.
 

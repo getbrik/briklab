@@ -2,7 +2,7 @@
 # E2E Gitea API Library
 #
 # Reusable functions for interacting with the Gitea API.
-# Extracted from push-test-project-gitea.sh.
+# Extracted from gitea-push.sh.
 #
 # Prerequisites:
 #   - GITEA_PAT must be set (via ensure_gitea_pat or .env)

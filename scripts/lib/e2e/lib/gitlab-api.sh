@@ -2,7 +2,7 @@
 # E2E GitLab API Library
 #
 # Reusable functions for interacting with the GitLab API.
-# Extracted from e2e-gitlab-test.sh and push-test-project-gitlab.sh.
+# Extracted from gitlab-test.sh and gitlab-push.sh.
 #
 # Prerequisites:
 #   - GITLAB_PAT must be set (via ensure_gitlab_pat or .env)
