@@ -67,10 +67,11 @@ SCENARIOS=(
     "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||||workflow-trunk-main"
     "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600||||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
-    "error-build|node-error-build|main|brik-init||300|brik-build|||npm ERR!|SyntaxError|brik-init"
-    "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL|test.*failed|brik-init,brik-build"
-    "error-config|invalid-config|main|||300|brik-init|||validat|invalid|schema"
-    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent|NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
+    # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
+    "error-build|node-error-build|main|brik-init||300|brik-build|||npm ERR!~SyntaxError|brik-init"
+    "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
+    "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
+    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
 )
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ _suite_run_scenario() {
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
-    E2E_EXPECTED_ERROR_PATTERN="${error_pattern:-}" \
+    E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"
 }

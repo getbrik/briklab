@@ -60,10 +60,11 @@ SCENARIOS=(
     "workflow-trunk-tag|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-main"
     "workflow-trunk-feature|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-tag"
     # --- Error scenarios ---
-    "error-build|node-error-build|node-error-build|300|true||npm ERR!|SyntaxError"
-    "error-test|node-error-test|node-error-test|300|true||FAIL|test.*failed"
-    "error-config|invalid-config|invalid-config|300|true||validat|invalid|schema"
-    "error-deploy|node-deploy-failure|node-deploy-failure|600|true||brik-nonexistent|NotFound"
+    # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
+    "error-build|node-error-build|node-error-build|300|true||npm ERR!~SyntaxError"
+    "error-test|node-error-test|node-error-test|300|true||FAIL~test.*failed"
+    "error-config|invalid-config|invalid-config|300|true||validat~invalid~schema"
+    "error-deploy|node-deploy-failure|node-deploy-failure|600|true||brik-nonexistent~NotFound"
 )
 
 # ---------------------------------------------------------------------------
@@ -137,7 +138,7 @@ _suite_run_scenario() {
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
     E2E_TRIGGER_MODE="$trigger_mode" \
-    E2E_EXPECTED_ERROR_PATTERN="${error_pattern:-}" \
+    E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
         bash "${SCRIPT_DIR}/jenkins-test.sh"
 }
 
