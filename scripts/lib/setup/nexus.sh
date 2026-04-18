@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Nexus 3 CE configuration via REST API
 # Waits for Nexus, changes admin password, enables Docker + npm token realms,
-# and creates 6 hosted repositories for artifact publishing.
+# and creates 6 hosted repositories for artifact publishing (npm, Maven, PyPI,
+# NuGet, Docker, Cargo).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -263,14 +264,14 @@ create_repositories() {
         }
     }'
 
-    # raw hosted (for Cargo workaround and generic artifacts)
-    create_repo "raw" "brik-raw" '{
-        "name": "brik-raw",
+    # cargo hosted (Nexus 3.73+ supports native Cargo sparse protocol)
+    create_repo "cargo" "brik-cargo" '{
+        "name": "brik-cargo",
         "online": true,
         "storage": {
             "blobStoreName": "default",
-            "strictContentTypeValidation": false,
-            "writePolicy": "ALLOW"
+            "strictContentTypeValidation": true,
+            "writePolicy": "ALLOW_ONCE"
         }
     }'
 }
@@ -288,9 +289,12 @@ save_to_env "NEXUS_HOSTNAME" "${NEXUS_HOSTNAME:-nexus.briklab.test}"
 save_to_env "NEXUS_HTTP_PORT" "${NEXUS_HTTP_PORT:-8081}"
 save_to_env "NEXUS_DOCKER_PORT" "${NEXUS_DOCKER_PORT:-8082}"
 
-# Pre-compute npm token for Jenkins CasC (base64-encoded admin:password)
+# Pre-compute tokens for Jenkins CasC (base64-encoded admin:password)
 npm_token=$(printf 'admin:%s' "${NEXUS_NEW_PASSWORD}" | base64)
 save_to_env "NEXUS_NPM_TOKEN" "${npm_token}"
+
+# Cargo uses the same base64(admin:password) -- consumers add "Basic " prefix
+save_to_env "NEXUS_CARGO_TOKEN" "${npm_token}"
 
 log_ok "Nexus configuration complete"
 echo ""
@@ -305,4 +309,4 @@ echo "  maven  : ${NEXUS_URL}/repository/brik-maven/"
 echo "  pypi   : ${NEXUS_URL}/repository/brik-pypi/"
 echo "  nuget  : ${NEXUS_URL}/repository/brik-nuget/"
 echo "  docker : ${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
-echo "  raw    : ${NEXUS_URL}/repository/brik-raw/"
+echo "  cargo  : ${NEXUS_URL}/repository/brik-cargo/"
