@@ -16,12 +16,13 @@ All services run together via a single `docker-compose.yml`:
 
 | Component | Memory limit |
 |-----------|-------------|
-| GitLab CE | 8 GB |
-| GitLab Runner | 512 MB |
+| GitLab CE | 12 GB |
+| GitLab Runner | 1 GB |
 | Gitea | 512 MB |
 | Jenkins | 6 GB |
+| SSH Target | 128 MB |
 | Nexus 3 CE | 2 GB |
-| **Total** | **~17 GB** |
+| **Total** | **~22 GB** |
 
 ---
 
@@ -63,6 +64,12 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 |  |   :3000, :222    |   |  :9090, :50000   |   | :8081, :8082 |  |
 |  +------------------+   +------------------+   +--------------+  |
 |                                                                  |
+|  +------------------+                                            |
+|  |   SSH Target     |                                            |
+|  |   172.20.0.41    |                                            |
+|  |   :22 (internal) |                                            |
+|  +------------------+                                            |
+|                                                                  |
 +-----------------------------------------------------------------+
 ```
 
@@ -72,6 +79,7 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 | GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | - |
 | Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 |
 | Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 |
+| SSH Target | `briklab-ssh-target` (custom) | 172.20.0.41 | 22 (internal) |
 | Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 |
 
 The Runner uses `extra_hosts` to map `gitlab.briklab.test` and `nexus.briklab.test` to their static IPs. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve hostnames to clone repositories and push artifacts.
@@ -90,7 +98,8 @@ The Runner uses `extra_hosts` to map `gitlab.briklab.test` and `nexus.briklab.te
  |    |-- 4.2. runner.sh      (Runner registration)
  |    |-- 4.3. gitea.sh       (Gitea configuration)
  |    |-- 4.4. jenkins.sh     (Jenkins plugins + CasC)
- |    +-- 4.5. nexus.sh       (Nexus admin + repositories)
+ |    |-- 4.5. nexus.sh       (Nexus admin + repositories)
+ |    +-- 4.6. ssh-target.sh  (SSH target container setup)
  +-- 5. smoke-test.sh         (component verification)
 ```
 
@@ -135,7 +144,7 @@ Installs plugins from `config/jenkins/plugins.txt` via `jenkins-plugin-cli` and 
 2. **Admin password** -- reads the initial password from the container, changes it via REST API.
 3. **Docker Bearer Token Realm** -- enables the realm needed for `docker login`.
 4. **Anonymous access** -- enables anonymous reads (needed for `npm install`, `docker pull`).
-5. **Repositories** -- creates 6 hosted repositories: `brik-npm`, `brik-maven`, `brik-pypi`, `brik-nuget`, `brik-docker` (HTTP connector on port 8082), `brik-raw`.
+5. **Repositories** -- creates 6 hosted repositories: `brik-npm`, `brik-maven`, `brik-pypi`, `brik-nuget`, `brik-docker` (HTTP connector on port 8082), `brik-cargo` (sparse protocol).
 
 ### k3d.sh - Kubernetes setup
 
@@ -172,11 +181,19 @@ A summary line shows total / PASS / FAIL / SKIP counts. Exit code is non-zero if
 
 ```
 briklab/
-|-- docker-compose.yml            # All services (GitLab + Runner + Gitea + Jenkins + Nexus)
+|-- docker-compose.yml            # All services (GitLab + Runner + Gitea + Jenkins + Nexus + SSH Target)
 |-- .env.example                  # Variables template
 |-- scripts/
 |   |-- briklab.sh                # Main CLI
 |   +-- lib/
+|       |-- common.sh             # Shared utilities (logging, retry, env loading)
+|       |-- infra-verify.sh       # Environment verification
+|       |-- infra-refresh.sh      # Token/port-forward refresh
+|       |-- auth/                 # Credential management
+|       |   |-- gitlab-pat.sh     # GitLab PAT management
+|       |   |-- gitea-pat.sh      # Gitea PAT management
+|       |   |-- argocd-token.sh   # ArgoCD token retrieval
+|       |   +-- argocd-portfwd.sh # ArgoCD port-forward management
 |       |-- setup/                # Setup scripts
 |       |   |-- gitlab.sh         # PAT + project + runner token
 |       |   |-- runner.sh         # Runner registration + helper_image
@@ -184,29 +201,52 @@ briklab/
 |       |   |-- jenkins.sh        # Jenkins plugins + CasC
 |       |   |-- nexus.sh          # Nexus admin + repositories
 |       |   |-- k3d.sh            # k3d cluster + ArgoCD
+|       |   |-- ssh-target.sh     # SSH target container setup
 |       |   +-- smoke-test.sh     # Component verification
 |       +-- e2e/                  # E2E test scripts
-|           |-- ensure-gitlab-pat.sh         # Auto-refresh GitLab PAT
-|           |-- push-test-project-gitlab.sh  # Push repos to briklab GitLab
-|           |-- push-test-project-gitea.sh   # Push repos to briklab Gitea
-|           |-- e2e-gitlab-test.sh           # Trigger + validate one GitLab pipeline
-|           |-- e2e-gitlab-suite.sh          # Orchestrate all GitLab scenarios
-|           |-- e2e-jenkins-test.sh          # Trigger + validate Jenkins pipeline
-|           +-- e2e-jenkins-suite.sh         # Orchestrate all Jenkins scenarios
-|-- test-projects/                # E2E fixtures (13 scenarios)
+|           |-- gitlab-push.sh    # Push repos to GitLab
+|           |-- gitlab-test.sh    # Single GitLab pipeline test
+|           |-- gitlab-suite.sh   # GitLab scenario orchestrator
+|           |-- gitlab-rollback.sh # GitLab rollback E2E
+|           |-- gitea-push.sh     # Push repos to Gitea
+|           |-- jenkins-test.sh   # Single Jenkins pipeline test
+|           |-- jenkins-suite.sh  # Jenkins scenario orchestrator
+|           |-- jenkins-rollback.sh # Jenkins rollback E2E
+|           +-- lib/              # Reusable E2E libraries (17 files)
+|               |-- assert.sh, auth.sh, suite.sh, push.sh, git.sh
+|               |-- reset.sh, rollback.sh
+|               |-- gitlab-api.sh, jenkins-api.sh, gitea-api.sh
+|               |-- nexus.sh, k8s.sh, argocd.sh, compose.sh, ssh.sh
+|               +-- error-patterns.conf, error-ignore-patterns.conf
+|-- test-projects/                # E2E fixtures (25 projects)
 |   |-- node-minimal/             # Node.js minimal (init, build, test)
 |   |-- node-full/                # Node.js full (release, quality, package)
+|   |-- node-complete/            # Full pipeline + npm/Docker publish to Nexus
 |   |-- node-security/            # Node.js security stage (npm audit)
-|   |-- node-deploy/              # Node.js deploy stage
+|   |-- node-deploy/              # Deploy stage (compose target)
+|   |-- node-deploy-k8s/          # Deploy to Kubernetes
+|   |-- node-deploy-ssh/          # Deploy via SSH
+|   |-- node-deploy-helm/         # Deploy via Helm chart on k3d
+|   |-- node-deploy-gitops/       # Deploy via GitOps + ArgoCD
+|   |-- node-deploy-gitops-rollback/ # GitOps rollback (3-step commit chain)
+|   |-- node-deploy-failure/      # Intentional deploy failure
+|   |-- node-workflow-trunk/      # Trunk-based workflow (main, tag, feature)
 |   |-- python-minimal/           # Python minimal (pytest)
 |   |-- python-full/              # Python full (ruff, pip-audit, Docker)
-|   |-- java-minimal/             # Java minimal (JUnit 5) - maven CI image
-|   |-- java-full/                # Java full (checkstyle, Docker) - maven CI image
-|   |-- rust-minimal/             # Rust minimal (cargo test) - rust CI image
-|   |-- dotnet-minimal/           # .NET minimal (xUnit) - dotnet SDK CI image
+|   |-- python-complete/          # Full pipeline + PyPI/Docker publish
+|   |-- java-minimal/             # Java minimal (JUnit 5)
+|   |-- java-full/                # Java full (checkstyle, Docker)
+|   |-- java-complete/            # Full pipeline + Maven/Docker publish
+|   |-- rust-minimal/             # Rust minimal (cargo test)
+|   |-- rust-complete/            # Full pipeline + Cargo/Docker publish
+|   |-- dotnet-minimal/           # .NET minimal (xUnit)
+|   |-- dotnet-complete/          # Full pipeline + NuGet/Docker publish
 |   |-- node-error-build/         # Error: intentionally broken build
 |   |-- node-error-test/          # Error: intentionally failing tests
 |   +-- invalid-config/           # Error: invalid brik.yml (version: 99)
+|-- images/
+|   |-- jenkins/                  # Custom Jenkins image (Dockerfile + entrypoint)
+|   +-- ssh-target/               # SSH target container (Dockerfile + entrypoint)
 |-- config/
 |   +-- jenkins/
 |       |-- plugins.txt           # Required plugins
@@ -290,6 +330,11 @@ briklab/
 | Root password rejected | GitLab 18.x requires strong password | Default `Brik-Gtlb-2026` meets requirements |
 | Forced password change at login | `password_automatically_set = true` | Rails runner sets `password_automatically_set = false` |
 | Nexus healthcheck fails on Alpine | `curl` not available in Nexus Alpine image | Healthcheck uses `wget` instead |
+| No `!` in passwords | Bash heredoc and Ruby escaping issues | Use `Brik-Gtlb-2026` not `Brik-Gtlb-2026!` |
+| ArgoCD unreachable from runners | Hostname resolves to 127.0.0.1 inside containers | Use `host.docker.internal:9080` |
+| Gitea API 404 on org repos | `brik` is a user, not an organization | Use `/api/v1/user/repos` not `/api/v1/orgs/brik/repos` |
+| ArgoCD doesn't pick up new commits | Default polling interval ~3 minutes | Call `?refresh=hard` before sync |
+| GitLab can't mask variables with spaces | GitLab restriction on masked variable format | Avoid spaces in masked CI variable values |
 
 ---
 
@@ -301,34 +346,31 @@ To add a new E2E test scenario:
 
 2. **Add a `brik.yml`** declaring the stack, tools, and stages to exercise.
 
-3. **Add a scenario entry** in `scripts/lib/e2e/e2e-gitlab-suite.sh`:
+3. **Add a scenario entry** in `scripts/lib/e2e/gitlab-suite.sh`:
    ```bash
    SCENARIOS=(
        # ...existing scenarios...
        # Normal scenario (pipeline must succeed):
        "my-scenario|my-project|main|brik-init,brik-build,brik-test,brik-notify||300"
-       # Error scenario (pipeline must fail at specific job):
-       "my-error|my-project|main|brik-init||300|brik-build"
+       # Error scenario (pipeline must fail, with error pattern and success jobs):
+       "my-error|my-project|main|brik-init||300|brik-build||npm ERR!~SyntaxError|brik-init"
+       # Scenario with dependency on another scenario:
+       "my-step2|my-project|v0.1.0|brik-init,brik-build||300||||my-step1"
    )
    ```
-   Format: `name|project|trigger_ref|required_jobs|optional_jobs|timeout|expect_failed_job`
+   Format: `name|project|ref|required_jobs|optional_jobs|timeout|expect_fail|ci_vars|depends_on|error_pattern|success_jobs`
 
-   The 7th field is optional. When set, the E2E test expects the pipeline to fail and verifies that the specified job has `failed` status.
+   - `expect_fail`: job name that must fail (empty for success scenarios)
+   - `ci_vars`: CI variables injected via API (e.g. `BRIK_DRY_RUN=true`)
+   - `depends_on`: scenario name that must run first (sequential execution)
+   - `error_pattern`: regex patterns to validate in logs (use `~` as OR separator)
+   - `success_jobs`: jobs that must succeed even in failure scenarios
 
 4. **Define required and optional jobs** -- required jobs must all succeed for the scenario to pass (in normal mode). Optional jobs are checked but do not cause failure.
 
-5. **Override CI image** -- for non-Alpine stacks (Java, Rust, .NET), override `BRIK_CI_IMAGE` in the project's `.gitlab-ci.yml`:
-   ```yaml
-   variables:
-     BRIK_CI_IMAGE: maven:3.9-eclipse-temurin-21-alpine
+5. **Add group mapping** -- update `_suite_get_group()` in the suite file if the new scenario doesn't match existing patterns (A=stack, B=full, C=complete, D=security, E=deploy, F=gitops, G=workflow, H=error).
 
-   include:
-     - project: 'brik/gitlab-templates'
-       ref: v0.1.0
-       file: '/templates/pipeline.yml'
-   ```
-
-6. **Run it**: `./scripts/briklab.sh test --project <name>`
+6. **Run it**: `./scripts/briklab.sh test --gitlab --project <name>`
 
 ---
 
@@ -368,4 +410,4 @@ GitLab's API requires a valid authentication token, but tokens don't exist on a 
 
 ### Why Nexus CE (not Artifactory, not custom registries)
 
-Nexus 3 CE is free, supports multiple repository formats (npm, Maven, PyPI, NuGet, Docker, raw) in a single instance, and has a well-documented REST API for automated setup. This avoids running separate registries per format.
+Nexus 3 CE is free, supports multiple repository formats (npm, Maven, PyPI, NuGet, Docker, Cargo) in a single instance, and has a well-documented REST API for automated setup. This avoids running separate registries per format.
