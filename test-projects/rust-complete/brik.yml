@@ -30,6 +30,10 @@ package:
     dockerfile: Dockerfile
 
 publish:
+  cargo:
+    registry: brik-cargo
+    index: "sparse+http://nexus.briklab.test:8081/repository/brik-cargo/"
+    token_var: BRIK_PUBLISH_CARGO_TOKEN
   docker:
     image: nexus.briklab.test:8082/brik/rust-complete
     registry: nexus.briklab.test:8082

@@ -165,8 +165,8 @@ setup_nexus_ci_variables() {
     fi
 
     local nexus_password="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
-    local npm_token
-    npm_token=$(printf 'admin:%s' "$nexus_password" | base64)
+    local auth_token_b64
+    auth_token_b64=$(printf 'admin:%s' "$nexus_password" | base64)
 
     local count=0
     local total=14
@@ -176,7 +176,7 @@ setup_nexus_ci_variables() {
     _set_group_variable "BRIK_PUBLISH_DOCKER_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
 
     # npm (node-complete)
-    _set_group_variable "BRIK_PUBLISH_NPM_TOKEN" "$npm_token" "true" && count=$((count + 1))
+    _set_group_variable "BRIK_PUBLISH_NPM_TOKEN" "$auth_token_b64" "true" && count=$((count + 1))
 
     # PyPI (python-complete) - format admin:password for basic auth
     _set_group_variable "BRIK_PUBLISH_PYPI_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
@@ -185,8 +185,9 @@ setup_nexus_ci_variables() {
     _set_group_variable "BRIK_PUBLISH_MAVEN_USER" "admin" "false" && count=$((count + 1))
     _set_group_variable "BRIK_PUBLISH_MAVEN_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
 
-    # Cargo (rust-complete) - dummy token for dry-run
-    _set_group_variable "BRIK_PUBLISH_CARGO_TOKEN" "dummy-dry-run-token" "false" && count=$((count + 1))
+    # Cargo (rust-complete) - Basic auth token for Nexus Cargo registry
+    # masked=false because GitLab cannot mask values containing spaces ("Basic ...")
+    _set_group_variable "BRIK_PUBLISH_CARGO_TOKEN" "Basic ${auth_token_b64}" "false" && count=$((count + 1))
 
     # NuGet (dotnet-complete) - format admin:password for basic auth
     _set_group_variable "BRIK_PUBLISH_NUGET_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))

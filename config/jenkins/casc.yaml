@@ -19,7 +19,7 @@ jenkins:
           - key: BRIK_PUBLISH_MAVEN_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
           - key: BRIK_PUBLISH_CARGO_TOKEN
-            value: "dummy-dry-run-token"
+            value: "Basic ${NEXUS_CARGO_TOKEN}"
           - key: BRIK_PUBLISH_NUGET_TOKEN
             value: "admin:${NEXUS_ADMIN_PASSWORD}"
           - key: BRIK_REGISTRY_HOST
