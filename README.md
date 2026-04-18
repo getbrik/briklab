@@ -458,6 +458,13 @@ Auth libraries are reusable -- each validates and caches credentials, and can be
 - [Brik](https://github.com/getbrik/brik) -- the portable CI/CD pipeline system
 - [Architecture](docs/architecture.md) -- how Briklab works internally
 
+## Transparency Notice
+
+We use AI-assisted development ([Claude Code](https://claude.ai/code) + [Everything Claude Code](https://github.com/aspect-build/everything-claude-code)) to accelerate implementation:
+
+- Every contribution (human or AI-generated) follows the same quality gates: code review, test coverage, E2E testing, and CI checks.
+- AI-generated code is not perfect. Regular refactoring passes address its shortcomings, and the overall productivity gains are significant.
+
 ## License
 
-MIT
+[MPL-2.0](LICENSE)
