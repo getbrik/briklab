@@ -411,6 +411,22 @@ jobs:
         }
       }
   - script: >
+      pipelineJob('node-workflow-trunk') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-workflow-trunk.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
       pipelineJob('node-error-build') {
         definition {
           cpsScm {

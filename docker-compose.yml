@@ -120,6 +120,7 @@ services:
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-changeme_jenkins_admin}
       - NEXUS_ADMIN_PASSWORD=${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}
       - NEXUS_NPM_TOKEN=${NEXUS_NPM_TOKEN:-}
+      - NEXUS_CARGO_TOKEN=${NEXUS_CARGO_TOKEN:-}
       - ARGOCD_PORT=${ARGOCD_PORT:-9080}
       - ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN:-}
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx4g
