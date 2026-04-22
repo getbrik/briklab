@@ -1,2 +1,27 @@
+# Brik runtime artefacts
+brik-artifacts/
+.brik-logs/
+pipeline-report.md
+
+# Test / coverage
+coverage/
+.coverage
+.shellspec-quick.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Node
 node_modules/
 dist/
+build/
+package-lock.json
+.npm/
+*.tgz
