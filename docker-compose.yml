@@ -130,6 +130,9 @@ services:
       - ./data/jenkins:/var/jenkins_home
       - ./config/jenkins/casc.yaml:/var/jenkins_casc/casc.yaml:ro
       - ./data/k3d/kubeconfig:/opt/brik/kubeconfig:ro
+      # SSH deploy key for node-deploy-ssh E2E test (read-only).
+      # The deploy stage container inherits this mount via --volumes-from.
+      - ./data/ssh-target/deploy_key:/opt/brik/ssh/deploy_key:ro
       # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

@@ -30,6 +30,12 @@ jenkins:
             value: "${NEXUS_ADMIN_PASSWORD}"
           - key: BRIK_SSH_STRICT_HOST_KEY
             value: "no"
+          # Path to the SSH private key for node-deploy-ssh E2E test.
+          # The host file is mounted by docker-compose at this path; the
+          # deploy stage container inherits the mount via --volumes-from.
+          # transverse.ssh.setup_agent loads the key file into ssh-agent.
+          - key: SSH_PRIVATE_KEY
+            value: "/opt/brik/ssh/deploy_key"
           - key: BRIK_KUBECTL_OPTS
             value: "--insecure-skip-tls-verify --validate=false"
           - key: ARGOCD_SERVER
@@ -332,6 +338,22 @@ jobs:
               git {
                 remote {
                   url('http://gitea.briklab.test:3000/brik/node-deploy-ssh.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-helm') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-helm.git')
                 }
                 branches('*/main')
               }
