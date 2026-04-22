@@ -170,8 +170,16 @@ else
 fi
 
 # 7. Validate build logs (only for successful builds)
-if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
+# Skip log-clean assertion entirely when the build already FAILED: the
+# build-result assertion above has caught the failure, and Jenkins's
+# console flush has variable latency past 2s, so a "Build logs clean"
+# PASS on a failed build would be a misleading false positive that
+# masks the real failure.
+if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" && "$FINAL_RESULT" != "FAILURE" ]]; then
     log_info "Checking build logs for errors..."
+    # Small settle delay so Jenkins has time to flush the console tail
+    # before we fetch it; otherwise final [ERROR] lines can be missing.
+    sleep 2
     CONSOLE_LOG=$(e2e.jenkins.get_console_log "$JOB_NAME" "$BUILD_NUMBER")
     if [[ -n "$CONSOLE_LOG" ]]; then
         assert.build_logs_clean "$CONSOLE_LOG"

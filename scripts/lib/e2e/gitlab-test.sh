@@ -247,13 +247,25 @@ done
 if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
     echo ""
     log_info "Checking job logs for errors..."
-    while IFS=: read -r jid jname; do
+    # Small settle delay so the runner has time to upload the tail of the
+    # trace; without this, jobs that finish in the very last step can have
+    # their final [ERROR] lines missing at fetch time.
+    sleep 2
+    while IFS=: read -r jid jname jstatus; do
         [[ -z "$jid" ]] && continue
+        # Skip log-clean assertion for jobs that already failed: the
+        # job-status assertion has already caught the failure, and
+        # GitLab's trace relay has variable latency past 2s, so a
+        # log-clean PASS on a failed job would be a misleading false
+        # positive that masks the real failure.
+        if [[ "$jstatus" == "failed" ]]; then
+            continue
+        fi
         local_log=$(e2e.gitlab.get_job_log "$PROJECT_ID" "$jid")
         if [[ -n "$local_log" ]]; then
             assert.job_logs_clean "$local_log" "Logs clean: ${jname}"
         fi
-    done < <(echo "$JOBS" | jq -r '.[] | "\(.id):\(.name)"' 2>/dev/null)
+    done < <(echo "$JOBS" | jq -r '.[] | "\(.id):\(.name):\(.status)"' 2>/dev/null)
 fi
 
 echo ""

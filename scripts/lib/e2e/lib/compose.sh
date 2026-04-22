@@ -41,3 +41,29 @@ e2e.compose.container_healthy() {
     health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "unknown")
     [[ "$health" == "healthy" ]]
 }
+
+# ---------------------------------------------------------------------------
+# Teardown
+# ---------------------------------------------------------------------------
+
+# Force-remove every container belonging to a compose project.
+# Compose names containers "<project>-<service>-<ordinal>" and labels them
+# with "com.docker.compose.project". Port collisions between scenario runs
+# come from stale containers still binding the published port, so this
+# helper wipes them before a fresh deploy.
+# Args: $1 = compose project name (e.g. "node-deploy")
+e2e.compose.teardown_stack() {
+    local project="$1"
+    [[ -z "$project" ]] && return 0
+
+    local ids
+    ids=$(docker ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null)
+    if [[ -z "$ids" ]]; then
+        # Fall back to name-prefix match for containers started without the label
+        ids=$(docker ps -aq --filter "name=^${project}-" 2>/dev/null)
+    fi
+    [[ -z "$ids" ]] && return 0
+
+    # shellcheck disable=SC2086
+    docker rm -f $ids >/dev/null 2>&1 || true
+}

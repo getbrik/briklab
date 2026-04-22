@@ -273,11 +273,16 @@ e2e.gitlab.wait_pipeline_by_sha() {
 
     if [[ -z "$pipeline_id" ]]; then
         echo "" >&2
-        log_error "No pipeline found for SHA ${sha} after ${discover_timeout}s"
+        log_error "No pipeline found for SHA ${sha} after ${discover_timeout}s" >&2
         return 1
     fi
 
-    log_info "Pipeline #${pipeline_id} found for SHA ${sha:0:8}"
+    # Route log lines to stderr: this function's stdout is captured by the
+    # caller via `$(...)`, so any log_* call (which writes to stdout by
+    # default) would contaminate the returned "pipeline_id status" string
+    # with ANSI-coloured [INFO] text. Progress dots already go to stderr
+    # above; this aligns the rest of the function with that convention.
+    log_info "Pipeline #${pipeline_id} found for SHA ${sha:0:8}" >&2
 
     # Phase 2: wait for pipeline completion
     local status

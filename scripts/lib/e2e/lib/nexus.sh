@@ -151,9 +151,27 @@ e2e.nexus.delete_docker_images() {
     done
 }
 
+# Delete a specific cargo crate (and its sparse-index entry) from brik-cargo.
+# Cargo's sparse index rejects re-publishing the same name@version, so the
+# index path component (e.g. "/ru/st/rust-complete") must be removed as well
+# as the .crate component itself.
+# Args: $1 = crate name, $2 = crate version
+e2e.nexus.delete_cargo_crate() {
+    local name="$1" version="$2"
+    local components
+    components=$(_e2e_nexus_api_get "/service/rest/v1/components?repository=brik-cargo" 2>/dev/null) || return 0
+
+    echo "$components" | jq -r --arg name "$name" --arg version "$version" \
+        '.items[] | select((.name == $name and .version == $version) or (.name | endswith("/" + $name))) | .id' 2>/dev/null | \
+    while IFS= read -r id; do
+        [[ -z "$id" ]] && continue
+        _e2e_nexus_api_delete "/service/rest/v1/components/${id}"
+    done
+}
+
 # Delete all test artifacts from all Nexus repositories.
 e2e.nexus.delete_all_test_artifacts() {
-    for repo in brik-docker brik-npm brik-maven brik-pypi brik-nuget; do
+    for repo in brik-docker brik-npm brik-maven brik-pypi brik-nuget brik-cargo; do
         local continuation_token=""
         while true; do
             local url="/service/rest/v1/components?repository=${repo}"

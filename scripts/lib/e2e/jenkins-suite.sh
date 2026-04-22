@@ -27,6 +27,10 @@ source "${SCRIPT_DIR}/lib/auth.sh"
 source "${SCRIPT_DIR}/lib/push.sh"
 # shellcheck source=lib/suite.sh
 source "${SCRIPT_DIR}/lib/suite.sh"
+# shellcheck source=lib/compose.sh
+source "${SCRIPT_DIR}/lib/compose.sh"
+# shellcheck source=lib/nexus.sh
+source "${SCRIPT_DIR}/lib/nexus.sh"
 reload_env
 
 # ---------------------------------------------------------------------------
@@ -120,6 +124,18 @@ _suite_run_scenario() {
     if [[ -n "${error_pattern:-}" ]]; then
         echo -e "${YELLOW}  Error pattern: ${error_pattern}${NC}"
     fi
+
+    # Per-scenario pre-cleanup: wipe stale state that would cause false
+    # failures (stale compose stacks holding ports, cargo crates already
+    # published in Nexus).
+    case "$name" in
+        node-deploy|node-deploy-dryrun)
+            e2e.compose.teardown_stack "node-deploy"
+            ;;
+        rust-complete)
+            e2e.nexus.delete_cargo_crate "rust-complete" "0.1.0"
+            ;;
+    esac
 
     # Multi-step rollback scenario: delegate to dedicated script
     if [[ "$name" == "node-deploy-rollback" ]]; then
