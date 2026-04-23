@@ -35,11 +35,9 @@ deploy:
       target: k8s
       namespace: brik-e2e-workflow
       manifest: k8s/deployment.yaml
-      when:
-        ref: main
+      when: "branch == 'main'"
     production:
       target: k8s
       namespace: brik-e2e-workflow
       manifest: k8s/deployment.yaml
-      when:
-        ref: tag
+      when: "tag =~ 'v*'"
