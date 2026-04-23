@@ -111,6 +111,13 @@ e2e.jenkins.trigger_build() {
     local crumb
     crumb=$(e2e.jenkins.get_crumb)
 
+    # Parameterized jobs (e.g. those using properties([parameters(...)])) reject
+    # plain /build with HTTP 400 -- they require /buildWithParameters. Detect by
+    # inspecting the job's property[].parameterDefinitions via the API.
+    local has_params
+    has_params=$(e2e.jenkins.api_get "${job_path}/api/json?tree=property[parameterDefinitions[name]]" 2>/dev/null | \
+        jq -r '[.property[]?.parameterDefinitions // []] | flatten | length' 2>/dev/null || echo "0")
+
     local endpoint="build"
     local trigger_data=()
     if [[ -n "$ci_vars" ]]; then
@@ -123,6 +130,8 @@ e2e.jenkins.trigger_build() {
             [[ -z "$_key" ]] && continue
             trigger_data+=(--data-urlencode "${_key}=${_val}")
         done
+    elif [[ "${has_params:-0}" -gt 0 ]]; then
+        endpoint="buildWithParameters"
     fi
 
     # Fire the trigger
