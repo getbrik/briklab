@@ -21,9 +21,40 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../common.sh"
 
 _E2E_ARGOCD_URL="https://localhost:${ARGOCD_PORT:-9080}"
 
+# Path to the canonical port-forward helper, sourced lazily only when needed.
+_E2E_ARGOCD_PORTFWD_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../auth" && pwd)/argocd-portfwd.sh"
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+# Ensure the ArgoCD port-forward is alive before an ArgoCD-dependent scenario.
+# Wraps the canonical ensure_argocd_port_forward helper from the auth layer.
+# Non-fatal: returns 0 when kubectl is unavailable, no kubeconfig context is
+# configured, or the argocd namespace is absent, so non-ArgoCD setups are
+# unaffected.
+# Args: none
+# Returns: 0 on success (or safely skipped), 1 on genuine port-forward failure.
+e2e.argocd.ensure_port_forward() {
+    if ! command -v kubectl >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! kubectl config current-context >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! kubectl get namespace argocd >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [[ ! -f "$_E2E_ARGOCD_PORTFWD_SRC" ]]; then
+        log_warn "argocd-portfwd helper not found at ${_E2E_ARGOCD_PORTFWD_SRC}"
+        return 0
+    fi
+
+    # shellcheck source=/dev/null
+    source "$_E2E_ARGOCD_PORTFWD_SRC"
+    ensure_argocd_port_forward
+}
 
 # GET request to ArgoCD API.
 # Args: $1 = API path (e.g. "/api/v1/applications/my-app")

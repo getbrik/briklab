@@ -32,6 +32,8 @@ source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 source "${SCRIPT_DIR}/lib/compose.sh"
 # shellcheck source=lib/nexus.sh
 source "${SCRIPT_DIR}/lib/nexus.sh"
+# shellcheck source=lib/argocd.sh
+source "${SCRIPT_DIR}/lib/argocd.sh"
 reload_env
 ensure_gitlab_pat
 
@@ -145,13 +147,17 @@ _suite_run_scenario() {
 
     # Per-scenario pre-cleanup: wipe stale state that would cause false
     # failures (stale compose stacks holding ports, cargo crates already
-    # published in Nexus).
+    # published in Nexus, dead ArgoCD port-forward on the host).
     case "$name" in
         node-deploy|node-deploy-dryrun)
             e2e.compose.teardown_stack "node-deploy"
             ;;
         rust-complete)
             e2e.nexus.delete_cargo_crate "rust-complete" "0.1.0"
+            ;;
+        *-deploy-gitops|*-deploy-rollback)
+            e2e.argocd.ensure_port_forward || \
+                log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
             ;;
     esac
 
