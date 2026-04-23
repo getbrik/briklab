@@ -110,7 +110,7 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     log_ok "Push SHA: ${PUSH_SHA}"
 
     log_info "Waiting for build triggered by SHA ${PUSH_SHA:0:8}..."
-    BUILD_NUMBER=$(e2e.jenkins.wait_build_by_sha "$JOB_NAME" "$PUSH_SHA" 90 "$TIMEOUT_SECONDS")
+    BUILD_NUMBER=$(e2e.jenkins.wait_build_by_sha "$JOB_NAME" "$PUSH_SHA" "${E2E_JENKINS_DISCOVER_TIMEOUT:-90}" "$TIMEOUT_SECONDS")
 
     BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
     FINAL_RESULT=$(e2e.jenkins.get_build_result "$JOB_NAME" "$BUILD_NUMBER")

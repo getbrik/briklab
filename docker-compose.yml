@@ -91,6 +91,9 @@ services:
       - GITEA__server__HTTP_PORT=${GITEA_HTTP_PORT:-3000}
       - GITEA__server__SSH_PORT=${GITEA_SSH_PORT:-222}
       - GITEA__server__SSH_LISTEN_PORT=22
+      # Lab-only: allow webhook delivery to Jenkins on the private docker
+      # network. In prod, restrict to the specific host(s) instead of *.
+      - GITEA__webhook__ALLOWED_HOST_LIST=*
     ports:
       - "${GITEA_HTTP_PORT:-3000}:${GITEA_HTTP_PORT:-3000}"
       - "${GITEA_SSH_PORT:-222}:22"
@@ -123,7 +126,11 @@ services:
       - NEXUS_CARGO_TOKEN=${NEXUS_CARGO_TOKEN:-}
       - ARGOCD_PORT=${ARGOCD_PORT:-9080}
       - ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN:-}
+      - GITEA_PAT=${GITEA_PAT:-}
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx4g
+    depends_on:
+      gitea:
+        condition: service_healthy
     ports:
       - "${JENKINS_HTTP_PORT:-9090}:${JENKINS_HTTP_PORT:-9090}"
       - "${JENKINS_AGENT_PORT:-50000}:50000"

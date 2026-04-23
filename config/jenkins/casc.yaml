@@ -54,9 +54,25 @@ jenkins:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
 
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - giteaAccessToken:
+              scope: GLOBAL
+              id: gitea-admin-pat
+              description: "Gitea admin PAT - used by gitea-plugin for webhook management, multibranch scans, and commit-status push-back"
+              token: "${GITEA_PAT}"
+
 unclassified:
   location:
     url: "http://jenkins.briklab.test:9090/"
+  giteaServers:
+    servers:
+      - displayName: briklab
+        serverUrl: "http://gitea.briklab.test:3000"
+        manageHooks: true
+        credentialsId: gitea-admin-pat
   globalLibraries:
     libraries:
       - name: "brik"
@@ -411,19 +427,29 @@ jobs:
         }
       }
   - script: >
-      pipelineJob('node-workflow-trunk') {
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('http://gitea.briklab.test:3000/brik/node-workflow-trunk.git')
+      multibranchPipelineJob('node-workflow-trunk') {
+        branchSources {
+          branchSource {
+            source {
+              giteaSCMSource {
+                id('gitea-node-workflow-trunk')
+                serverUrl('http://gitea.briklab.test:3000')
+                repoOwner('brik')
+                repository('node-workflow-trunk')
+                credentialsId('gitea-admin-pat')
+                traits {
+                  giteaBranchDiscovery { strategyId(3) }
+                  giteaTagDiscovery()
                 }
-                branches('*/main')
               }
             }
-            scriptPath('Jenkinsfile')
           }
+        }
+        factory {
+          workflowBranchProjectFactory { scriptPath('Jenkinsfile') }
+        }
+        orphanedItemStrategy {
+          discardOldItems { numToKeep(5) }
         }
       }
   - script: >

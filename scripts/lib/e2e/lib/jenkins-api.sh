@@ -36,6 +36,18 @@ _e2e_jenkins_ensure_cookie_jar() {
     fi
 }
 
+# Resolve the Jenkins URL prefix for a job.
+# Flat pipelineJob: "job/<name>"
+# Multibranch (when $E2E_JENKINS_BRANCH is set): "job/<name>/job/<branch>"
+_e2e_jenkins_job_path() {
+    local job_name="$1"
+    if [[ -n "${E2E_JENKINS_BRANCH:-}" ]]; then
+        printf 'job/%s/job/%s' "$job_name" "$E2E_JENKINS_BRANCH"
+    else
+        printf 'job/%s' "$job_name"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Low-level API
 # ---------------------------------------------------------------------------
@@ -43,10 +55,12 @@ _e2e_jenkins_ensure_cookie_jar() {
 # GET request to Jenkins API.
 # Args: $1 = path (e.g. "job/node-minimal/api/json")
 # Output: response on stdout
+# Note: -g disables curl URL globbing so Jenkins tree=builds[...,actions[...]]
+# queries with literal brackets are sent as-is instead of failing silently.
 e2e.jenkins.api_get() {
     local path="$1"
     _e2e_jenkins_ensure_cookie_jar
-    curl -sf --max-time 30 \
+    curl -sfg --max-time 30 \
         -b "$_E2E_JENKINS_COOKIE_JAR" \
         -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
         "${_E2E_JENKINS_URL}/${path}"
@@ -84,10 +98,12 @@ e2e.jenkins.get_crumb() {
 e2e.jenkins.trigger_build() {
     local job_name="$1"
     local ci_vars="${2:-}"
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
 
     # Get next build number before triggering
     local next_build
-    next_build=$(e2e.jenkins.api_get "job/${job_name}/api/json" | \
+    next_build=$(e2e.jenkins.api_get "${job_path}/api/json" | \
         jq -r '.nextBuildNumber // 1' 2>/dev/null || echo "1")
 
     # Prepare trigger
@@ -120,21 +136,21 @@ e2e.jenkins.trigger_build() {
         -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
         ${crumb_args[@]+"${crumb_args[@]}"} \
         ${trigger_data[@]+"${trigger_data[@]}"} \
-        "${_E2E_JENKINS_URL}/job/${job_name}/${endpoint}" >/dev/null 2>&1
+        "${_E2E_JENKINS_URL}/${job_path}/${endpoint}" >/dev/null 2>&1
 
     # Wait for the build to start (up to 90s)
     local elapsed=0
     while [[ $elapsed -lt 90 ]]; do
-        if e2e.jenkins.api_get "job/${job_name}/${next_build}/api/json" &>/dev/null; then
+        if e2e.jenkins.api_get "${job_path}/${next_build}/api/json" &>/dev/null; then
             echo "$next_build"
             return 0
         fi
         # Check if nextBuildNumber advanced
         local current_next
-        current_next=$(e2e.jenkins.api_get "job/${job_name}/api/json" 2>/dev/null | \
+        current_next=$(e2e.jenkins.api_get "${job_path}/api/json" 2>/dev/null | \
             jq -r '.nextBuildNumber // 0' 2>/dev/null || echo "0")
         if [[ "$current_next" -gt "$next_build" ]]; then
-            if e2e.jenkins.api_get "job/${job_name}/${next_build}/api/json" &>/dev/null; then
+            if e2e.jenkins.api_get "${job_path}/${next_build}/api/json" &>/dev/null; then
                 echo "$next_build"
                 return 0
             fi
@@ -143,7 +159,7 @@ e2e.jenkins.trigger_build() {
         elapsed=$((elapsed + 3))
     done
 
-    log_error "Build #${next_build} did not start within 90s"
+    log_error "Build #${next_build} did not start within 90s" >&2
     return 1
 }
 
@@ -154,10 +170,12 @@ e2e.jenkins.wait_build() {
     local job_name="$1" build_number="$2" timeout="${3:-300}"
     local poll_interval=10
     local elapsed=0
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
 
     while [[ $elapsed -lt $timeout ]]; do
         local build_json
-        build_json=$(e2e.jenkins.api_get "job/${job_name}/${build_number}/api/json" 2>/dev/null || true)
+        build_json=$(e2e.jenkins.api_get "${job_path}/${build_number}/api/json" 2>/dev/null || true)
 
         if [[ -n "$build_json" ]]; then
             local building result
@@ -176,7 +194,7 @@ e2e.jenkins.wait_build() {
     done
 
     echo "" >&2
-    log_error "Build timed out after ${timeout}s"
+    log_error "Build timed out after ${timeout}s" >&2
     echo "TIMEOUT"
     return 1
 }
@@ -192,11 +210,13 @@ e2e.jenkins.wait_build_by_sha() {
     local poll_interval=5
     local elapsed=0
     local build_number=""
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
 
     # Phase 1: discover build by SHA
     while [[ $elapsed -lt $discover_timeout ]]; do
         local builds_json
-        builds_json=$(e2e.jenkins.api_get "job/${job_name}/api/json?tree=builds[number,actions[lastBuiltRevision[SHA1]],building,result]" 2>/dev/null || true)
+        builds_json=$(e2e.jenkins.api_get "${job_path}/api/json?tree=builds[number,actions[lastBuiltRevision[SHA1]],building,result]" 2>/dev/null || true)
 
         if [[ -n "$builds_json" ]]; then
             # Find a build matching the SHA in lastBuiltRevision
@@ -218,11 +238,11 @@ e2e.jenkins.wait_build_by_sha() {
 
     if [[ -z "$build_number" ]]; then
         echo "" >&2
-        log_error "No build found for SHA ${sha} after ${discover_timeout}s"
+        log_error "No build found for SHA ${sha} after ${discover_timeout}s" >&2
         return 1
     fi
 
-    log_info "Build #${build_number} found for SHA ${sha:0:8}"
+    log_info "Build #${build_number} found for SHA ${sha:0:8}" >&2
 
     # Phase 2: wait for build completion
     local result
@@ -236,7 +256,9 @@ e2e.jenkins.wait_build_by_sha() {
 # Output: result string on stdout (SUCCESS, FAILURE, UNSTABLE, ABORTED, etc.)
 e2e.jenkins.get_build_result() {
     local job_name="$1" build_number="$2"
-    e2e.jenkins.api_get "job/${job_name}/${build_number}/api/json" | \
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
+    e2e.jenkins.api_get "${job_path}/${build_number}/api/json" | \
         jq -r '.result // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN"
 }
 
@@ -245,7 +267,9 @@ e2e.jenkins.get_build_result() {
 # Output: stages JSON on stdout
 e2e.jenkins.get_stages() {
     local job_name="$1" build_number="$2"
-    e2e.jenkins.api_get "job/${job_name}/${build_number}/wfapi/describe" 2>/dev/null || true
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
+    e2e.jenkins.api_get "${job_path}/${build_number}/wfapi/describe" 2>/dev/null || true
 }
 
 # Get the full console log of a build.
@@ -253,5 +277,7 @@ e2e.jenkins.get_stages() {
 # Output: log text on stdout
 e2e.jenkins.get_console_log() {
     local job_name="$1" build_number="$2"
-    e2e.jenkins.api_get "job/${job_name}/${build_number}/consoleText" 2>/dev/null || true
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
+    e2e.jenkins.api_get "${job_path}/${build_number}/consoleText" 2>/dev/null || true
 }

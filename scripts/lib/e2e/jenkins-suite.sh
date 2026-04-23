@@ -149,11 +149,25 @@ _suite_run_scenario() {
         trigger_mode="push"
     fi
 
+    # node-workflow-trunk is a multibranch Jenkins job backed by gitea-plugin;
+    # builds live under job/<name>/job/<branch>/... The api helpers pick up
+    # E2E_JENKINS_BRANCH to build the correct URL prefix. Multibranch scan +
+    # branch job creation + queue on first push can exceed the default 90s
+    # discovery window, so bump it to 180s for these scenarios.
+    local branch=""
+    local discover_timeout=""
+    if [[ "$job" == "node-workflow-trunk" ]]; then
+        branch="main"
+        discover_timeout="300"
+    fi
+
     E2E_JENKINS_JOB="$job" \
     E2E_JENKINS_TIMEOUT="$timeout" \
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
     E2E_TRIGGER_MODE="$trigger_mode" \
+    E2E_JENKINS_BRANCH="$branch" \
+    E2E_JENKINS_DISCOVER_TIMEOUT="$discover_timeout" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
         bash "${SCRIPT_DIR}/jenkins-test.sh"
 }
