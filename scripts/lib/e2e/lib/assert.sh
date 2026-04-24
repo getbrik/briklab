@@ -188,27 +188,68 @@ assert.job_status() {
     assert.equals "Job '${job_name}' status" "$expected" "$actual"
 }
 
+# Strip comment lines (# ...) and blank lines from a pattern file and emit
+# the result on stdout. Required because grep -f treats blank lines as
+# "match every line" (both BSD and GNU grep), which silently broke
+# assert.job_logs_clean: the broken match-everything in error-patterns
+# was cancelled by the same broken match-everything in error-ignore-patterns,
+# producing a permanent silent PASS regardless of log content.
+_assert._strip_pattern_comments() {
+    local file="$1"
+    [[ -f "$file" ]] || return 0
+    grep -E -v '^[[:space:]]*(#|$)' "$file" 2>/dev/null || true
+}
+
 # assert.job_logs_clean <job_log_text>
 # Checks that job log does not contain known error patterns.
-# Uses error-patterns.conf and error-ignore-patterns.conf from lib/ directory.
+# Uses three pattern files from lib/ directory:
+#   error-patterns.conf          - errors filtered by error-ignore-patterns.conf
+#   error-ignore-patterns.conf   - lines to drop from the error matches
+#   false-positive-patterns.conf - patterns ALWAYS treated as errors,
+#                                   bypassing the ignore filter (use for
+#                                   noise the project considers a bug)
 assert.job_logs_clean() {
     local log_text="$1"
     local desc="${2:-Job logs clean}"
     local patterns_file="${_E2E_ASSERT_LIB_DIR}/error-patterns.conf"
     local ignore_file="${_E2E_ASSERT_LIB_DIR}/error-ignore-patterns.conf"
+    local fp_file="${_E2E_ASSERT_LIB_DIR}/false-positive-patterns.conf"
 
     if [[ ! -f "$patterns_file" ]]; then
         assert._fail "$desc" "error-patterns.conf not found"
         return
     fi
 
-    # Find lines matching error patterns
+    # Find lines matching error patterns. Pattern files have comments and
+    # blank lines that grep -f would otherwise treat as wildcards; strip
+    # them via process substitution before feeding grep.
     local matches
-    matches=$(echo "$log_text" | grep -E -f "$patterns_file" 2>/dev/null || true)
+    matches=$(echo "$log_text" \
+        | grep -E -f <(_assert._strip_pattern_comments "$patterns_file") \
+            2>/dev/null || true)
 
     # Filter out known false positives
     if [[ -n "$matches" && -f "$ignore_file" ]]; then
-        matches=$(echo "$matches" | grep -v -E -f "$ignore_file" 2>/dev/null || true)
+        matches=$(echo "$matches" \
+            | grep -v -E -f <(_assert._strip_pattern_comments "$ignore_file") \
+                2>/dev/null || true)
+    fi
+
+    # Add false-positive matches that bypass the ignore filter. These are
+    # patterns the project decided to surface unconditionally (e.g. CI cache
+    # warnings that indicate a runner-config bug).
+    if [[ -f "$fp_file" ]]; then
+        local fp_matches
+        fp_matches=$(echo "$log_text" \
+            | grep -E -f <(_assert._strip_pattern_comments "$fp_file") \
+                2>/dev/null || true)
+        if [[ -n "$fp_matches" ]]; then
+            if [[ -n "$matches" ]]; then
+                matches="${matches}"$'\n'"${fp_matches}"
+            else
+                matches="$fp_matches"
+            fi
+        fi
     fi
 
     if [[ -z "$matches" ]]; then
