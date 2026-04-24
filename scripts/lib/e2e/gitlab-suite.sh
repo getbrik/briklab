@@ -50,11 +50,11 @@ SCENARIOS=(
     "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     # --- Full pipelines (tag push: all stages) ---
-    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality|600"
-    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality,brik-security|600"
-    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-quality|600"
+    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint|600"
+    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint,brik-sast,brik-scan|600"
+    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint|600"
     # --- Security and Deploy ---
-    "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-security|300"
+    "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-sast,brik-scan|300"
     "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
     "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
@@ -63,11 +63,11 @@ SCENARIOS=(
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
-    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
-    "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
-    "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
-    "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
-    "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-quality,brik-security|900"
+    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
+    "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
+    "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
+    "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
+    "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
     # --- Workflow scenarios (push-driven, sequential) ---
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||||workflow-trunk-main"
