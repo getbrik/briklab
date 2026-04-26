@@ -1,27 +1,21 @@
 version: 1
-
 project:
   name: python-full
   stack: python
   stack_version: "3.13"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: pytest
-
 quality:
   lint:
     enabled: true
     tool: ruff
-
 security:
   deps:
     severity: high
   secrets: {}
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/python-full

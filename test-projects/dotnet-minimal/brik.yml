@@ -1,13 +1,10 @@
 version: 1
-
 project:
   name: dotnet-minimal
   stack: dotnet
   stack_version: "9.0"
-
 quality:
   lint:
     enabled: false
-
 test:
   framework: dotnet

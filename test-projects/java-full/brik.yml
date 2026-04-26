@@ -1,22 +1,17 @@
 version: 1
-
 project:
   name: java-full
   stack: java
   stack_version: "21"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: maven
-
 quality:
   lint:
     enabled: true
     tool: checkstyle
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/java-full

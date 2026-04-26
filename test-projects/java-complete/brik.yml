@@ -1,24 +1,19 @@
 version: 1
-
 project:
   name: java-complete
   stack: java
   stack_version: "21"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: maven
   coverage:
     threshold: 80
-
 quality:
   lint:
     enabled: true
     tool: checkstyle
-
 security:
   deps:
     severity: high
@@ -27,15 +22,12 @@ security:
     allowed: "MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause"
   iac:
     tool: checkov
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/java-complete
     dockerfile: Dockerfile
-
 publish:
   docker:
-    image: nexus.briklab.test:8082/brik/java-complete
     registry: nexus.briklab.test:8082
     username_var: BRIK_PUBLISH_DOCKER_USER
     password_var: BRIK_PUBLISH_DOCKER_PASSWORD

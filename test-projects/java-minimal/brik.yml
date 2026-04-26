@@ -1,13 +1,10 @@
 version: 1
-
 project:
   name: java-minimal
   stack: java
   stack_version: "21"
-
 quality:
   lint:
     enabled: false
-
 test:
   framework: maven

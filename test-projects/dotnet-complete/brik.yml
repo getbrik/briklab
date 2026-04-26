@@ -1,35 +1,27 @@
 version: 1
-
 project:
   name: dotnet-complete
   stack: dotnet
   stack_version: "9.0"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: dotnet
-
 quality:
   lint:
     enabled: true
     tool: dotnet-format
-
 security:
   deps:
     severity: high
   secrets: {}
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/dotnet-complete
     dockerfile: Dockerfile
-
 publish:
   docker:
-    image: nexus.briklab.test:8082/brik/dotnet-complete
     registry: nexus.briklab.test:8082
     username_var: BRIK_PUBLISH_DOCKER_USER
     password_var: BRIK_PUBLISH_DOCKER_PASSWORD

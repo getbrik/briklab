@@ -1,22 +1,17 @@
 version: 1
-
 project:
   name: node-full
   stack: node
   stack_version: "22"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: npm
-
 quality:
   lint:
     enabled: true
     tool: eslint
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/node-full

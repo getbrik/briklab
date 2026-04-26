@@ -1,13 +1,10 @@
 version: 1
-
 project:
   name: node-error-test
   stack: node
   stack_version: "22"
-
 quality:
   lint:
     enabled: false
-
 test:
   framework: npm

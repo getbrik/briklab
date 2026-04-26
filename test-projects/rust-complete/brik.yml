@@ -1,41 +1,33 @@
 version: 1
-
 project:
   name: rust-complete
   stack: rust
   stack_version: "1"
-
 release:
   strategy: semver
   tag_prefix: v
-
 test:
   framework: cargo
-
 quality:
   lint:
     enabled: true
     tool: clippy
   format:
     tool: rustfmt
-
 security:
   deps:
     severity: high
   secrets: {}
-
 package:
   docker:
     image: nexus.briklab.test:8082/brik/rust-complete
     dockerfile: Dockerfile
-
 publish:
   cargo:
     registry: brik-cargo
     index: "sparse+http://nexus.briklab.test:8081/repository/brik-cargo/"
     token_var: BRIK_PUBLISH_CARGO_TOKEN
   docker:
-    image: nexus.briklab.test:8082/brik/rust-complete
     registry: nexus.briklab.test:8082
     username_var: BRIK_PUBLISH_DOCKER_USER
     password_var: BRIK_PUBLISH_DOCKER_PASSWORD
