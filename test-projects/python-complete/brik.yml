@@ -8,6 +8,8 @@ release:
   tag_prefix: v
 test:
   framework: pytest
+  reports:
+    enabled: true
 quality:
   lint:
     enabled: true

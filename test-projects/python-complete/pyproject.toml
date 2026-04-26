@@ -6,7 +6,7 @@ requires-python = ">=3.10"
 dependencies = ["pytest"]
 
 [project.optional-dependencies]
-dev = ["ruff", "pip-audit"]
+dev = ["ruff", "pip-audit", "pytest-cov"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
