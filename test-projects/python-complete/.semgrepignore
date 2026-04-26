@@ -1,0 +1,6 @@
+# Pip installs project deps (pytest, pytest-cov, ...) into .local at
+# runtime when Brik runs `pip install -e .[dev]` in dev mode. Those
+# library files belong to the upstream packages, not the project, so
+# semgrep findings on them are noise.
+.local/
+.brik-env
