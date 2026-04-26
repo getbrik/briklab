@@ -7,4 +7,5 @@ RUN cargo build --release
 FROM alpine:3.21
 WORKDIR /app
 COPY --from=builder /app/target/release/rust-complete .
+USER 1000:1000
 CMD ["./rust-complete"]
