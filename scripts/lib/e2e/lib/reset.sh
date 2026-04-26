@@ -50,6 +50,22 @@ _E2E_ARGOCD_APPS=(
 )
 
 # ---------------------------------------------------------------------------
+# Platform -> git host resolution
+# ---------------------------------------------------------------------------
+
+# Map a CI platform name to the git host that actually serves the repos.
+# briklab Jenkins consumes webhooks from Gitea, so platform=jenkins must
+# dispatch to the gitea code path. Returns 0 with the host on stdout, or
+# 1 when the platform is unknown.
+_e2e.reset._resolve_git_host() {
+    case "$1" in
+        gitlab)            echo "gitlab" ;;
+        gitea | jenkins)   echo "gitea"  ;;
+        *) return 1 ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Granular reset functions
 # ---------------------------------------------------------------------------
 
@@ -66,12 +82,18 @@ e2e.reset.repo() {
 
     log_info "Resetting repo: ${project_name} (${platform})"
 
+    local git_host
+    git_host="$(_e2e.reset._resolve_git_host "$platform")" || {
+        log_error "Unknown platform: ${platform}"
+        return 1
+    }
+
     # Create a fresh repo from template
     local tmp_dir
     tmp_dir=$(e2e.git.init_from_template "$template_dir")
 
     local push_result=0
-    case "$platform" in
+    case "$git_host" in
         gitlab)
             local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
             local remote_url="${gitlab_url}/brik/${project_name}.git"
@@ -97,10 +119,6 @@ e2e.reset.repo() {
             local remote_url="${gitea_url}/brik/${project_name}.git"
             local gitea_user="${GITEA_ADMIN_USER:-brik}"
             e2e.git.push "$tmp_dir" "$remote_url" "$gitea_user" "$GITEA_PAT" "--force" || push_result=1
-            ;;
-        *)
-            log_error "Unknown platform: ${platform}"
-            push_result=1
             ;;
     esac
 
@@ -167,6 +185,12 @@ e2e.reset.gitops_config_repo() {
 
     log_info "Resetting gitops config repo: ${repo_name} (${platform})"
 
+    local git_host
+    git_host="$(_e2e.reset._resolve_git_host "$platform")" || {
+        log_error "Unknown platform: ${platform}"
+        return 1
+    }
+
     local tmp_dir
     tmp_dir=$(mktemp -d)
     (
@@ -178,7 +202,7 @@ e2e.reset.gitops_config_repo() {
     )
 
     local push_result=0
-    case "$platform" in
+    case "$git_host" in
         gitea)
             local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
             local gitea_user="${GITEA_ADMIN_USER:-brik}"
@@ -191,10 +215,6 @@ e2e.reset.gitops_config_repo() {
                 python3 -c "import urllib.parse; print(urllib.parse.quote('brik/${repo_name}', safe=''))" 2>/dev/null)
             e2e.gitlab.api_delete "projects/${encoded_path}/protected_branches/main"
             e2e.git.push "$tmp_dir" "${gitlab_url}/brik/${repo_name}.git" "root" "$GITLAB_PAT" "--force" || push_result=1
-            ;;
-        *)
-            log_error "Unknown platform: ${platform}"
-            push_result=1
             ;;
     esac
 
