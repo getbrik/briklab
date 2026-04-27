@@ -2,3 +2,13 @@ include:
   - project: 'brik/gitlab-templates'
     ref: v0.1.0
     file: '/templates/pipeline.yml'
+
+# java-complete uses the jacoco maven plugin (declared in pom.xml) so the
+# coverage report is jacoco, not the cobertura default. Override only the
+# coverage_report block; GitLab merges this hash into the templated job.
+brik-test:
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: jacoco
+        path: coverage/jacoco.xml
