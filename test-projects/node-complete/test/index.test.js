@@ -1,44 +1,25 @@
 const { add, multiply } = require('../src/index');
-const assert = require('assert');
 
-let passed = 0;
-let failed = 0;
+describe('add', () => {
+  test('add(1, 2) returns 3', () => {
+    expect(add(1, 2)).toBe(3);
+  });
 
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`  PASS: ${name}`);
-    passed++;
-  } catch (e) {
-    console.error(`  FAIL: ${name} - ${e.message}`);
-    failed++;
-  }
-}
+  test('add(0, 0) returns 0', () => {
+    expect(add(0, 0)).toBe(0);
+  });
 
-console.log('Running tests...\n');
-
-test('add(1, 2) should return 3', () => {
-  assert.strictEqual(add(1, 2), 3);
+  test('add(-1, 1) returns 0', () => {
+    expect(add(-1, 1)).toBe(0);
+  });
 });
 
-test('add(0, 0) should return 0', () => {
-  assert.strictEqual(add(0, 0), 0);
+describe('multiply', () => {
+  test('multiply(2, 3) returns 6', () => {
+    expect(multiply(2, 3)).toBe(6);
+  });
+
+  test('multiply(0, 5) returns 0', () => {
+    expect(multiply(0, 5)).toBe(0);
+  });
 });
-
-test('add(-1, 1) should return 0', () => {
-  assert.strictEqual(add(-1, 1), 0);
-});
-
-test('multiply(2, 3) should return 6', () => {
-  assert.strictEqual(multiply(2, 3), 6);
-});
-
-test('multiply(0, 5) should return 0', () => {
-  assert.strictEqual(multiply(0, 5), 0);
-});
-
-console.log(`\nResults: ${passed} passed, ${failed} failed`);
-
-if (failed > 0) {
-  process.exit(1);
-}

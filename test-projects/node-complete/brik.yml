@@ -7,7 +7,7 @@ release:
   strategy: semver
   tag_prefix: v
 test:
-  framework: npm
+  framework: jest
   reports:
     enabled: true
 quality:
