@@ -1,0 +1,11 @@
+# osv-scanner configuration for node-complete (chantier 15 e2e fixture).
+# Auto-discovered by `osv-scanner scan` from the project root.
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+# CVSS 6.3 medium-high CVE in uuid 8.3.2, pulled transitively as a dev-only
+# dependency of jest-junit 16. The fix requires uuid 14, which is a breaking
+# API change incompatible with jest-junit. The vulnerable code is never
+# loaded by the runtime; only the test stage touches it. We unblock the
+# chantier 15 e2e validation here and revisit when jest-junit upgrades.
+reason = "transitive dev-dep via jest-junit; fix requires uuid 14 (breaking); not in runtime path"
