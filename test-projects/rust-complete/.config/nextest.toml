@@ -1,0 +1,9 @@
+# Nextest CI profile used by `cargo nextest run --profile ci` when
+# brik's test stage runs with quality.test.reports.enabled=true.
+#
+# nextest resolves the junit.path relative to the profile store dir
+# (target/nextest/ci/), so ../../../reports/junit.xml lands at the
+# repository root under reports/junit.xml -- the same path the GitLab
+# template and Jenkins junit step look for.
+[profile.ci.junit]
+path = "../../../reports/junit.xml"

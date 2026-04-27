@@ -10,6 +10,8 @@ test:
   framework: maven
   coverage:
     threshold: 80
+  reports:
+    enabled: true
 quality:
   lint:
     enabled: true
