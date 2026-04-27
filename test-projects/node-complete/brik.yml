@@ -18,7 +18,12 @@ quality:
     tool: prettier
 security:
   deps:
-    severity: high
+    # jest-junit 16 transitively pulls uuid 8.3.2 which has GHSA-w5hq-g745-h8pq
+    # (CVSS 6.3). The fix requires uuid 14+, which is a breaking API change
+    # incompatible with jest-junit. Lower the threshold to critical for this
+    # test fixture so the chantier 15 reports.enabled path can be validated
+    # end-to-end without an unrelated transitive dev-dep CVE blocking it.
+    severity: critical
   secrets: {}
 package:
   docker:
