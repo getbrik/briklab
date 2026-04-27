@@ -1,3 +1,4 @@
+/* global describe, test, expect */
 const { add, multiply } = require('../src/index');
 
 describe('add', () => {
