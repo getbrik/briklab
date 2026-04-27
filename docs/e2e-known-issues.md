@@ -74,8 +74,43 @@ Cascade-skipped: same set as GitLab.
 
 ## Status Overview - Remaining Issues
 
-_No open issues tracked at 2026-04-23. Previously-open entries are
+_No open issues tracked at 2026-04-27. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
+
+## Recently Fixed (2026-04-25 -> 2026-04-27)
+
+Eight chantiers landed in this window; full plans archived under
+[`docs/archives/chantiers/`](../../docs/archives/chantiers/) in the
+parent repo:
+
+- **P1 faux-positifs** -- noms de jobs fantômes `brik-quality`/`brik-security`,
+  `brik-artifacts/` non peuplé par notify, warnings cache stack par job,
+  artefacts test inexistants, SAST findings bloquants ignorés. _All five
+  remediated._
+- **release-stage-hardening** -- propagation des exit codes, identité git
+  lue depuis `brik.yml` puis appliquée par `transverse.git.config_identity`,
+  idempotence `git.tag` sur même SHA. _Débloque `node-full` GitLab._
+- **lint-contract** -- migration test-projects vers ESLint 10 + flat
+  config, Tier 2 strict, `_deps.sh` propage les exit codes, statuts
+  `disabled / not-applicable / skipped / passed / failed` distincts.
+  _Débloque `node-complete` GitLab._
+- **jenkins-hardening** -- try/catch par stage dans `brikPipeline.groovy`,
+  cleanup `.ssh`/`.kube` post-deploy, `reset.sh` alias `jenkins -> gitea`.
+  _Débloque `dotnet-complete`, `node-deploy-ssh`, `node-deploy-rollback`
+  Jenkins._
+- **init-source-unique** -- `stages.init` seul lecteur de `brik.yml`,
+  dotenv complet avec defaults, suppression de `build.<stack>_version`,
+  `config.validate_coherence` étendu.
+- **docker-buildx** -- migration `docker build` -> `docker buildx build`,
+  helper `transverse.tools.docker.ensure_buildx`. Prépare le digest
+  canonique pour le release promotion model.
+- **security-scans-sharp** -- `osv-scanner` actionnable, `gitleaks`
+  pleinement compatible avec `BRIK_PLATFORM`, monitoring de version
+  des outils dans `pipeline-report.json`.
+- **test-reports opt-in** -- contrat `quality.test.reports.{enabled,
+  coverage,junit}` câblé sur les 5 stacks. Cobertura partout, jacoco
+  pour Java via override projet. Validé end-to-end sur Jenkins (5/5)
+  et GitLab (5/5).
 
 ## Procedure When a New Flake Appears
 
