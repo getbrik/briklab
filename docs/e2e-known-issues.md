@@ -77,6 +77,18 @@ Cascade-skipped: same set as GitLab.
 _No open issues tracked at 2026-04-27. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
 
+## Recently Fixed (2026-04-28)
+
+- **jsonschema-validation** -- `jv` (santhosh-tekuri) installed in
+  `brik-runner-base` via a multi-stage Go builder.
+  `config.validate_schema` wired into `stages.init` and `brik validate`,
+  with `config.validate_coherence` reused alongside. The pre-existing
+  `error-config` E2E scenario (test-project `invalid-config`,
+  `version: 99`) now fails fast at `brik-init` with the expected
+  `validat|invalid|schema` log pattern. _Validated end-to-end on
+  GitLab (`error-config` 1/1, `--complete` 5/5) and Jenkins
+  (`error-config` 1/1, `--complete` 5/5)._
+
 ## Recently Fixed (2026-04-25 -> 2026-04-27)
 
 Eight chantiers landed in this window; full plans archived under
