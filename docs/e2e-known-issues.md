@@ -79,6 +79,17 @@ listed in "Recently Fixed" for audit trail._
 
 ## Recently Fixed (2026-05-02)
 
+- **pipeline-report-followups L1** -- aggregate now carries true
+  millisecond `duration_ms` (bash 5+ `EPOCHREALTIME` via
+  `_helpers.epoch_ms`, no more multiples of 1000) and the full set of
+  optional pipeline metadata (`pipeline.url`, `pipeline.commit.{sha,
+  short_sha, ref, branch, tag}`, `pipeline.triggered_by`).
+  `_pipeline.detect_metadata` reads `CI_*`/`BUILD_*`/`GIT_*` and exports
+  normalized `BRIK_*` (pre-set wins). GitLab and Jenkins `--complete`
+  E2E suites assert the aggregate shape via `assert.aggregate_v1`
+  (schema_version, platform, status, commit.sha, ISO-8601 timestamp,
+  stage count) by downloading `brik-artifacts/pipeline-report.json`
+  from the notify job.
 - **pipeline-report-ci-aggregation** -- multi-container CI mode now
   produces the same aggregated `pipeline-report.{md,json}` as local mode.
   Each stage emits `brik-artifacts/<stage>.json` (Phase 0.1 schema,
@@ -90,9 +101,7 @@ listed in "Recently Fixed" for audit trail._
   presence and calls `report.aggregate_fragments` to merge them into
   the canonical report. Schema-version mismatch (`v2.0+` fragments) is
   warn-and-skipped for forward-compat. _ShellSpec coverage: 88 spec
-  examples added (Phase 0+1+2+3.1) -- E2E validation on briklab is the
-  next follow-up; chantier may be re-opened if the GitLab/Jenkins
-  `--complete` scenarios surface a regression._
+  examples added (Phase 0+1+2+3.1)._
 
 ## Recently Fixed (2026-04-28)
 

@@ -146,6 +146,92 @@ assert.not_contains() {
 }
 
 # ---------------------------------------------------------------------------
+# JSON document assertions
+# ---------------------------------------------------------------------------
+
+# assert.json_eq <description> <file> <jq-path> <expected_json>
+# Reads jq-path from <file> and compares against <expected_json> (literal,
+# pass quoted strings as '"value"').
+assert.json_eq() {
+    local desc="$1" file="$2" path="$3" expected="$4"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "$desc" "file not found: ${file}"
+        return
+    fi
+    local actual
+    actual=$(jq -c "$path" "$file" 2>/dev/null || echo "<error>")
+    if [[ "$actual" == "$expected" ]]; then
+        assert._pass "$desc"
+    else
+        assert._fail "$desc" "expected=${expected} actual=${actual}"
+    fi
+}
+
+# assert.json_match <description> <file> <jq-path> <regex>
+# Reads jq-path with -r and matches against ERE regex.
+assert.json_match() {
+    local desc="$1" file="$2" path="$3" regex="$4"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "$desc" "file not found: ${file}"
+        return
+    fi
+    local actual
+    actual=$(jq -r "$path" "$file" 2>/dev/null || echo "")
+    if [[ "$actual" =~ $regex ]]; then
+        assert._pass "$desc"
+    else
+        assert._fail "$desc" "value '${actual}' does not match /${regex}/"
+    fi
+}
+
+# assert.json_ge <description> <file> <jq-path> <min>
+# Reads jq-path (numeric) and asserts value >= min.
+assert.json_ge() {
+    local desc="$1" file="$2" path="$3" min="$4"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "$desc" "file not found: ${file}"
+        return
+    fi
+    local actual
+    actual=$(jq -r "$path" "$file" 2>/dev/null || echo "")
+    if [[ "$actual" =~ ^[0-9]+$ ]] && [[ "$actual" -ge "$min" ]]; then
+        assert._pass "$desc"
+    else
+        assert._fail "$desc" "value '${actual}' is not a number >= ${min}"
+    fi
+}
+
+# assert.aggregate_v1 <artifact_path> <expected_platform>
+# Validates the shape of a Brik pipeline-report.json v1 aggregate.
+# Asserts:
+#   - schema_version == "1.0"
+#   - pipeline.platform == <expected>
+#   - pipeline.id non-empty
+#   - pipeline.status == "success"
+#   - pipeline.commit.sha matches a 40-char hex SHA (when present)
+#   - summary.stages.total >= 7 (sanity: real pipeline ran multiple stages)
+#   - stages[0].timestamp is ISO-8601
+assert.aggregate_v1() {
+    local file="$1" expected_platform="$2"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "Aggregate v1: file present (${file})" "not found"
+        return
+    fi
+    assert.json_eq    "Aggregate schema_version is 1.0"      "$file" '.schema_version'         '"1.0"'
+    assert.json_eq    "Aggregate pipeline.platform"           "$file" '.pipeline.platform'      "\"${expected_platform}\""
+    assert.json_match "Aggregate pipeline.id non-empty"       "$file" '.pipeline.id'            '^.+$'
+    assert.json_eq    "Aggregate pipeline.status is success"  "$file" '.pipeline.status'        '"success"'
+    assert.json_ge    "Aggregate summary.stages.total >= 7"   "$file" '.summary.stages.total'   7
+    # commit metadata is optional; assert only when populated.
+    local has_commit
+    has_commit=$(jq -r '.pipeline | has("commit")' "$file" 2>/dev/null || echo "false")
+    if [[ "$has_commit" == "true" ]]; then
+        assert.json_match "Aggregate pipeline.commit.sha is 40-char hex" "$file" '.pipeline.commit.sha // ""' '^[a-f0-9]{40}$'
+    fi
+    assert.json_match "Aggregate stages[0].timestamp is ISO-8601" "$file" '.stages[0].timestamp // ""' '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+}
+
+# ---------------------------------------------------------------------------
 # Pipeline / Build status assertions
 # ---------------------------------------------------------------------------
 

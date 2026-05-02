@@ -290,3 +290,19 @@ e2e.jenkins.get_console_log() {
     job_path="$(_e2e_jenkins_job_path "$job_name")"
     e2e.jenkins.api_get "${job_path}/${build_number}/consoleText" 2>/dev/null || true
 }
+
+# Download a single archived artifact from a build into <dest>.
+# Args: $1 = job name, $2 = build number, $3 = artifact path (e.g.
+#       "brik-artifacts/pipeline-report.json"), $4 = destination file path
+# Returns: 0 on success, non-zero otherwise
+e2e.jenkins.download_artifact() {
+    local job_name="$1" build_number="$2" artifact_path="$3" dest="$4"
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
+    _e2e_jenkins_ensure_cookie_jar
+    curl -sfgL --max-time 60 \
+        -b "$_E2E_JENKINS_COOKIE_JAR" \
+        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
+        -o "$dest" \
+        "${_E2E_JENKINS_URL}/${job_path}/${build_number}/artifact/${artifact_path}"
+}

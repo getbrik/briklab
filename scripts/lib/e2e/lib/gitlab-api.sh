@@ -365,6 +365,18 @@ e2e.gitlab.get_job_log() {
         "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/trace" 2>/dev/null || true
 }
 
+# Download a single file from a job's artifact archive into <dest>.
+# Args: $1 = project ID, $2 = job ID, $3 = artifact path (e.g.
+#       "brik-artifacts/pipeline-report.json"), $4 = destination file path
+# Returns: 0 on success (file downloaded), non-zero otherwise
+e2e.gitlab.download_artifact() {
+    local project_id="$1" job_id="$2" artifact_path="$3" dest="$4"
+    curl -sfL --max-time 60 \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+        -o "$dest" \
+        "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/artifacts/${artifact_path}"
+}
+
 # ---------------------------------------------------------------------------
 # CI Variables
 # ---------------------------------------------------------------------------
