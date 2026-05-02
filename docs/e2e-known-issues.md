@@ -77,6 +77,23 @@ Cascade-skipped: same set as GitLab.
 _No open issues tracked at 2026-04-27. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
 
+## Recently Fixed (2026-05-02)
+
+- **pipeline-report-ci-aggregation** -- multi-container CI mode now
+  produces the same aggregated `pipeline-report.{md,json}` as local mode.
+  Each stage emits `brik-artifacts/<stage>.json` (Phase 0.1 schema,
+  `schemas/report/v1/fragment.schema.json`, `schema_version: "1.0"`).
+  GitLab job templates declare `artifacts.paths: [brik-artifacts/]`
+  (1 week) and `notify.yml` keeps the aggregate for 1 month. Jenkins
+  `brikPipeline.groovy` stashes per stage and unstashes in the Notify
+  block. `stages.notify` detects "CI aggregation mode" by fragment
+  presence and calls `report.aggregate_fragments` to merge them into
+  the canonical report. Schema-version mismatch (`v2.0+` fragments) is
+  warn-and-skipped for forward-compat. _ShellSpec coverage: 88 spec
+  examples added (Phase 0+1+2+3.1) -- E2E validation on briklab is the
+  next follow-up; chantier may be re-opened if the GitLab/Jenkins
+  `--complete` scenarios surface a regression._
+
 ## Recently Fixed (2026-04-28)
 
 - **jsonschema-validation** -- `jv` (santhosh-tekuri) installed in
