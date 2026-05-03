@@ -30,6 +30,12 @@ security:
     allowed: "MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause"
   iac:
     tool: checkov
+  container:
+    # Test fixture: limit container-scan failures to CRITICAL CVEs.
+    # Official base images regularly carry HIGH-rated transitive CVEs
+    # that would otherwise block the E2E suite without reflecting a
+    # real security regression in this project.
+    severity: critical
 package:
   docker:
     image: nexus.briklab.test:8082/brik/java-complete

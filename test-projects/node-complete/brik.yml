@@ -25,6 +25,12 @@ security:
     # end-to-end without an unrelated transitive dev-dep CVE blocking it.
     severity: critical
   secrets: {}
+  container:
+    # Test fixture: limit container-scan failures to CRITICAL CVEs.
+    # Official base images regularly carry HIGH-rated transitive CVEs
+    # that would otherwise block the E2E suite without reflecting a
+    # real security regression in this project.
+    severity: critical
 package:
   docker:
     image: nexus.briklab.test:8082/brik/node-complete
