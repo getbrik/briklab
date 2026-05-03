@@ -74,8 +74,38 @@ Cascade-skipped: same set as GitLab.
 
 ## Status Overview - Remaining Issues
 
-_No open issues tracked at 2026-04-27. Previously-open entries are
+_No open issues tracked at 2026-05-03. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
+
+## Recently Fixed (2026-05-03)
+
+- **jenkins-platform-parity** -- Jenkins now runs every Brik stage inside
+  its dedicated brik-runner image, matching GitLab. Init and Notify run
+  in `brik-runner-base` (not on the Jenkins agent), build/lint/test in
+  `brik-runner-<stack>`, sast in `brik-runner-analysis`, scan and
+  container-scan in `brik-runner-scanner`, deploy in `brik-runner-deploy`.
+  The Jenkins agent only handles SCM checkout, stash/unstash,
+  archiveArtifacts and the Notify finally orchestration. Implemented in
+  `shared-libs/jenkins/vars/` via six small variables: `brikPipeline`
+  (orchestrator), `brikStage` (sh wrapper), `brikRunStage` (Docker
+  dispatcher), `brikResolveHome` (`@libs` discovery), `brikDockerArgs`
+  (args + env-file builder), `brikReadDotenv` (parse `brik-init.env`).
+  brikPipeline.call() shrank from 268 to 196 lines.
+- **briklab-jenkins-image-strip** -- briklab/images/jenkins/Dockerfile
+  drops Node.js, Maven, Python, Rust, .NET, gcc, libc6-dev, libicu-dev
+  and the jv-builder stage. The master keeps only what it needs to drive
+  Docker and serve Notify housekeeping (git, docker-cli, jq, yq, curl,
+  gosu, plugins, entrypoint). Image size **4.67 GB -> 1.13 GB (-76%)**,
+  build time on M-series Mac drops from ~12 min to ~3 min. Validated on
+  Jenkins `--complete` 5/5 PASS (node, python, java, rust, dotnet).
+- **runner-image-accuracy** -- `config.export_runner_vars` no longer
+  unconditionally overwrites `BRIK_RUNNER_IMAGE` with the project's stack
+  default; it early-returns when the wrapper has already injected an
+  image (Jenkins via `-e BRIK_RUNNER_IMAGE=` in `docker.image().inside`,
+  GitLab via `CI_JOB_IMAGE` mapping). Each stage's report fragment now
+  records its actual execution image: init/notify in `brik-runner-base`,
+  release/build/test in `brik-runner-<stack>`, sast in `brik-runner-analysis`,
+  scan in `brik-runner-scanner`, deploy in `brik-runner-deploy`.
 
 ## Recently Fixed (2026-05-02)
 
