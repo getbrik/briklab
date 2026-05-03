@@ -1,8 +1,23 @@
 # Custom Jenkins image for Briklab
-# Adds yq, jq, Node.js, and pre-installed plugins
+# Adds yq, jq, jv, Node.js, and pre-installed plugins
+
+# Stage: build jv (santhosh-tekuri/jsonschema CLI) statically.
+# Same pattern as brik-images/images/base/Dockerfile so prereqs_present.jv
+# matches what GitLab runners report (true).
+ARG JV_VERSION=v6.0.2
+FROM golang:1.23-alpine AS jv-builder
+ARG JV_VERSION
+RUN apk add --no-cache git \
+ && git clone --depth 1 --branch ${JV_VERSION} https://github.com/santhosh-tekuri/jsonschema /src
+WORKDIR /src/cmd/jv
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /jv .
+
 FROM jenkins/jenkins:2.541.3-lts-jdk21
 
 USER root
+
+# jv (JSON Schema validator) for brik validate + init prereqs probe
+COPY --from=jv-builder /jv /usr/local/bin/jv
 
 # Install system dependencies (gcc needed for Rust cargo test linking)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,7 +49,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Maven (for java-complete E2E)
-ARG MAVEN_VERSION=3.9.14
+ARG MAVEN_VERSION=3.9.15
 RUN curl -fsSL "https://dlcdn.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
     | tar -xz -C /opt \
     && ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn
