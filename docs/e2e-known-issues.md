@@ -77,6 +77,36 @@ Cascade-skipped: same set as GitLab.
 _No open issues tracked at 2026-05-03. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
 
+## Recently Fixed (2026-05-04)
+
+- **pipeline-report-l4-sarif-cyclonedx** -- The lint, sast, and scan
+  stages now aggregate SARIF / CycloneDX outputs into business.* under
+  `pipeline-report.json`. Lint reads `target/<check>.sarif` (one per
+  configured check) and reports `business.violations.{total,
+  by_severity, by_check}` plus `business.report` and
+  `business.fix_applied`. Sast reads `target/sast.sarif` and reports
+  `business.findings.{total, by_severity, cwe}` plus `business.report`.
+  Scan reads `target/scan.sarif`, `target/secret.sarif`, and
+  `target/sbom.cdx.json` and reports `business.deps.{vulnerabilities,
+  affected_packages, sbom_path}`, `business.secret.{findings_count,
+  report}`, and a top-level `business.report` rollup pointing at the
+  deps SARIF. Schema additions are additive (v1.0 unchanged):
+  `security.sast.{output_format, output_path}`,
+  `security.deps.{output_path, sbom.{enabled, format, output_path}}`,
+  `security.secrets.output_path`. New transverse helpers
+  `lib/transverse/sarif.sh` and `lib/transverse/sbom.sh` ship the
+  parsers and converters (`sarif.from_prettier`, `sarif.from_tsc`,
+  `sarif.from_dotnet_format`). Scanner runner image now bundles
+  `cyclonedx-cli v0.27.2` for SBOM merge; the brik repo bundles the
+  official SARIF 2.1.0 + CycloneDX 1.5 schemas under
+  `schemas/external/`. New e2e helpers
+  `assert.artifact_is_valid_sarif` and `assert.artifact_is_valid_cyclonedx`
+  validate runner outputs against those schemas via `jv`. Each business
+  block is independently no-op when its source artifact is absent, so
+  stacks that don't yet emit SARIF are not regressed. Test suite went
+  from 2523 to 2619 ShellSpec examples (+96), 0 failures across all
+  phases.
+
 ## Recently Fixed (2026-05-03)
 
 - **jenkins-platform-parity** -- Jenkins now runs every Brik stage inside

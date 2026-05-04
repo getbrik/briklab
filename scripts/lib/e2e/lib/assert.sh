@@ -631,3 +631,77 @@ assert.ssh_process_running() {
         assert._fail "SSH process running: ${process}" "ssh.sh not loaded"
     fi
 }
+
+# Pipeline-report L4 artifact assertions
+# ---------------------------------------------------------------------------
+# Validate SARIF and CycloneDX outputs produced by the lint, sast, and scan
+# stages. Each takes a local file path (extracted from a downloaded
+# artifacts.zip) and a label used in the assertion line.
+
+# Locate the directory where Brik bundles the official schemas (committed
+# in Phase 0). When BRIK_HOME is unset, fall back to the checkout path
+# alongside briklab.
+_assert_l4_schema_dir() {
+    local _candidates=(
+        "${BRIK_HOME:-}/schemas/external"
+        "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." 2>/dev/null && pwd)/brik/schemas/external"
+    )
+    local _d
+    for _d in "${_candidates[@]}"; do
+        [[ -n "$_d" && -d "$_d" ]] && { printf '%s\n' "$_d"; return 0; }
+    done
+    return 1
+}
+
+assert.artifact_present() {
+    local label="$1" path="$2"
+    if [[ -f "$path" ]]; then
+        assert._pass "Artifact present: ${label}"
+    else
+        assert._fail "Artifact present: ${label}" "missing at ${path}"
+    fi
+}
+
+assert.artifact_is_valid_sarif() {
+    local label="$1" path="$2"
+    if [[ ! -f "$path" ]]; then
+        assert._fail "Valid SARIF: ${label}" "file missing at ${path}"
+        return
+    fi
+    if ! command -v jv >/dev/null 2>&1; then
+        assert._fail "Valid SARIF: ${label}" "jv binary not available on host"
+        return
+    fi
+    local schema_dir
+    if ! schema_dir="$(_assert_l4_schema_dir)"; then
+        assert._fail "Valid SARIF: ${label}" "schemas/external/ not found"
+        return
+    fi
+    if jv "${schema_dir}/sarif-2.1.0.json" "$path" >/dev/null 2>&1; then
+        assert._pass "Valid SARIF: ${label}"
+    else
+        assert._fail "Valid SARIF: ${label}" "schema validation failed"
+    fi
+}
+
+assert.artifact_is_valid_cyclonedx() {
+    local label="$1" path="$2"
+    if [[ ! -f "$path" ]]; then
+        assert._fail "Valid CycloneDX 1.5: ${label}" "file missing at ${path}"
+        return
+    fi
+    if ! command -v jv >/dev/null 2>&1; then
+        assert._fail "Valid CycloneDX 1.5: ${label}" "jv binary not available on host"
+        return
+    fi
+    local schema_dir
+    if ! schema_dir="$(_assert_l4_schema_dir)"; then
+        assert._fail "Valid CycloneDX 1.5: ${label}" "schemas/external/ not found"
+        return
+    fi
+    if jv "${schema_dir}/cyclonedx-1.5.schema.json" "$path" >/dev/null 2>&1; then
+        assert._pass "Valid CycloneDX 1.5: ${label}"
+    else
+        assert._fail "Valid CycloneDX 1.5: ${label}" "schema validation failed"
+    fi
+}
