@@ -15,9 +15,9 @@ test:
     junit:
       # Maven Surefire produces one JUnit XML per test class under
       # target/surefire-reports/, which brik's java stack flattens into
-      # reports/junit/. Use a glob so GitLab artifacts.reports.junit picks
+      # brik-artifacts/test/junit/. Use a glob so GitLab artifacts.reports.junit picks
       # them all up (single-file path is for stacks like python/dotnet).
-      output_path: reports/junit/*.xml
+      output_path: brik-artifacts/test/junit/*.xml
 quality:
   lint:
     enabled: true

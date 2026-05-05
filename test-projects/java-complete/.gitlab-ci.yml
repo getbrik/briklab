@@ -11,4 +11,4 @@ brik-test:
     reports:
       coverage_report:
         coverage_format: jacoco
-        path: coverage/jacoco.xml
+        path: brik-artifacts/test/coverage/jacoco.xml
