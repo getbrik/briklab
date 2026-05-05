@@ -13,3 +13,4 @@ ansicolor:latest
 timestamper:latest
 ws-cleanup:latest
 pipeline-groovy-lib:latest
+warnings-ng:latest
