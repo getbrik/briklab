@@ -77,6 +77,22 @@ Cascade-skipped: same set as GitLab.
 _No open issues tracked at 2026-05-03. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
 
+## Recently Fixed (2026-05-05)
+
+- **platform-gate-parity (SC1)** -- Cross-platform alignment of stage gates
+  with skip-with-warning visualization. Every gate-able stage is always
+  instantiated on both GitLab and Jenkins; the Bash code decides between
+  `run normal`, `run mandatory` (release), `skip silent` (not applicable),
+  or `skip with warning` (user-disabled outside release). New
+  `stage.skip_with_warning` helper records `summary.warnings[]` in the
+  aggregate. GitLab signals via `allow_failure: { exit_codes: [99] }`,
+  Jenkins maps exit 99 to `unstable()`. Container-scan now reads
+  `package.tech.image_built` and skips silently when no image was
+  produced (e.g. python-minimal). Release / package / deploy gates
+  aligned: GitLab no longer needs `rules.if: '$CI_COMMIT_TAG'` on package
+  (non-tag GitLab builds now include package -- documented in 0.4.0
+  CHANGELOG breaking section). Released in v0.4.0.
+
 ## Recently Fixed (2026-05-04)
 
 - **pipeline-report-l4-sarif-cyclonedx** -- The lint, sast, and scan
