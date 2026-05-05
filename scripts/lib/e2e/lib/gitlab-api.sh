@@ -367,7 +367,7 @@ e2e.gitlab.get_job_log() {
 
 # Download a single file from a job's artifact archive into <dest>.
 # Args: $1 = project ID, $2 = job ID, $3 = artifact path (e.g.
-#       "brik-artifacts/pipeline-report.json"), $4 = destination file path
+#       "brik-artifacts/aggregate-report.json"), $4 = destination file path
 # Returns: 0 on success (file downloaded), non-zero otherwise
 e2e.gitlab.download_artifact() {
     local project_id="$1" job_id="$2" artifact_path="$3" dest="$4"

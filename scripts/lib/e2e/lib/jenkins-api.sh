@@ -293,7 +293,7 @@ e2e.jenkins.get_console_log() {
 
 # Download a single archived artifact from a build into <dest>.
 # Args: $1 = job name, $2 = build number, $3 = artifact path (e.g.
-#       "brik-artifacts/pipeline-report.json"), $4 = destination file path
+#       "brik-artifacts/aggregate-report.json"), $4 = destination file path
 # Returns: 0 on success, non-zero otherwise
 e2e.jenkins.download_artifact() {
     local job_name="$1" build_number="$2" artifact_path="$3" dest="$4"

@@ -188,18 +188,18 @@ fi
 
 echo ""
 
-# 8. Validate the pipeline-report.json aggregate produced by the notify
+# 8. Validate the aggregate-report.json aggregate produced by the notify
 # stage. Only run on successful builds: a failed build may not have
 # reached notify or archived the aggregate.
 if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" && "$FINAL_RESULT" == "SUCCESS" ]]; then
-    log_info "Validating pipeline-report.json aggregate (build #${BUILD_NUMBER})..."
+    log_info "Validating aggregate-report.json aggregate (build #${BUILD_NUMBER})..."
     AGG_TMP="$(mktemp -d)"
-    AGG_FILE="${AGG_TMP}/pipeline-report.json"
+    AGG_FILE="${AGG_TMP}/aggregate-report.json"
     if e2e.jenkins.download_artifact "$JOB_NAME" "$BUILD_NUMBER" \
-            "brik-artifacts/pipeline-report.json" "$AGG_FILE" 2>/dev/null; then
+            "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
         assert.aggregate_v1 "$AGG_FILE" "jenkins"
     else
-        log_warn "could not download pipeline-report.json from build (skipping aggregate assertions)"
+        log_warn "could not download aggregate-report.json from build (skipping aggregate assertions)"
     fi
     rm -rf "$AGG_TMP"
     echo ""

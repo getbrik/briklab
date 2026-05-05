@@ -270,21 +270,21 @@ fi
 
 echo ""
 
-# 11. Validate the pipeline-report.json aggregate produced by brik-notify.
+# 11. Validate the aggregate-report.json aggregate produced by brik-notify.
 # Only run on successful pipelines: a failed pipeline may not have reached
 # notify, or the aggregate may be missing fields the assertion expects.
 if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
     NOTIFY_JOB_ID=$(echo "$JOBS" | jq -r \
         '[.[] | select(.name == "brik-notify" and .status == "success")][0].id // empty' 2>/dev/null || true)
     if [[ -n "$NOTIFY_JOB_ID" ]]; then
-        log_info "Validating pipeline-report.json aggregate (notify job ${NOTIFY_JOB_ID})..."
+        log_info "Validating aggregate-report.json aggregate (notify job ${NOTIFY_JOB_ID})..."
         AGG_TMP="$(mktemp -d)"
-        AGG_FILE="${AGG_TMP}/pipeline-report.json"
+        AGG_FILE="${AGG_TMP}/aggregate-report.json"
         if e2e.gitlab.download_artifact "$PROJECT_ID" "$NOTIFY_JOB_ID" \
-                "brik-artifacts/pipeline-report.json" "$AGG_FILE" 2>/dev/null; then
+                "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
             assert.aggregate_v1 "$AGG_FILE" "gitlab"
         else
-            log_warn "could not download pipeline-report.json from notify job (skipping aggregate assertions)"
+            log_warn "could not download aggregate-report.json from notify job (skipping aggregate assertions)"
         fi
         rm -rf "$AGG_TMP"
     else

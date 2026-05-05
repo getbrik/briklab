@@ -81,13 +81,13 @@ listed in "Recently Fixed" for audit trail._
 
 - **pipeline-report-l4-sarif-cyclonedx** -- The lint, sast, and scan
   stages now aggregate SARIF / CycloneDX outputs into business.* under
-  `pipeline-report.json`. Lint reads `target/<check>.sarif` (one per
+  `aggregate-report.json`. Lint reads `brik-artifacts/lint/<check>.sarif` (one per
   configured check) and reports `business.violations.{total,
   by_severity, by_check}` plus `business.report` and
-  `business.fix_applied`. Sast reads `target/sast.sarif` and reports
+  `business.fix_applied`. Sast reads `brik-artifacts/sast/sast.sarif` and reports
   `business.findings.{total, by_severity, cwe}` plus `business.report`.
-  Scan reads `target/scan.sarif`, `target/secret.sarif`, and
-  `target/sbom.cdx.json` and reports `business.deps.{vulnerabilities,
+  Scan reads `brik-artifacts/scan/deps.sarif`, `brik-artifacts/scan/secret.sarif`, and
+  `brik-artifacts/scan/sbom.cdx.json` and reports `business.deps.{vulnerabilities,
   affected_packages, sbom_path}`, `business.secret.{findings_count,
   report}`, and a top-level `business.report` rollup pointing at the
   deps SARIF. Schema additions are additive (v1.0 unchanged):
@@ -148,10 +148,10 @@ listed in "Recently Fixed" for audit trail._
   normalized `BRIK_*` (pre-set wins). GitLab and Jenkins `--complete`
   E2E suites assert the aggregate shape via `assert.aggregate_v1`
   (schema_version, platform, status, commit.sha, ISO-8601 timestamp,
-  stage count) by downloading `brik-artifacts/pipeline-report.json`
+  stage count) by downloading `brik-artifacts/aggregate-report.json`
   from the notify job.
 - **pipeline-report-ci-aggregation** -- multi-container CI mode now
-  produces the same aggregated `pipeline-report.{md,json}` as local mode.
+  produces the same aggregated `aggregate-report.{md,json}` as local mode.
   Each stage emits `brik-artifacts/<stage>.json` (Phase 0.1 schema,
   `schemas/report/v1/fragment.schema.json`, `schema_version: "1.0"`).
   GitLab job templates declare `artifacts.paths: [brik-artifacts/]`
@@ -204,7 +204,7 @@ parent repo:
   canonique pour le release promotion model.
 - **security-scans-sharp** -- `osv-scanner` actionnable, `gitleaks`
   pleinement compatible avec `BRIK_PLATFORM`, monitoring de version
-  des outils dans `pipeline-report.json`.
+  des outils dans `aggregate-report.json`.
 - **test-reports opt-in** -- contrat `quality.test.reports.{enabled,
   coverage,junit}` câblé sur les 5 stacks. Cobertura partout, jacoco
   pour Java via override projet. Validé end-to-end sur Jenkins (5/5)

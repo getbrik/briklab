@@ -202,7 +202,7 @@ assert.json_ge() {
 }
 
 # assert.aggregate_v1 <artifact_path> <expected_platform>
-# Validates the shape of a Brik pipeline-report.json v1 aggregate.
+# Validates the shape of a Brik aggregate-report.json v1 aggregate.
 # Asserts:
 #   - schema_version == "1.0"
 #   - pipeline.platform == <expected>
