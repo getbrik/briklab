@@ -247,6 +247,13 @@ setup_nexus_ci_variables() {
         log_warn "ARGOCD_AUTH_TOKEN not found in .env -- run k3d setup first"
     fi
 
+    # DSI-owned org policy URL (chantier 20260508 P3). Pipelines resolve
+    # the file via the docker-compose mount on gitlab-runner; production
+    # deployments swap this for an https:// URL pointing at the DSI repo.
+    total=$((total + 1))
+    _set_group_variable "BRIK_POLICY_URL" "file:///etc/brik/policy/brik-policy.yml" "false" \
+        && count=$((count + 1))
+
     if [[ $count -eq $total ]]; then
         log_ok "All ${total} CI/CD variables configured"
     else

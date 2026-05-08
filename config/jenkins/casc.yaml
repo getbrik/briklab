@@ -44,6 +44,12 @@ jenkins:
             value: "${ARGOCD_AUTH_TOKEN}"
           - key: ARGOCD_INSECURE
             value: "true"
+          # DSI-owned org policy URL (chantier 20260508 P3). Jenkins jobs
+          # resolve the file via the docker-compose mount at /etc/brik/policy/.
+          # Production deployments swap this for an https:// URL pointing
+          # at the DSI repo; the brik runtime uses curl which supports both.
+          - key: BRIK_POLICY_URL
+            value: "file:///etc/brik/policy/brik-policy.yml"
   securityRealm:
     local:
       allowsSignup: false

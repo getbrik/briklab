@@ -67,6 +67,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/gitlab-runner:/etc/gitlab-runner
+      # DSI-owned org policy file (chantier 20260508 P3.G). Read-only mount
+      # so pipeline jobs can resolve BRIK_POLICY_URL=file:///etc/brik/policy/
+      # without needing an HTTP server. Production deployments host this
+      # file in a dedicated DSI repository and point BRIK_POLICY_URL at the
+      # raw HTTPS URL instead.
+      - ./policy:/etc/brik/policy:ro
     mem_limit: ${GITLAB_RUNNER_MEM_LIMIT:-1g}
     networks:
       brik-net:
@@ -141,6 +147,10 @@ services:
       # SSH deploy key for node-deploy-ssh E2E test (read-only).
       # The deploy stage container inherits this mount via --volumes-from.
       - ./data/ssh-target/deploy_key:/opt/brik/ssh/deploy_key:ro
+      # DSI-owned org policy file (chantier 20260508 P3.G). Same mount as
+      # the gitlab-runner service so Jenkins jobs resolve the same
+      # BRIK_POLICY_URL=file:///etc/brik/policy/brik-policy.yml.
+      - ./policy:/etc/brik/policy:ro
       # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

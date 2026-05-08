@@ -1,0 +1,52 @@
+# Brik organizational policy file -- briklab dev edition.
+#
+# This file is the source of truth for the lab's DSI-owned policy. It is
+# mounted read-only into gitlab-runner and jenkins at /etc/brik/policy/,
+# and pipelines reach it via the CI variable
+#   BRIK_POLICY_URL=file:///etc/brik/policy/brik-policy.yml
+#
+# In production, the equivalent file lives in a dedicated DSI repository
+# and BRIK_POLICY_URL points to its raw HTTP(S) URL. The Brik runtime
+# uses curl which supports both schemes natively, so no code change is
+# required to flip from file:// to http(s)://.
+#
+# Schema: schemas/policy/v1/brik-policy.schema.json (in the brik repo).
+#
+# Editing rules (mirror of production governance):
+#   - Each entry MUST carry a reason and an expires date (YYYY-MM-DD).
+#     There is no permanent allowlist by design.
+#   - To scope an entry to specific projects, set projects: [name1, name2].
+#     Project names match BRIK_PROJECT_NAME exactly (no wildcards in v1).
+#     Omitting projects[] applies the entry to every project.
+#   - Expired entries are silently ignored at runtime.
+#
+# Default state: empty allowlist. The built-in pragmatic preset still
+# ignores findings without an upstream fix; bring entries in here only
+# when the DSI agrees to a documented exception.
+
+# Optional preset override. When set, wins over the project's
+# quality.findings.policy. Allowed values: pragmatic | strict | permissive.
+# preset: pragmatic
+
+allow:
+  cve: []
+
+  paths: []
+
+# Example entries (commented). Uncomment and adapt when an exception is
+# approved by the DSI/architecture board.
+#
+#   cve:
+#     - id: CVE-2026-6100
+#       reason: "Python 3.14 binary CVE, no upstream fix; ARCHI-2026-042"
+#       expires: 2026-08-01
+#
+#     - id: CVE-2025-15366
+#       reason: "Bandit dev-only finding, scoped to python-complete"
+#       expires: 2026-12-31
+#       projects: ["python-complete"]
+#
+#   paths:
+#     - glob: "vendor/**"
+#       reason: "Third-party code, audited on a separate cycle"
+#       expires: 2027-12-31
