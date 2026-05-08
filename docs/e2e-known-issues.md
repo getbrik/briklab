@@ -77,6 +77,24 @@ Cascade-skipped: same set as GitLab.
 _No open issues tracked at 2026-05-03. Previously-open entries are
 listed in "Recently Fixed" for audit trail._
 
+## Recently Fixed (2026-05-08)
+
+- **python-complete environmental CVEs (no-fix in python:3.13 base)** --
+  Resolved by the Findings Management Framework chantier (#10) -- the
+  built-in `pragmatic` preset auto-tags any finding with empty fix
+  metadata as `policy.built-in.no-upstream-fix` and any below-floor
+  finding as `policy.built-in.below-severity`. Grype on
+  `python:3.13.13` previously surfaced 3 high/critical CVEs without
+  upstream fixes that flipped python-complete to red on every run; the
+  preset now ignores them transparently. python-complete is back to
+  11/11 stages green with **zero project-side configuration added**
+  (pipeline 1276 on briklab GitLab, 2026-05-08). `brik-artifacts/`
+  also gains the new pipeline-level layer:
+  `aggregate.sarif` (multi-runs SARIF combining every stage) and
+  `gl-sast-report.json` (GitLab non-Ultimate vulnerability report).
+  See `brik/docs/policy.md` for DSI distribution of allowlists.
+  Replaces the chantier #9 stand-alone fix; #9 archived 2026-05-08.
+
 ## Recently Fixed (2026-05-05)
 
 - **platform-gate-parity (SC1)** -- Cross-platform alignment of stage gates
