@@ -232,6 +232,82 @@ assert.aggregate_v1() {
 }
 
 # ---------------------------------------------------------------------------
+# Business outcome assertions (read from Brik aggregate-report.json)
+# ---------------------------------------------------------------------------
+# Four-category surface aligned on the runtime contract:
+#   assert.passed   -- business.status == "success"
+#   assert.failed   -- business.status == "error"
+#   assert.warned   -- business.status == "warning"
+#   assert.skipped  -- business.status absent OR business.reason == "not applicable"
+#
+# Each helper takes (<stage_name>, <aggregate_json_path>) and uses jq to
+# read .stages[] | select(.stage == name) | .business.status.
+
+_assert._business_status() {
+    local stage="$1" file="$2"
+    [[ -f "$file" ]] || { echo "<file-missing>"; return; }
+    jq -r --arg s "$stage" \
+        '(.stages[]? | select(.stage == $s) | .business.status) // "<absent>"' \
+        "$file" 2>/dev/null || echo "<jq-error>"
+}
+
+_assert._business_reason() {
+    local stage="$1" file="$2"
+    [[ -f "$file" ]] || { echo ""; return; }
+    jq -r --arg s "$stage" \
+        '(.stages[]? | select(.stage == $s) | .business.reason) // ""' \
+        "$file" 2>/dev/null || echo ""
+}
+
+# assert.passed <stage> <aggregate_report_json>
+assert.passed() {
+    local stage="$1" file="$2"
+    local actual; actual="$(_assert._business_status "$stage" "$file")"
+    if [[ "$actual" == "success" ]]; then
+        assert._pass "Stage '${stage}' business.status=success"
+    else
+        assert._fail "Stage '${stage}' business.status=success" "got '${actual}'"
+    fi
+}
+
+# assert.failed <stage> <aggregate_report_json>
+assert.failed() {
+    local stage="$1" file="$2"
+    local actual; actual="$(_assert._business_status "$stage" "$file")"
+    if [[ "$actual" == "error" ]]; then
+        assert._pass "Stage '${stage}' business.status=error"
+    else
+        assert._fail "Stage '${stage}' business.status=error" "got '${actual}'"
+    fi
+}
+
+# assert.warned <stage> <aggregate_report_json>
+assert.warned() {
+    local stage="$1" file="$2"
+    local actual; actual="$(_assert._business_status "$stage" "$file")"
+    if [[ "$actual" == "warning" ]]; then
+        assert._pass "Stage '${stage}' business.status=warning"
+    else
+        assert._fail "Stage '${stage}' business.status=warning" "got '${actual}'"
+    fi
+}
+
+# assert.skipped <stage> <aggregate_report_json>
+# Matches both pipeline-skipped (no business.status recorded) and
+# stage-self-skipped (business.status=success with reason="not applicable").
+assert.skipped() {
+    local stage="$1" file="$2"
+    local actual; actual="$(_assert._business_status "$stage" "$file")"
+    local reason; reason="$(_assert._business_reason "$stage" "$file")"
+    if [[ "$actual" == "<absent>" ]] \
+       || { [[ "$actual" == "success" ]] && [[ "$reason" == "not applicable" ]]; }; then
+        assert._pass "Stage '${stage}' is skipped"
+    else
+        assert._fail "Stage '${stage}' is skipped" "business.status='${actual}' reason='${reason}'"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Pipeline / Build status assertions
 # ---------------------------------------------------------------------------
 

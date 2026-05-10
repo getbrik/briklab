@@ -40,7 +40,11 @@ ensure_gitlab_pat
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
-# Each scenario: name | project_name | trigger_ref | required_jobs | optional_jobs | timeout | expect_failure:failed_job | ci_vars | depends_on | error_pattern | success_jobs
+# Each scenario: name | project_name | trigger_ref | required_jobs | _legacy_optional | timeout | expect_failure:failed_job | ci_vars | depends_on | error_pattern | success_jobs
+# The 5th column (_legacy_optional) is kept as a vestigial empty placeholder
+# to preserve the positional parser; the optional-jobs convention was
+# dropped in chantier 20260510 sub-chantier 10. All jobs that the runtime
+# now produces a fragment for are required.
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
@@ -50,11 +54,11 @@ SCENARIOS=(
     "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     # --- Full pipelines (tag push: all stages) ---
-    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint|600"
-    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint,brik-sast,brik-scan|600"
-    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify|brik-lint|600"
+    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600"
+    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-package,brik-deploy,brik-notify||600"
     # --- Security and Deploy ---
-    "node-security|node-security|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify|brik-sast,brik-scan|300"
+    "node-security|node-security|main|brik-init,brik-build,brik-sast,brik-scan,brik-test,brik-deploy,brik-notify||300"
     "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
     "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
     "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
@@ -63,11 +67,11 @@ SCENARIOS=(
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
-    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
-    "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
-    "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
-    "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
-    "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-notify|brik-lint,brik-sast,brik-scan|900"
+    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
+    "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
+    "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
+    "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
+    "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     # --- Workflow scenarios (push-driven, sequential) ---
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||||workflow-trunk-main"
@@ -119,7 +123,7 @@ _suite_list_scenarios() {
     printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "NAME" "PROJECT" "REF" "EXPECT" "DEPENDS_ON" "REQUIRED JOBS"
     printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "----" "-------" "---" "------" "----------" "-------------"
     for scenario in "${SCENARIOS[@]}"; do
-        IFS='|' read -r name project ref required optional timeout expect_fail ci_vars depends_on <<< "$scenario"
+        IFS='|' read -r name project ref required _optional timeout expect_fail ci_vars depends_on <<< "$scenario"
         local mode="pass"
         [[ -n "${expect_fail:-}" ]] && mode="fail"
         printf "  %-20s %-15s %-10s %-8s %-20s %s\n" "$name" "$project" "$ref" "$mode" "${depends_on:--}" "$required"
@@ -129,7 +133,7 @@ _suite_list_scenarios() {
 
 _suite_run_scenario() {
     local scenario="$1"
-    IFS='|' read -r name project ref required optional timeout expect_fail ci_vars _depends_on error_pattern success_jobs <<< "$scenario"
+    IFS='|' read -r name project ref required _optional timeout expect_fail ci_vars _depends_on error_pattern success_jobs <<< "$scenario"
 
     echo ""
     echo -e "${BOLD}========================================${NC}"
@@ -183,7 +187,6 @@ _suite_run_scenario() {
 
     E2E_PROJECT_PATH="$project_encoded" \
     E2E_REQUIRED_JOBS="$required" \
-    E2E_OPTIONAL_JOBS="${optional:-}" \
     E2E_TRIGGER_REF="$ref" \
     E2E_TRIGGER_MODE="$trigger_mode" \
     E2E_TIMEOUT="${timeout:-300}" \

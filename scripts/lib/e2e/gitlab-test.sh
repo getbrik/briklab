@@ -7,7 +7,6 @@
 # Configuration (env vars with backward-compatible defaults):
 #   E2E_PROJECT_PATH    - URL-encoded GitLab project path (default: brik%2Fnode-minimal)
 #   E2E_REQUIRED_JOBS   - Comma-separated jobs that must succeed (default: brik-init,brik-build,brik-test)
-#   E2E_OPTIONAL_JOBS   - Comma-separated jobs checked but not blocking (default: empty)
 #   E2E_TRIGGER_REF     - Git ref to trigger pipeline on (default: main)
 #   E2E_TIMEOUT          - Pipeline timeout in seconds (default: 300)
 #   E2E_EXPECT_FAILURE   - Set to "true" to expect the pipeline to fail (default: false)
@@ -51,13 +50,8 @@ EXPECT_FAILURE="${E2E_EXPECT_FAILURE:-false}"
 EXPECT_FAILED_JOB="${E2E_EXPECT_FAILED_JOB:-}"
 SKIP_LOG_CHECK="${E2E_SKIP_LOG_CHECK:-false}"
 
-# Parse comma-separated job lists into arrays
+# Parse the required-jobs list into an array
 IFS=',' read -ra REQUIRED_JOBS <<< "${E2E_REQUIRED_JOBS:-brik-init,brik-build,brik-test}"
-if [[ -n "${E2E_OPTIONAL_JOBS:-}" ]]; then
-    IFS=',' read -ra OPTIONAL_JOBS <<< "$E2E_OPTIONAL_JOBS"
-else
-    OPTIONAL_JOBS=()
-fi
 
 # Derive human-readable project name from path
 PROJECT_NAME="${PROJECT_PATH//%2F//}"
@@ -75,9 +69,6 @@ log_info "=== Brik E2E Pipeline Test ==="
 log_info "Project: ${PROJECT_NAME}"
 log_info "Ref: ${TRIGGER_REF}"
 log_info "Required jobs: ${REQUIRED_JOBS[*]}"
-if [[ ${#OPTIONAL_JOBS[@]} -gt 0 && -n "${OPTIONAL_JOBS[0]}" ]]; then
-    log_info "Optional jobs: ${OPTIONAL_JOBS[*]}"
-fi
 if [[ "$EXPECT_FAILURE" == "true" ]]; then
     log_warn "Mode: EXPECT FAILURE (pipeline should fail)"
     [[ -n "$EXPECT_FAILED_JOB" ]] && log_warn "Expected failed job: ${EXPECT_FAILED_JOB}"
@@ -220,30 +211,7 @@ if [[ "$EXPECT_FAILURE" == "true" && -n "$EXPECT_FAILED_JOB" ]]; then
     fi
 fi
 
-# 9. Check optional jobs (warn only, do not assert)
-for job_name in "${OPTIONAL_JOBS[@]}"; do
-    job_name="$(echo "$job_name" | tr -d '[:space:]')"
-    [[ -z "$job_name" ]] && continue
-
-    JOB_STATUS=$(e2e.gitlab.get_job_status "$JOBS" "$job_name")
-
-    case "$JOB_STATUS" in
-        success)
-            log_ok "${job_name}: PASSED (optional)"
-            ;;
-        skipped|manual|created)
-            log_info "${job_name}: ${JOB_STATUS} (optional, acceptable)"
-            ;;
-        failed)
-            log_warn "${job_name}: FAILED (optional, allow_failure)"
-            ;;
-        *)
-            log_warn "${job_name}: ${JOB_STATUS} (optional)"
-            ;;
-    esac
-done
-
-# 10. Validate job logs (only for successful pipelines)
+# 9. Validate job logs (only for successful pipelines)
 if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
     echo ""
     log_info "Checking job logs for errors..."

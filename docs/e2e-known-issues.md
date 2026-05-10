@@ -95,6 +95,31 @@ listed in "Recently Fixed" for audit trail._
   See `brik/docs/policy.md` for DSI distribution of allowlists.
   Replaces the chantier #9 stand-alone fix; #9 archived 2026-05-08.
 
+## Recently Fixed (2026-05-10)
+
+- **business-gatekeeper-e2e** -- The runtime now expresses stage outcome
+  through `business.{status, reason}` (success/warning/error) computed
+  from a fixed matrix; `pipeline.business.status` is the worst-of and
+  drives both `pipeline.run` rc and `stages.notify` exit code. The
+  legacy SKIP_WITH_WARNING (exit 99) plumbing is removed end-to-end:
+  `BRIK_EXIT_SKIP_WITH_WARNING`, `stage.skip_with_warning`,
+  `summary.warnings`, GitLab `allow_failure: { exit_codes: [99] }` on
+  lint/sast/scan/container-scan, and the Jenkins `unstable()` branch
+  on rc=99 are all gone. The E2E harness follows: the
+  `E2E_OPTIONAL_JOBS` convention is dropped from `gitlab-test.sh` and
+  `gitlab-suite.sh`; lint/sast/scan jobs that were previously listed
+  optional are promoted to required (the policy work in the previous
+  chantier made them green by default). New helpers in
+  `lib/e2e/lib/assert.sh`: `assert.passed`, `assert.failed`,
+  `assert.warned`, `assert.skipped`, all reading `business.status`
+  from `aggregate-report.json`.
+
+  UI implication on GitLab/Jenkins: a stage in `business.warning`
+  (e.g. findings ignored by policy) no longer paints "yellow"
+  (allow_failure / unstable); the GitLab job stays green and the
+  signal is in `aggregate-report.{md,json,html}` only. A real stage
+  failure still paints red as before.
+
 ## Recently Fixed (2026-05-05)
 
 - **platform-gate-parity (SC1)** -- Cross-platform alignment of stage gates
@@ -109,7 +134,9 @@ listed in "Recently Fixed" for audit trail._
   produced (e.g. python-minimal). Release / package / deploy gates
   aligned: GitLab no longer needs `rules.if: '$CI_COMMIT_TAG'` on package
   (non-tag GitLab builds now include package -- documented in 0.4.0
-  CHANGELOG breaking section). Released in v0.4.0.
+  CHANGELOG breaking section). Released in v0.4.0. **Superseded
+  2026-05-10 by business-gatekeeper-e2e (entry above) -- the
+  skip-with-warning code path is gone.**
 
 ## Recently Fixed (2026-05-04)
 

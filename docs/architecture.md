@@ -358,15 +358,20 @@ To add a new E2E test scenario:
        "my-step2|my-project|v0.1.0|brik-init,brik-build||300||||my-step1"
    )
    ```
-   Format: `name|project|ref|required_jobs|optional_jobs|timeout|expect_fail|ci_vars|depends_on|error_pattern|success_jobs`
+   Format: `name|project|ref|required_jobs|_legacy_optional|timeout|expect_fail|ci_vars|depends_on|error_pattern|success_jobs`
 
+   - `_legacy_optional`: vestigial empty placeholder kept for the
+     positional parser. The "optional jobs" convention was dropped in
+     chantier 20260510 sub-chantier 10 alongside the SKIP_WITH_WARNING
+     code 99 plumbing; all jobs that the runtime produces are now
+     required. Always leave this column empty.
    - `expect_fail`: job name that must fail (empty for success scenarios)
    - `ci_vars`: CI variables injected via API (e.g. `BRIK_DRY_RUN=true`)
    - `depends_on`: scenario name that must run first (sequential execution)
    - `error_pattern`: regex patterns to validate in logs (use `~` as OR separator)
    - `success_jobs`: jobs that must succeed even in failure scenarios
 
-4. **Define required and optional jobs** -- required jobs must all succeed for the scenario to pass (in normal mode). Optional jobs are checked but do not cause failure.
+4. **Define required jobs** -- required jobs must all succeed for the scenario to pass (in normal mode). Stage warnings (e.g. findings ignored by policy) surface in `aggregate-report.json` (`business.status=warning`) without failing the job.
 
 5. **Add group mapping** -- update `_suite_get_group()` in the suite file if the new scenario doesn't match existing patterns (A=stack, B=full, C=complete, D=security, E=deploy, F=gitops, G=workflow, H=error).
 
