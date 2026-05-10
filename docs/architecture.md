@@ -177,6 +177,58 @@ A summary line shows total / PASS / FAIL / SKIP counts. Exit code is non-zero if
 
 ---
 
+## E2E Assertion Model
+
+E2E test assertions live in `scripts/lib/e2e/lib/assert.sh`. Most
+helpers (`assert.equals`, `assert.contains`, `assert.json_eq`,
+`assert.job_status`, `assert.k8s_deployment_ready`, ...) are generic;
+the four business-driven helpers below align the harness with the
+Brik runtime's two orthogonal axes (tech vs business).
+
+### Business outcome helpers
+
+Each helper takes `<stage_name> <aggregate_report_json_path>` and
+reads `business.status` from the named stage's entry in
+`aggregate-report.json`:
+
+| Helper            | PASS when                                                                                       |
+|---|---|
+| `assert.passed`   | `business.status == "success"`                                                                  |
+| `assert.failed`   | `business.status == "error"`                                                                    |
+| `assert.warned`   | `business.status == "warning"`                                                                  |
+| `assert.skipped`  | `business.status` is absent OR (`business.status == "success"` AND `reason == "not applicable"`) |
+
+The four categories mirror the Brik matrix:
+
+```
+tech.status x context  ->  business.status
+  success                ->  success | warning (with side-band findings.ignored)
+  failed   x snapshot    ->  warning
+  failed   x release     ->  error
+  skipped                ->  success (reason: "not applicable")
+```
+
+So an E2E scenario that asserts `assert.warned "lint" "$AGG"` will
+pass either when lint failed in snapshot context or when lint passed
+with ignored findings -- both legitimate "warning" outcomes per the
+runtime contract.
+
+### Why drop OPTIONAL_JOBS
+
+Before chantier 20260510 sub-chantier 10, the harness carried an
+`E2E_OPTIONAL_JOBS` list (column 5 of `SCENARIOS` in `gitlab-suite.sh`)
+to tolerate "warning" GitLab jobs painted yellow via
+`allow_failure: { exit_codes: [99] }`. With the Brik runtime now
+gating on `business.status` (and the wrappers no longer translating
+exit code 99), the GitLab job color carries the tech outcome only and
+the business outcome surfaces in `aggregate-report.{md,json,html}`.
+The harness therefore reads business directly via the four helpers
+above, and the `OPTIONAL_JOBS` convention is gone. Column 5 of
+`SCENARIOS` is kept as a vestigial empty placeholder so the positional
+parser stays happy.
+
+---
+
 ## Directory Structure
 
 ```
