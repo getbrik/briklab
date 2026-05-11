@@ -3,8 +3,5 @@ project:
   name: python-minimal
   stack: python
   stack_version: "3.13"
-quality:
-  lint:
-    enabled: false
 test:
   framework: pytest

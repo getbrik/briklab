@@ -6,9 +6,6 @@ project:
 release:
   strategy: semver
   tag_prefix: v
-quality:
-  lint:
-    enabled: false
 test:
   framework: npm
 package:

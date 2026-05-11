@@ -3,8 +3,5 @@ project:
   name: rust-minimal
   stack: rust
   stack_version: "1"
-quality:
-  lint:
-    enabled: false
 test:
   framework: cargo

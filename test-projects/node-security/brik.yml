@@ -3,9 +3,6 @@ project:
   name: node-security
   stack: node
   stack_version: "22"
-quality:
-  lint:
-    enabled: false
 test:
   framework: npm
 security:

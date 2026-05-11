@@ -3,8 +3,5 @@ project:
   name: node-minimal
   stack: node
   stack_version: "22"
-quality:
-  lint:
-    enabled: false
 test:
   framework: npm
