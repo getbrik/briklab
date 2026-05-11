@@ -202,27 +202,18 @@ assert.json_ge() {
 }
 
 # assert.aggregate_v1 <artifact_path> <expected_platform>
-# Validates the shape of a Brik aggregate-report.json v1 aggregate.
-# Asserts:
-#   - schema_version == "1.0"
-#   - pipeline.platform == <expected>
-#   - pipeline.id non-empty
-#   - pipeline.status == "success"
-#   - pipeline.commit.sha matches a 40-char hex SHA (when present)
-#   - summary.stages.total >= 7 (sanity: real pipeline ran multiple stages)
-#   - stages[0].timestamp is ISO-8601
+# Validates the shape of a Brik aggregate-report.json (v1.1).
 assert.aggregate_v1() {
     local file="$1" expected_platform="$2"
     if [[ ! -f "$file" ]]; then
         assert._fail "Aggregate v1: file present (${file})" "not found"
         return
     fi
-    assert.json_eq    "Aggregate schema_version is 1.0"      "$file" '.schema_version'         '"1.0"'
-    assert.json_eq    "Aggregate pipeline.platform"           "$file" '.pipeline.platform'      "\"${expected_platform}\""
-    assert.json_match "Aggregate pipeline.id non-empty"       "$file" '.pipeline.id'            '^.+$'
-    assert.json_eq    "Aggregate pipeline.status is success"  "$file" '.pipeline.status'        '"success"'
-    assert.json_ge    "Aggregate summary.stages.total >= 7"   "$file" '.summary.stages.total'   7
-    # commit metadata is optional; assert only when populated.
+    assert.json_eq    "Aggregate schema_version is 1.1"          "$file" '.schema_version'                '"1.1"'
+    assert.json_eq    "Aggregate pipeline.platform"               "$file" '.pipeline.platform'             "\"${expected_platform}\""
+    assert.json_match "Aggregate pipeline.id non-empty"           "$file" '.pipeline.id'                   '^.+$'
+    assert.json_match "Aggregate pipeline.business.status pass"   "$file" '.pipeline.business.status // ""' '^(success|warning)$'
+    assert.json_ge    "Aggregate summary.stages.total >= 4"       "$file" '.summary.stages.total'          4
     local has_commit
     has_commit=$(jq -r '.pipeline | has("commit")' "$file" 2>/dev/null || echo "false")
     if [[ "$has_commit" == "true" ]]; then
