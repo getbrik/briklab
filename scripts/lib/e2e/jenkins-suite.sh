@@ -155,6 +155,29 @@ _suite_run_scenario() {
         trigger_mode="push"
     fi
 
+    # Mirror GitLab's tag-trigger semantics on Jenkins. The gitlab-suite
+    # counterpart of these scenarios triggers on ref v0.1.0 (or v0.2.0
+    # for workflow-trunk-tag), which gives the pipeline CI_COMMIT_TAG and
+    # routes brik into release context. Jenkins pipelineJobs always build
+    # the configured branch, so we signal the tag explicitly via the
+    # BRIK_TAG build parameter declared in brikPipeline.groovy. Without
+    # this, *-full / *-complete / node-deploy* scenarios would skip the
+    # release stage and tag images with the short SHA instead of the
+    # release tag -- breaking parity with GitLab.
+    local brik_tag=""
+    case "$name" in
+        *-full|*-complete|node-deploy*|error-deploy)
+            brik_tag="v0.1.0"
+            ;;
+    esac
+    if [[ -n "$brik_tag" ]]; then
+        if [[ -n "${ci_vars:-}" ]]; then
+            ci_vars="${ci_vars},BRIK_TAG=${brik_tag}"
+        else
+            ci_vars="BRIK_TAG=${brik_tag}"
+        fi
+    fi
+
     # node-workflow-trunk is a multibranch Jenkins job backed by gitea-plugin;
     # builds live under job/<name>/job/<branch>/... The api helpers pick up
     # E2E_JENKINS_BRANCH to build the correct URL prefix. Multibranch scan +
