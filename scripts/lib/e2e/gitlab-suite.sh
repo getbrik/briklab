@@ -74,8 +74,8 @@ SCENARIOS=(
     "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     # --- Workflow scenarios (push-driven, sequential) ---
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||||workflow-trunk-main"
-    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600||||workflow-trunk-tag"
+    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600|||workflow-trunk-main"
+    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600|||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
     "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
@@ -90,7 +90,14 @@ SCENARIOS=(
 
 _suite_get_name() { IFS='|' read -r name _ <<< "$1"; echo "$name"; }
 _suite_get_project() { IFS='|' read -r _ project _ <<< "$1"; echo "$project"; }
-_suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ _ _ dep <<< "$1"; echo "${dep:-}"; }
+# Trailing `_ _` absorbs columns 10 (error_pattern) and 11 (success_jobs)
+# so they don't get glued into depends_on. Without them, error-* and
+# workflow-trunk-tag/feature returned depends_on=
+# "|<error_pattern>|<success_jobs>" or "|workflow-trunk-main", which
+# never matched a passed scenario name and SKIPped every dependent test
+# in --all runs (single-scenario --only mode bypassed dep resolution so
+# the bug stayed invisible there).
+_suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ _ _ dep _ _ <<< "$1"; echo "${dep:-}"; }
 
 # Group mapping by scenario name prefix:
 #   A: stack-minimal (node-minimal, python-minimal, etc.)

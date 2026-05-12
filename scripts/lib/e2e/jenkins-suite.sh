@@ -79,7 +79,12 @@ SCENARIOS=(
 
 _suite_get_name() { IFS='|' read -r name _ <<< "$1"; echo "$name"; }
 _suite_get_project() { IFS='|' read -r _ _ projects _ <<< "$1"; echo "$projects"; }
-_suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ dep <<< "$1"; echo "${dep:-}"; }
+# Adding a trailing `_` after `dep` is critical: bash's `read` slurps
+# every remaining field into the last variable. Without the extra
+# absorber the 8-field scenario "...||depends|error_pattern" was being
+# parsed as depends_on="" + "|" + error_pattern, which then never matched
+# any passed scenario name and SKIPped every dependent test in --all.
+_suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ dep _ <<< "$1"; echo "${dep:-}"; }
 
 # Group mapping (same scheme as gitlab-suite.sh)
 _suite_get_group() {
