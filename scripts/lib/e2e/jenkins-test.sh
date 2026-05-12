@@ -105,14 +105,69 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     # shellcheck source=lib/git.sh
     source "${SCRIPT_DIR}/lib/git.sh"
 
-    log_info "Triggering via git push (ref: main)..."
-    PUSH_SHA=$(e2e.git.trigger_via_push "gitea" "$JOB_NAME" "main")
+    # Honor the suite-provided trigger ref so workflow-trunk-tag pushes
+    # v0.2.0 (Multibranch tag-scan -> release context) and
+    # workflow-trunk-feature pushes a feature branch -- mirroring GitLab.
+    # Defaulting to "main" preserves behavior for callers that don't set
+    # E2E_TRIGGER_REF.
+    TRIGGER_REF="${E2E_TRIGGER_REF:-main}"
+
+    # Multibranch routes tag-scan builds under /job/<job>/job/<tag>/...
+    # and feature-branch builds under /job/<job>/job/<branch>/. Override
+    # E2E_JENKINS_BRANCH so the wait/api helpers query the right URL.
+    # Slashes in branch names (e.g. feature/test) must be URL-encoded as
+    # %2F or Jenkins parses them as nested folders.
+    case "$TRIGGER_REF" in
+        v[0-9]*)  export E2E_JENKINS_BRANCH="$TRIGGER_REF" ;;
+        branch:*)
+            _branch_name="${TRIGGER_REF#branch:}"
+            export E2E_JENKINS_BRANCH="${_branch_name//\//%2F}"
+            ;;
+    esac
+
+    log_info "Triggering via git push (ref: ${TRIGGER_REF})..."
+    PUSH_SHA=$(e2e.git.trigger_via_push "gitea" "$JOB_NAME" "$TRIGGER_REF")
     log_ok "Push SHA: ${PUSH_SHA}"
+
+    # Multibranch + giteaTagDiscovery() indexes new tags but does not
+    # auto-trigger a build for them (only new branch commits trigger
+    # automatically). Wait for the tag sub-job to appear, then issue an
+    # explicit /build so the harness can observe the build it expects.
+    # Mirrors GitLab where pushing a tag immediately runs a pipeline.
+    if [[ "$TRIGGER_REF" =~ ^v[0-9] ]]; then
+        log_info "Waiting for Multibranch to discover tag ${TRIGGER_REF}..."
+        _tag_path="job/${JOB_NAME}/job/${TRIGGER_REF}"
+        _discover=0
+        while [[ $_discover -lt 60 ]]; do
+            if e2e.jenkins.api_get "${_tag_path}/api/json" 2>/dev/null | jq -e '.name' >/dev/null 2>&1; then
+                break
+            fi
+            sleep 5
+            _discover=$((_discover + 5))
+        done
+        if [[ $_discover -ge 60 ]]; then
+            log_warn "Tag sub-job did not appear within 60s; proceeding with wait anyway"
+        else
+            # Delegate to trigger_build, which already handles the
+            # crumb+cookie session correctly. E2E_JENKINS_BRANCH is set
+            # above so _e2e_jenkins_job_path routes to the tag sub-job.
+            log_info "Triggering build on tag sub-job..."
+            e2e.jenkins.trigger_build "$JOB_NAME" >/dev/null 2>&1 || \
+                log_warn "Failed to trigger tag sub-job build (will rely on Multibranch auto-scan)"
+        fi
+    fi
 
     log_info "Waiting for build triggered by SHA ${PUSH_SHA:0:8}..."
     BUILD_NUMBER=$(e2e.jenkins.wait_build_by_sha "$JOB_NAME" "$PUSH_SHA" "${E2E_JENKINS_DISCOVER_TIMEOUT:-90}" "$TIMEOUT_SECONDS")
 
-    BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    # Multibranch sub-jobs live under /job/<job>/job/<branch_or_tag>/<n>.
+    # Include the sub-job segment when E2E_JENKINS_BRANCH is set so log
+    # readers (and the parity helper) reach the right artifacts URL.
+    if [[ -n "${E2E_JENKINS_BRANCH:-}" ]]; then
+        BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/job/${E2E_JENKINS_BRANCH}/${BUILD_NUMBER}"
+    else
+        BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    fi
     FINAL_RESULT=$(e2e.jenkins.get_build_result "$JOB_NAME" "$BUILD_NUMBER")
 else
     # API trigger (default, unchanged)
@@ -126,7 +181,14 @@ else
         exit 1
     }
 
-    BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    # Multibranch sub-jobs live under /job/<job>/job/<branch_or_tag>/<n>.
+    # Include the sub-job segment when E2E_JENKINS_BRANCH is set so log
+    # readers (and the parity helper) reach the right artifacts URL.
+    if [[ -n "${E2E_JENKINS_BRANCH:-}" ]]; then
+        BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/job/${E2E_JENKINS_BRANCH}/${BUILD_NUMBER}"
+    else
+        BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
+    fi
     log_ok "Build #${BUILD_NUMBER} started"
     echo "  URL: ${BUILD_URL}"
     echo ""

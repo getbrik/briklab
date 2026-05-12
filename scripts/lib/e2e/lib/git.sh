@@ -276,10 +276,16 @@ e2e.git.trigger_via_push() {
                 ;;
             branch:*)
                 local branch_name="${trigger_ref#branch:}"
+                # The branch may already exist remotely from a prior
+                # run; the new .brik-trigger commit on top of a fresh
+                # main checkout will not be a fast-forward, so force the
+                # push. The tag-trigger flow above uses a delete+recreate
+                # for the same reason -- this is the equivalent for
+                # branches.
                 git checkout -b "$branch_name" >/dev/null 2>&1
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
                     git -c "credential.username=${username}" \
-                    push -u origin "$branch_name" >/dev/null 2>&1 || exit 1
+                    push -u --force origin "$branch_name" >/dev/null 2>&1 || exit 1
                 ;;
             *)
                 # Default: push to main (or whatever ref name)

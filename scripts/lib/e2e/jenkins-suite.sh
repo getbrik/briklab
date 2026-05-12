@@ -190,11 +190,25 @@ _suite_run_scenario() {
         discover_timeout="300"
     fi
 
+    # Trigger ref selection for push-mode scenarios. GitLab's counterpart
+    # uses a per-scenario trigger_ref column (main / v0.2.0 / branch:feat).
+    # On Jenkins the test script defaulted to "main" for every push, which
+    # made workflow-trunk-tag behave like a branch push (snapshot context)
+    # instead of a tag push (release context) -- breaking parity. Derive
+    # the ref from the scenario name so each workflow variant pushes the
+    # right git reference and Multibranch routes to the right build kind.
+    local trigger_ref=""
+    case "$name" in
+        workflow-trunk-tag)     trigger_ref="v0.2.0" ;;
+        workflow-trunk-feature) trigger_ref="branch:feature/test" ;;
+    esac
+
     E2E_JENKINS_JOB="$job" \
     E2E_JENKINS_TIMEOUT="$timeout" \
     E2E_JENKINS_EXPECT_FAILURE="$expect_fail" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
     E2E_TRIGGER_MODE="$trigger_mode" \
+    E2E_TRIGGER_REF="$trigger_ref" \
     E2E_JENKINS_BRANCH="$branch" \
     E2E_JENKINS_DISCOVER_TIMEOUT="$discover_timeout" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
