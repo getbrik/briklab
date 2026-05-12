@@ -31,7 +31,56 @@
 allow:
   cve: []
 
-  paths: []
+  paths:
+    # Environmental CVEs from base-image transitive dependencies. The
+    # node runner images bundle npm at /usr/local/lib/node_modules/npm
+    # which carries its own vendored copy of brace-expansion, glob,
+    # minimatch, tar, etc. Those advisories are real but not under any
+    # project's control here -- they ship with the upstream node image
+    # and are resolved by upgrading the runner image, not by editing the
+    # application code. Captured per chantier 20260511 bug E.
+    - glob: "**/usr/local/lib/node_modules/npm/node_modules/**"
+      reason: |
+        npm bundled vendored dependencies in the node runner image
+        (cross-spawn, brace-expansion, glob, ip-address, minimatch, tar,
+        diff). Resolved by upgrading the brik-runner-node base image.
+        Tracked in brik-images repo; revisit at next runner-image rebuild.
+      expires: 2026-08-09
+
+    # Alpine apk database: CVEs in busybox / ssl_client / gnutls /
+    # coreutils / gnupg / freetype (Alpine 3.23 + Temurin base). Same
+    # environmental class as the npm bundled deps. The fix is an Alpine
+    # base-image upgrade in brik-runner-*, not application-level
+    # remediation.
+    - glob: "**/lib/apk/db/installed"
+      reason: |
+        Alpine apk-managed CVEs (busybox, ssl_client, gnutls, coreutils,
+        gnupg, freetype) in the runner base image. Resolved by bumping
+        the Alpine base layer in brik-runner-*. Tracked in brik-images
+        repo.
+      expires: 2026-08-09
+
+    # OpenJDK runtime bundled in the Java runner image
+    # (eclipse-temurin:21-jdk-jammy and equivalents). CVEs flagged against
+    # the JDK itself are resolved by bumping the temurin base in
+    # brik-runner-java, not by editing the application code.
+    - glob: "**/opt/java/openjdk/**"
+      reason: |
+        OpenJDK runtime CVEs in the Java runner image (Temurin JDK).
+        Resolved by bumping the temurin base layer in brik-runner-java.
+        Tracked in brik-images repo.
+      expires: 2026-08-09
+
+    # CPython interpreter bundled in the Python runner image. CVEs
+    # against the interpreter binary are resolved by bumping the
+    # python: base image in brik-runner-python, not by editing the
+    # application code.
+    - glob: "**/usr/local/bin/python*"
+      reason: |
+        CPython interpreter CVEs in the Python runner image. Resolved
+        by bumping the python: base layer in brik-runner-python.
+        Tracked in brik-images repo.
+      expires: 2026-08-09
 
 # Example entries (commented). Uncomment and adapt when an exception is
 # approved by the DSI/architecture board.

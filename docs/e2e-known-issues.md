@@ -72,10 +72,199 @@ Notable wins (compared to R2 baseline):
 
 Cascade-skipped: same set as GitLab.
 
-## Status Overview - Remaining Issues
+## Status Overview - Remaining Issues (2026-05-12)
 
-_No open issues tracked at 2026-05-03. Previously-open entries are
-listed in "Recently Fixed" for audit trail._
+Validation pass post master pipeline-behavior-model chantier
+(`docs/chantiers/20260511_pipeline-behavior-model.md` SC1-21,
+landed on `feat/business-sh-module`). E2E re-runs `gitlab --all` and
+`jenkins --all` against the SC1-21 code revealed 13-21 failures per
+platform; the structural causes are catalogued below.
+
+### Run baseline
+
+| Run                                       | Platform | PASS | FAIL | cascade-SKIP | Note                                                          |
+|-------------------------------------------|----------|-----:|-----:|-------------:|----------------------------------------------------------------|
+| `gitlab-all-2026-05-12T20`                | GitLab   |    8 |   13 |            7 | Baseline -- no DSI policy loaded, no eslint on deploy projects |
+| `jenkins-all-2026-05-12T22`               | Jenkins  |    7 |   21 |            7 | Same baseline; bundled Verify amplifies failures               |
+| `gitlab-all-2026-05-12T23` (with policy)  | GitLab   |   12 |    9 |            7 | After `brik-policy.yml` path-allowlist landed                  |
+
+The diff between run 1 (8 PASS) and run 2 (12 PASS) on GitLab is purely
+DSI-policy-driven: `node-full`, `java-full`, `node-complete`,
+`java-complete` all moved PASS once the `brik-policy.yml` path
+allowlist suppressed environmental CVEs in the runner base images.
+
+### Open issue OI-1: Bug G structural fix missing in `lib/stages/verify/lint.sh`
+
+**Where**: `brik/lib/stages/verify/lint.sh:54-63`.
+
+**Symptom**: when the project's `package.json` doesnt declare `eslint`
+as a devDep, the lint stage hard-fails with rc=10 and the error
+`eslint binary not found in node_modules or PATH`. The failure
+propagates as a GitLab job failure (`brik-lint: failed`) which
+cascades into `brik-package: skipped`, `brik-container-scan: skipped`,
+`brik-deploy: skipped`, `brik-notify: failed`.
+
+**Chantier-promised resolution** (master `20260511_pipeline-behavior-model.md`
+Bug G entry, line 953): *"Résolu en cascade : `tool_resolver` (SC15)
+détecte `provenance=missing`, `_stage._finalize_fragment` (SC16)
+produit `tech.kind=missing-tool` + `fix_classification=has_fix`,
+matrice business émet `business.status=warning` en snapshot, `error`
+en release."*
+
+**Current state**: SC15 ships `lib/transverse/tool_resolver.sh` and SC16
+extends `business.evaluate`, but neither sub-chantier wires
+`tool_resolver.resolve` *into* `lib/stages/verify/lint.sh`. The lint
+stage still uses the legacy `[[ -x ... ]] || command -v ... || error`
+chain at lines 54-63 (and similar at lines 93-220 for the other
+linters / formatters). Result: the "missing-tool surfaces as a SARIF
+finding" cascade does not actually run for lint/format/test stages
+today.
+
+**Workaround applied 2026-05-12**: each affected briklab test-project
+(7: `node-security`, `node-deploy`, `node-deploy-k8s`, `node-deploy-ssh`,
+`node-deploy-helm`, `node-deploy-gitops`, `node-deploy-gitops-rollback`,
+plus `node-workflow-trunk`) now declares `eslint@^10.1.0` as a devDep
+and ships a flat `eslint.config.js` mirroring `node-full`. This unblocks
+the test-project pipelines but leaves the structural gap in brik open.
+
+**Resolution owed**: open a new chantier (call it SC22 in the master
+postmortem) to wire `tool_resolver` into `lib/stages/verify/lint.sh`,
+`format.sh`, and `test.sh`. When `provenance=missing`, the stage
+should:
+1. emit a SARIF result with `ruleId=brik-missing-tool`, `level=error`,
+   `properties.tool=<name>`, `properties.brikFixClassification=has_fix`;
+2. annotate `tech.kind=missing-tool` on the stage fragment;
+3. return rc=0 so `business.evaluate` (not the stage code) decides
+   snapshot/release.
+
+This closes Bug G structurally and makes the eslint-devDep workaround
+no longer required.
+
+### Open issue OI-2: Jenkins bundled Verify stage amplifies sast failures
+
+**Where**: `brik/shared-libs/jenkins/vars/brikPipeline.groovy`.
+
+**Symptom**: on Jenkins, the four verify checks (lint, sast, scan,
+test) run inside a single `Verify` Pipeline stage. Any one of them
+failing (e.g. a semgrep finding in `python-minimal/src/`) marks the
+whole Verify stage `FAILURE`, which bubbles up as the Pipeline result
+even though the offending tool is not in the harness `required_jobs`.
+
+On GitLab the same project passes: `brik-sast` is a separate job and
+`python-minimal` doesnt list it in `required_jobs`, so its failure
+is tolerated at the harness level.
+
+**Current state**: `python-minimal` PASS on GitLab, FAIL on Jenkins.
+Same brik code, same test-project, different platform wrapper.
+
+**Resolution**: two options, neither yet decided.
+
+(A) Mirror GitLab's per-tool job split in
+    `shared-libs/jenkins/vars/brikPipeline.groovy`: emit four parallel
+    Pipeline stages instead of one bundled `Verify`. This aligns the
+    semantic across platforms.
+
+(B) Update the Jenkins harness in
+    `scripts/lib/e2e/jenkins-suite.sh` to read per-tool exit codes
+    from the stage report and apply the same `required_jobs` filter
+    as the GitLab harness. Avoids touching the brik shared lib.
+
+(B) is the lighter touch and stays in briklab; (A) makes the platform
+behaviour symmetric and is the longer-term direction.
+
+### Open issue OI-3: Cascade-skip chain in the harness suite
+
+**Where**: `scripts/lib/e2e/gitlab-suite.sh:51-` and
+`scripts/lib/e2e/jenkins-suite.sh:51-`.
+
+**Symptom**: 7 scenarios (`node-deploy-rollback`,
+`workflow-trunk-tag`, `workflow-trunk-feature`, `error-build`,
+`error-test`, `error-config`, `error-deploy`) cascade-SKIP when their
+upstream dependency scenario fails. The cascade is correct (running
+`error-build` makes no sense if `node-error-build` never even
+triggered), but the suite tally counts these as "failures" rather
+than skipped/blocked.
+
+**Resolution**: distinguish `cascade-skip` in the summary table
+(orange / yellow status) versus real `FAIL` (red) so the operator can
+see at-a-glance which failures are root-causes vs derived. Cosmetic;
+not blocking the chantier closure.
+
+### Open issue OI-4: `brik-policy.yml` `expires` rotation owed
+
+**Where**: `policy/brik-policy.yml`.
+
+**Symptom**: the four path-allowlist entries added 2026-05-12 all
+carry `expires: 2026-08-09` (90 days, the chantier-recommended
+default for environmental CVEs in base images). When the date arrives,
+the entries will be silently ignored at runtime and the suppressed
+CVEs will re-enter the failing set unless either (a) the runner
+images have been rebuilt with patched bases, or (b) the entries are
+refreshed with new `expires` dates.
+
+**Resolution**: the chantier-prescribed cadence applies here.
+- **Quarterly** (next: 2026-08-09): walk `policy/brik-policy.yml`,
+  check whether each entry is still load-bearing.
+- **Before each runner-image rebuild in `brik-images/`**: drop the
+  entries whose bases have been bumped.
+
+The brik runtime's init stage automatically lists "expiring soon"
+entries when within `BRIK_FINDINGS_EXPIRING_SOON_DAYS` (default 30)
+of the date, surfaced in the aggregate-report. No CI work needed;
+just keep nightly aggregate-reports under review.
+
+### Open issue OI-5: `BRIK_POLICY_URL` not set in GitLab CI variables
+
+**Where**: `data/gitlab-runner/config.toml` `[[runners]] environment`
+field (now fixed: previously absent).
+
+**Symptom**: on run 1 of the 2026-05-12 batch, no DSI policy was
+loaded by any GitLab pipeline; the init stage silently skipped the
+`org_policy.load` call because `BRIK_POLICY_URL` was not in the job
+environment. The volume mount existed but the env var did not.
+
+**Resolution applied 2026-05-12**:
+- Added `environment = ["BRIK_POLICY_URL=file:///etc/brik/policy/brik-policy.yml"]`
+  to `[[runners]]` (not `[runners.docker]` -- TOML scope matters).
+- Added `/Users/jeanjerome/Projets/Getbrik/briklab/policy:/etc/brik/policy:ro`
+  to the runner's `volumes` list so the file is reachable inside
+  spawned job containers.
+- `docker restart brik-runner` to reload the config.
+
+Jenkins is unchanged: the file mount and `BRIK_POLICY_URL` were
+already wired via `config/jenkins/casc.yaml:51-52` and continue to
+work after the brik-side SC1-21 changes.
+
+**Verification**: `node-full` on `v0.1.0` tag PASSes after the fix,
+with `findings.sarif` entries tagged
+`brikSource=policy.org.path-allowlist` (vs `policy.built-in.below-severity`
+before).
+
+### Verified-resolved on 2026-05-12 (pending full --all re-run)
+
+These were observed failing on the 2026-05-12 baseline run and have
+fixes landed but not yet validated by a complete `--all` re-run:
+
+| Scenario              | Root cause                                | Fix applied                                                          |
+|-----------------------|-------------------------------------------|----------------------------------------------------------------------|
+| `node-full`           | npm bundled deps + Alpine apk env CVEs    | `brik-policy.yml` path-allowlist (verified PASS)                     |
+| `python-full`         | CPython interpreter CVE env               | `brik-policy.yml` path-allowlist (pending re-run)                    |
+| `java-full`           | OpenJDK runtime CVEs + Alpine apk env     | `brik-policy.yml` path-allowlist (verified PASS via solo run)        |
+| `node-complete`       | npm bundled deps + Alpine apk env CVEs    | `brik-policy.yml` path-allowlist (verified PASS)                     |
+| `java-complete`       | OpenJDK runtime CVEs + Alpine apk env     | `brik-policy.yml` path-allowlist + openjdk glob (verified PASS)      |
+| `node-security`       | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `node-deploy`         | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `node-deploy-dryrun`  | Bug G (eslint not installed)              | devDep on `node-deploy/` (shared dir; pending re-run)                |
+| `node-deploy-k8s`     | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `node-deploy-ssh`     | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `node-deploy-helm`    | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `node-deploy-gitops`  | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+| `workflow-trunk-main` | Bug G (eslint not installed)              | devDep + `eslint.config.js` (pending re-run)                         |
+
+The next `briklab.sh test --gitlab --all` should report 21+/28 PASS
+(13 here + the previously-passing minimals/completes/full). The
+remaining failures will all fall into OI-1, OI-2 or OI-3 above and
+need targeted attention as described.
 
 ## Recently Fixed (2026-05-08)
 
