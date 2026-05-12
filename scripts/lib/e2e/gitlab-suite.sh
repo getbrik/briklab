@@ -78,7 +78,7 @@ SCENARIOS=(
     "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600||||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
-    "error-build|node-error-build|main|brik-init||300|brik-build|||npm ERR!~SyntaxError|brik-init"
+    "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
     "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
     "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
