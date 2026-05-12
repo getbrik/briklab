@@ -67,10 +67,10 @@ SCENARIOS=(
     "workflow-trunk-feature|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-tag"
     # --- Error scenarios ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
-    "error-build|node-error-build|node-error-build|300|true||Build failed intentionally"
-    "error-test|node-error-test|node-error-test|300|true||FAIL~test.*failed"
-    "error-config|invalid-config|invalid-config|300|true||validat~invalid~schema"
-    "error-deploy|node-deploy-failure|node-deploy-failure|600|true||brik-nonexistent~NotFound"
+    "error-build|node-error-build|node-error-build|300|true|||Build failed intentionally"
+    "error-test|node-error-test|node-error-test|300|true|||FAIL~test.*failed"
+    "error-config|invalid-config|invalid-config|300|true|||validat~invalid~schema"
+    "error-deploy|node-deploy-failure|node-deploy-failure|600|true|||brik-nonexistent~NotFound"
 )
 
 # ---------------------------------------------------------------------------
