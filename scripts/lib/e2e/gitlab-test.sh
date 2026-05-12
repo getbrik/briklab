@@ -114,8 +114,11 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     PUSH_SHA=$(e2e.git.trigger_via_push "gitlab" "$PROJECT_SHORT" "$TRIGGER_REF")
     log_ok "Push SHA: ${PUSH_SHA}"
 
-    log_info "Waiting for pipeline triggered by SHA ${PUSH_SHA:0:8}..."
-    PIPELINE_RESULT=$(e2e.gitlab.wait_pipeline_by_sha "$PROJECT_ID" "$PUSH_SHA" 60 "$TIMEOUT_SECONDS")
+    # Strip "branch:" prefix when present so the ref filter matches the GitLab pipeline ref.
+    REF_FILTER="${TRIGGER_REF#branch:}"
+
+    log_info "Waiting for pipeline triggered by SHA ${PUSH_SHA:0:8} on ref '${REF_FILTER}'..."
+    PIPELINE_RESULT=$(e2e.gitlab.wait_pipeline_by_sha "$PROJECT_ID" "$PUSH_SHA" 60 "$TIMEOUT_SECONDS" "$REF_FILTER")
     PIPELINE_ID=$(echo "$PIPELINE_RESULT" | cut -d' ' -f1)
     FINAL_STATUS=$(echo "$PIPELINE_RESULT" | cut -d' ' -f2)
 else

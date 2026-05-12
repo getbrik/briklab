@@ -247,19 +247,25 @@ e2e.gitlab.wait_pipeline() {
 
 # Wait for a pipeline triggered by a specific SHA to appear, then wait for completion.
 # Args: $1 = project ID, $2 = commit SHA, $3 = timeout for discovery (default 60),
-#        $4 = timeout for pipeline completion (default 300)
+#        $4 = timeout for pipeline completion (default 300),
+#        $5 = ref filter (optional; when set, only the pipeline whose ref matches
+#             this value is selected -- needed when a push creates both a branch
+#             and a tag pipeline at the same SHA).
 # Output: "pipeline_id status" on stdout
 e2e.gitlab.wait_pipeline_by_sha() {
     local project_id="$1" sha="$2"
     local discover_timeout="${3:-60}"
     local completion_timeout="${4:-300}"
+    local ref_filter="${5:-}"
     local poll_interval=5
     local elapsed=0
     local pipeline_id=""
+    local query="projects/${project_id}/pipelines?sha=${sha}&per_page=10"
+    [[ -n "$ref_filter" ]] && query="${query}&ref=${ref_filter}"
 
-    # Phase 1: discover pipeline triggered by this SHA
+    # Phase 1: discover pipeline triggered by this SHA (filtered by ref when provided)
     while [[ $elapsed -lt $discover_timeout ]]; do
-        pipeline_id=$(e2e.gitlab.api_get "projects/${project_id}/pipelines?sha=${sha}&per_page=1" | \
+        pipeline_id=$(e2e.gitlab.api_get "$query" | \
             jq -r '.[0].id // empty' 2>/dev/null || true)
 
         if [[ -n "$pipeline_id" ]]; then
