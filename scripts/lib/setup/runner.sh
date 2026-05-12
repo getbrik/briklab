@@ -111,6 +111,20 @@ if ! docker exec brik-runner grep -q "allowed_pull_policies" /etc/gitlab-runner/
         /etc/gitlab-runner/config.toml 2>/dev/null || true
 fi
 
+# Set pull_policy to if-not-present so each job reuses locally cached
+# images. briklab.sh pull_brik_images pre-fetches them before running
+# tests so this is safe.
+log_info "Setting pull_policy = if-not-present..."
+if docker exec brik-runner grep -q "pull_policy = " /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s|pull_policy = .*|pull_policy = \"if-not-present\"|" \
+        /etc/gitlab-runner/config.toml
+else
+    docker exec brik-runner sed -i \
+        "/\[runners.docker\]/a\\    pull_policy = \"if-not-present\"" \
+        /etc/gitlab-runner/config.toml 2>/dev/null || true
+fi
+
 # ---------------------------------------------------------------------------
 # Step 3: Verification
 # ---------------------------------------------------------------------------
@@ -129,6 +143,10 @@ if ! docker exec brik-runner grep -q "request_concurrency = ${RUNNER_REQUEST_CON
 fi
 if ! docker exec brik-runner grep -q "memory = \"${RUNNER_JOB_MEMORY}\"" /etc/gitlab-runner/config.toml; then
     log_warn "job memory limit not set to ${RUNNER_JOB_MEMORY}"
+    errors=$((errors + 1))
+fi
+if ! docker exec brik-runner grep -q 'pull_policy = "if-not-present"' /etc/gitlab-runner/config.toml; then
+    log_warn "pull_policy not set to if-not-present"
     errors=$((errors + 1))
 fi
 
