@@ -43,6 +43,51 @@ load_env() {
 
 # === HELPERS ===
 
+# Brik runner images used by the briklab test-projects.
+# Mirrors brik/lib/pipeline/runner-images.sh (source of truth) restricted to
+# the (stack, version) combos actually exercised by briklab/test-projects/*,
+# plus the 4 special-purpose images set by shared-libs/gitlab/templates/pipeline.yml.
+# With pull_policy="if-not-present" on the runner, these are pulled once and
+# reused on every pipeline; we make sure they are local before launching tests.
+BRIK_RUNNER_IMAGES=(
+    "ghcr.io/getbrik/brik-runner-base:latest"
+    "ghcr.io/getbrik/brik-runner-node:22"
+    "ghcr.io/getbrik/brik-runner-node:24"
+    "ghcr.io/getbrik/brik-runner-python:3.13"
+    "ghcr.io/getbrik/brik-runner-python:3.14"
+    "ghcr.io/getbrik/brik-runner-java:21"
+    "ghcr.io/getbrik/brik-runner-java:25"
+    "ghcr.io/getbrik/brik-runner-rust:1"
+    "ghcr.io/getbrik/brik-runner-dotnet:9.0"
+    "ghcr.io/getbrik/brik-runner-dotnet:10.0"
+    "ghcr.io/getbrik/brik-runner-analysis:latest"
+    "ghcr.io/getbrik/brik-runner-scanner:latest"
+    "ghcr.io/getbrik/brik-runner-deploy:latest"
+)
+
+# Ensure all brik runner images are available locally. Pulls only those missing.
+pull_brik_images() {
+    local missing=()
+    local image
+    for image in "${BRIK_RUNNER_IMAGES[@]}"; do
+        if ! docker image inspect "$image" >/dev/null 2>&1; then
+            missing+=("$image")
+        fi
+    done
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        log_info "Brik runner images: ${#BRIK_RUNNER_IMAGES[@]} cached, none to pull"
+        return 0
+    fi
+    log_info "Pulling ${#missing[@]} brik runner image(s)..."
+    for image in "${missing[@]}"; do
+        if docker pull "$image" >/dev/null 2>&1; then
+            log_ok "  pulled ${image}"
+        else
+            log_warn "  failed to pull ${image} (runner will retry on first use)"
+        fi
+    done
+}
+
 # Reload Jenkins CasC configuration without a full restart.
 # Use when only CasC YAML changed (e.g. new job definitions).
 # For env var changes (e.g. BRIK_PUBLISH_NPM_TOKEN), a full restart is needed.
@@ -358,6 +403,7 @@ cmd_reset() {
 cmd_test() {
     check_prereqs
     load_env
+    pull_brik_images
 
     local platform=""          # gitlab or jenkins (required)
     local action=""            # (empty)=default, all, list, project, complete, groups
