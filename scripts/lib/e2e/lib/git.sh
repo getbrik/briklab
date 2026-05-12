@@ -33,13 +33,27 @@ e2e.git.init_from_template() {
     local tmp_dir
     tmp_dir=$(mktemp -d)
 
+    # Derive a stable commit timestamp from the briklab repo's HEAD so
+    # each invocation produces the same initial commit (same SHA, same
+    # tag commit) across pushes. Without this pin, gitlab-push and
+    # jenkins-push of the same test source create commits with different
+    # wallclock timestamps, which then propagate as different
+    # SOURCE_DATE_EPOCH values inside brik builds and break artifact
+    # reproducibility (e.g. python wheel sha256 drift on otherwise
+    # identical sources). Falls back to a fixed epoch when briklab is
+    # not a git repo.
+    local _commit_epoch
+    _commit_epoch="$( (cd "${BRIKLAB_ROOT:-.}" && git log -1 --format=%ct HEAD 2>/dev/null) || echo 1700000000)"
+
     cp -r "${source_dir}"/. "${tmp_dir}/"
     (
         cd "$tmp_dir" || exit 1
         rm -rf .git
         git init -b main >/dev/null 2>&1
         git add -A >/dev/null 2>&1
-        git commit -m "Initial commit" >/dev/null 2>&1
+        GIT_AUTHOR_DATE="@${_commit_epoch} +0000" \
+        GIT_COMMITTER_DATE="@${_commit_epoch} +0000" \
+            git commit -m "Initial commit" >/dev/null 2>&1
         if [[ -n "$tag" ]]; then
             git tag "$tag" >/dev/null 2>&1
         fi
