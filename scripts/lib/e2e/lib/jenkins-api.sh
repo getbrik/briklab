@@ -92,6 +92,51 @@ e2e.jenkins.get_crumb() {
 # Build management
 # ---------------------------------------------------------------------------
 
+# Pre-register parameters on a job via the /scriptText Groovy API.
+# Jenkins evaluates a Pipeline's properties([parameters(...)]) block only
+# when the build actually runs, so the very first /buildWithParameters POST
+# on a never-built job is rejected with HTTP 400 ("Use POST to build a job
+# with parameters") because no ParametersDefinitionProperty exists yet.
+# Adding the property up-front via scriptText makes /buildWithParameters
+# succeed on the first call without needing to first run an unparameterized
+# build (which would deploy snapshots or fail outright).
+#
+# Args: $1 = job full-name (e.g. "node-deploy-failure")
+# Side effect: idempotently attaches BRIK_DRY_RUN + BRIK_TAG to the job.
+e2e.jenkins.pre_register_params() {
+    local job_full_name="$1"
+    local crumb
+    crumb=$(e2e.jenkins.get_crumb)
+    local crumb_args=()
+    [[ -n "$crumb" ]] && crumb_args=(-H "$crumb")
+
+    local groovy
+    groovy=$(cat <<'GROOVY'
+import jenkins.model.Jenkins
+import hudson.model.ParametersDefinitionProperty
+import hudson.model.BooleanParameterDefinition
+import hudson.model.StringParameterDefinition
+def j = Jenkins.instance.getItemByFullName('__JOB__')
+if (j == null) { println 'job-not-found'; return }
+if (j.getProperty(ParametersDefinitionProperty.class) != null) { println 'already-set'; return }
+j.addProperty(new ParametersDefinitionProperty([
+    new BooleanParameterDefinition('BRIK_DRY_RUN', false, 'Skip destructive deploy actions.'),
+    new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.')
+]))
+j.save()
+println 'registered'
+GROOVY
+)
+    groovy="${groovy//__JOB__/${job_full_name}}"
+
+    curl -s --max-time 30 -X POST \
+        -b "$_E2E_JENKINS_COOKIE_JAR" \
+        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
+        ${crumb_args[@]+"${crumb_args[@]}"} \
+        --data-urlencode "script=${groovy}" \
+        "${_E2E_JENKINS_URL}/scriptText" 2>/dev/null
+}
+
 # Trigger a build and return the build number.
 # Args: $1 = job name, $2 = CI variables (optional, "KEY=VAL,KEY2=VAL2")
 # Output: build number on stdout
@@ -117,6 +162,23 @@ e2e.jenkins.trigger_build() {
     local has_params
     has_params=$(e2e.jenkins.api_get "${job_path}/api/json?tree=property[parameterDefinitions[name]]" 2>/dev/null | \
         jq -r '[.property[]?.parameterDefinitions // []] | flatten | length' 2>/dev/null || echo "0")
+
+    # First-build race: a Pipeline that declares parameters via
+    # properties([parameters(...)]) only registers them when the build
+    # actually runs, so /buildWithParameters fails on the very first
+    # invocation. When ci_vars is requested but params are not yet
+    # registered, pre-register them via the /scriptText admin API so the
+    # POST below succeeds. Multibranch sub-jobs (E2E_JENKINS_BRANCH set)
+    # are skipped because their property model is owned by the parent.
+    # pre_register_params calls get_crumb internally, which rewrites the
+    # cookie jar -- re-fetch the crumb afterwards so the build POST below
+    # ships a crumb bound to the current session.
+    if [[ -n "$ci_vars" && "${has_params:-0}" -eq 0 && -z "${E2E_JENKINS_BRANCH:-}" ]]; then
+        e2e.jenkins.pre_register_params "$job_name" >/dev/null 2>&1 || true
+        crumb=$(e2e.jenkins.get_crumb)
+        has_params=$(e2e.jenkins.api_get "${job_path}/api/json?tree=property[parameterDefinitions[name]]" 2>/dev/null | \
+            jq -r '[.property[]?.parameterDefinitions // []] | flatten | length' 2>/dev/null || echo "0")
+    fi
 
     local endpoint="build"
     local trigger_data=()

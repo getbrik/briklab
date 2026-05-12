@@ -110,8 +110,14 @@ _rollback_trigger_deploy() {
     # Wait briefly for Gitea webhook
     [[ "$tag" == "v0.2.0" ]] && sleep 5
 
+    # Signal the tag via BRIK_TAG so the Jenkins wrapper classifies the
+    # build as a release (context=release), matching GitLab's CI_COMMIT_TAG
+    # semantics. Without this, both rollback steps build the latest main
+    # HEAD as a snapshot and tag the image with the short SHA instead of
+    # the release tag -- the rollback assertion then compares image:0.1.0
+    # against image:<random-sha> and the test fails.
     local build_number
-    build_number=$(e2e.jenkins.trigger_build "$JOB_NAME") || {
+    build_number=$(e2e.jenkins.trigger_build "$JOB_NAME" "BRIK_TAG=${tag}") || {
         log_error "Failed to trigger ${tag} build"
         exit 1
     }
