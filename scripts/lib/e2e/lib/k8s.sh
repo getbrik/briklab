@@ -114,5 +114,7 @@ e2e.k8s.delete_namespace() {
 # Args: $1 = namespace
 e2e.k8s.clean_namespace() {
     local namespace="$1"
-    kubectl delete all --all -n "$namespace" >/dev/null 2>&1 || true
+    # --timeout bounds the call: a self-heal race (or a stuck finalizer)
+    # degrades to a per-namespace timeout instead of an infinite hang.
+    kubectl delete all --all -n "$namespace" --timeout=120s >/dev/null 2>&1 || true
 }

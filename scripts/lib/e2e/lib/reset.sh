@@ -165,6 +165,24 @@ e2e.reset.argocd_app() {
         -X DELETE \
         "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}?cascade=true" &>/dev/null || true
 
+    # Wait for the app to actually disappear. The DELETE above is async;
+    # returning before ArgoCD has removed the app leaves its controller
+    # live and free to self-heal once more during the namespace cleanup
+    # that e2e.reset.all runs next. Bounded: a curl failure (ArgoCD
+    # unreachable) makes app_exists report "gone" and exits the loop.
+    local timeout=180 poll_interval=5 elapsed=0
+    while [[ $elapsed -lt $timeout ]]; do
+        e2e.argocd.app_exists "$app_name" || break
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+    [[ $elapsed -gt 0 ]] && echo "" >&2
+    if e2e.argocd.app_exists "$app_name"; then
+        log_warn "ArgoCD app '${app_name}' still present after ${timeout}s (continuing)"
+        return 0
+    fi
+
     log_ok "ArgoCD app deleted: ${app_name}"
 }
 
@@ -406,8 +424,12 @@ e2e.reset.all() {
     else
         log_warn "No platform specified -- skipping repo reset"
     fi
-    e2e.reset.all_deploy_namespaces
+    # ArgoCD apps MUST be deleted before the namespaces: brik-e2e-gitops /
+    # brik-e2e-rollback run with selfHeal=true and would recreate
+    # resources as fast as all_deploy_namespaces deletes them, deadlocking
+    # the reset on `kubectl delete all --all`.
     e2e.reset.all_argocd_apps
+    e2e.reset.all_deploy_namespaces
     e2e.reset.nexus_artifacts
     e2e.reset.registry_images
     log_ok "=== Full E2E reset complete ==="
