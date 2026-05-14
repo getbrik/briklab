@@ -197,6 +197,12 @@ setup_nexus_ci_variables() {
     _set_group_variable "BRIK_REGISTRY_USER" "admin" "false" && count=$((count + 1))
     _set_group_variable "BRIK_REGISTRY_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
 
+    # Nexus 3 UI URL (port 8081) -- distinct from the docker push endpoint
+    # (port 8082). Picked up by lib/transverse/config.sh and emitted as
+    # business.registry.ui_url so the HTML report shows a clickable link
+    # to the image browser page.
+    _set_group_variable "BRIK_PACKAGE_REGISTRY_UI_URL" "http://nexus.briklab.test:8081" "false" && count=$((count + 1))
+
     # SSH deploy: skip strict host key checking (local lab only)
     _set_group_variable "BRIK_SSH_STRICT_HOST_KEY" "no" "false" && count=$((count + 1))
 

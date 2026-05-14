@@ -28,6 +28,12 @@ jenkins:
             value: "admin"
           - key: BRIK_REGISTRY_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
+          # Nexus 3 UI URL (port 8081) -- distinct from the docker push
+          # endpoint (port 8082). Surfaced as business.registry.ui_url in
+          # the aggregate report so the HTML view links to the actual
+          # image browser page.
+          - key: BRIK_PACKAGE_REGISTRY_UI_URL
+            value: "http://nexus.briklab.test:8081"
           - key: BRIK_SSH_STRICT_HOST_KEY
             value: "no"
           # Path to the SSH private key for node-deploy-ssh E2E test.
