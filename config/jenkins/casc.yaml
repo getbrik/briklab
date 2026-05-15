@@ -101,9 +101,25 @@ tool:
       - name: Default
         home: git
 
+# Each pipelineJob below declares BRIK_DRY_RUN and BRIK_TAG via the Job DSL
+# `parameters {}` block so they exist in the Jenkins UI from the moment the
+# job is created. This mirrors the `properties([parameters([...])])` block
+# in shared-libs/jenkins/vars/brikPipeline.groovy, which is the source of
+# truth and re-applies the same params on each build (idempotent update).
+# Without this duplication the first build of a freshly-created job has no
+# "Build with Parameters" button -- a long-standing Jenkins limitation:
+# parameters declared inside the pipeline body only register *after* the
+# first run. Note the syntax difference: at Job DSL level it's
+# `parameters {}` directly under `pipelineJob`, NOT
+# `properties { parameters {} }` (that nesting is the Jenkinsfile-side
+# Workflow plugin DSL, which is incompatible with Job DSL).
 jobs:
   - script: >
       pipelineJob('node-minimal') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -120,6 +136,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-complete') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -136,6 +156,10 @@ jobs:
       }
   - script: >
       pipelineJob('python-complete') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -152,6 +176,10 @@ jobs:
       }
   - script: >
       pipelineJob('java-complete') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -168,6 +196,10 @@ jobs:
       }
   - script: >
       pipelineJob('rust-complete') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -184,6 +216,10 @@ jobs:
       }
   - script: >
       pipelineJob('dotnet-complete') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -200,6 +236,10 @@ jobs:
       }
   - script: >
       pipelineJob('python-minimal') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -216,6 +256,10 @@ jobs:
       }
   - script: >
       pipelineJob('java-minimal') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -232,6 +276,10 @@ jobs:
       }
   - script: >
       pipelineJob('rust-minimal') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -248,6 +296,10 @@ jobs:
       }
   - script: >
       pipelineJob('dotnet-minimal') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -264,6 +316,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-full') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -280,6 +336,10 @@ jobs:
       }
   - script: >
       pipelineJob('python-full') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -296,6 +356,10 @@ jobs:
       }
   - script: >
       pipelineJob('java-full') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -312,6 +376,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-security') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -328,6 +396,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -344,6 +416,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-k8s') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -360,6 +436,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-ssh') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -376,6 +456,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-helm') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -392,6 +476,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-gitops') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -408,6 +496,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-gitops-rollback') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -424,6 +516,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-deploy-failure') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -466,6 +562,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-error-build') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -482,6 +582,10 @@ jobs:
       }
   - script: >
       pipelineJob('node-error-test') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
@@ -498,6 +602,10 @@ jobs:
       }
   - script: >
       pipelineJob('invalid-config') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
         definition {
           cpsScm {
             scm {
