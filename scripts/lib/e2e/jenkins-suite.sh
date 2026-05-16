@@ -202,11 +202,17 @@ _suite_run_scenario() {
     # instead of a tag push (release context) -- breaking parity. Derive
     # the ref from the scenario name so each workflow variant pushes the
     # right git reference and Multibranch routes to the right build kind.
+    # API-mode scenarios that inject BRIK_TAG also export the matching
+    # trigger_ref so test-side assertions (e.g. assert.image_tag) treat
+    # the build as a release-context tag push, mirroring GitLab.
     local trigger_ref=""
     case "$name" in
         workflow-trunk-tag)     trigger_ref="v0.2.0" ;;
         workflow-trunk-feature) trigger_ref="branch:feature/test" ;;
     esac
+    if [[ -z "$trigger_ref" && -n "$brik_tag" ]]; then
+        trigger_ref="$brik_tag"
+    fi
 
     E2E_JENKINS_JOB="$job" \
     E2E_JENKINS_TIMEOUT="$timeout" \
