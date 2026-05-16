@@ -260,6 +260,14 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" && "$FINAL_RESU
     if e2e.jenkins.download_artifact "$JOB_NAME" "$BUILD_NUMBER" \
             "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
         assert.aggregate_v1 "$AGG_FILE" "jenkins"
+        # On tag scenarios (E2E_TRIGGER_REF=v<N>...), assert the package
+        # image tag mirrors the release version. Parity counterpart to the
+        # GitLab assertion -- both platforms must produce the same tag on
+        # the same release commit.
+        _trigger_ref="${E2E_TRIGGER_REF:-main}"
+        if [[ "$_trigger_ref" =~ ^v[0-9] ]]; then
+            assert.image_tag "$AGG_FILE" "${_trigger_ref#v}"
+        fi
     else
         log_warn "could not download aggregate-report.json from build (skipping aggregate assertions)"
     fi

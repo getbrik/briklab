@@ -299,6 +299,32 @@ assert.skipped() {
 }
 
 # ---------------------------------------------------------------------------
+# Package stage image assertions
+# ---------------------------------------------------------------------------
+
+# assert.image_tag <aggregate_json_path> <expected_tag>
+# Reads .stages[] | select(.stage == "package") | .business.image.tag from the
+# aggregate report and compares it to expected. Catches the parity failure
+# class where one platform tags with a release version while the other tags
+# with a short SHA (see CHANGELOG: GitLab pipeline.env propagation fix).
+assert.image_tag() {
+    local file="$1" expected="$2"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "Package image tag is '${expected}'" "aggregate file missing: ${file}"
+        return
+    fi
+    local actual
+    actual=$(jq -r '
+        (.stages[]? | select(.stage == "package") | .business.image.tag) // "<absent>"
+    ' "$file" 2>/dev/null || echo "<jq-error>")
+    if [[ "$actual" == "$expected" ]]; then
+        assert._pass "Package image tag is '${expected}'"
+    else
+        assert._fail "Package image tag is '${expected}'" "got '${actual}'"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Pipeline / Build status assertions
 # ---------------------------------------------------------------------------
 

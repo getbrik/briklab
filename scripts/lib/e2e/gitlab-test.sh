@@ -254,6 +254,13 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
         if e2e.gitlab.download_artifact "$PROJECT_ID" "$NOTIFY_JOB_ID" \
                 "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
             assert.aggregate_v1 "$AGG_FILE" "gitlab"
+            # On tag pushes (v<N>...), assert the package image tag mirrors
+            # the release version. Catches the GitLab pipeline.env regression
+            # class (package falls back to short SHA when BRIK_APP_VERSION
+            # is dropped by reports.dotenv collisions).
+            if [[ "$TRIGGER_REF" =~ ^v[0-9] ]]; then
+                assert.image_tag "$AGG_FILE" "${TRIGGER_REF#v}"
+            fi
         else
             log_warn "could not download aggregate-report.json from notify job (skipping aggregate assertions)"
         fi
