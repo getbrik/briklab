@@ -22,6 +22,7 @@ deploy:
   environments:
     staging:
       target: gitops
+      strategy: rolling
       repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-rollback.git
       path: k8s
       source: k8s
