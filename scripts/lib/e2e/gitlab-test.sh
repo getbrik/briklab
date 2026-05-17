@@ -188,6 +188,34 @@ for job_name in "${REQUIRED_JOBS[@]}"; do
     fi
 done
 
+# 7b. Check forbidden jobs (orchestrator-gating contract). A forbidden
+# job MUST NOT appear in the pipeline -- a present-but-skipped job
+# still fails the assertion. The chantier commit-context scenarios
+# rely on this to prove rules:/rules:changes actually drop the job at
+# pipeline-creation time, not just at script self-skip time.
+if [[ -n "${E2E_FORBIDDEN_JOBS:-}" ]]; then
+    IFS=',' read -ra _forbidden_jobs <<< "$E2E_FORBIDDEN_JOBS"
+    for fj in "${_forbidden_jobs[@]}"; do
+        fj="$(echo "$fj" | tr -d '[:space:]')"
+        [[ -z "$fj" ]] && continue
+        # The job is forbidden iff GitLab did not materialise it at all.
+        # get_job_status returns empty string when no job with that name
+        # exists in the pipeline.
+        _fj_status=$(e2e.gitlab.get_job_status "$JOBS" "$fj")
+        # get_job_status returns "not_found" when no job with that name
+        # exists in the pipeline, or an empty string when the jq lookup
+        # fails entirely. Both mean the orchestrator correctly skipped
+        # the job at materialisation time.
+        if [[ -z "$_fj_status" || "$_fj_status" == "not_found" ]]; then
+            log_ok "Forbidden job '${fj}' is absent (correctly skipped at orchestrator level)"
+            E2E_ASSERT_PASS=$((E2E_ASSERT_PASS + 1))
+        else
+            log_error "Forbidden job '${fj}' is PRESENT with status '${_fj_status}' -- orchestrator gating failed"
+            E2E_ASSERT_FAIL=$((E2E_ASSERT_FAIL + 1))
+        fi
+    done
+fi
+
 # 8. Check expected failed job and error pattern
 if [[ "$EXPECT_FAILURE" == "true" && -n "$EXPECT_FAILED_JOB" ]]; then
     assert.job_status "$JOBS" "$EXPECT_FAILED_JOB" "failed"

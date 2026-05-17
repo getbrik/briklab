@@ -252,8 +252,41 @@ e2e.git.trigger_via_push() {
             clone "$remote_url" repo >/dev/null 2>&1 || exit 1
         cd repo || exit 1
 
-        # Write trigger file to ensure a new commit
-        printf '%s %s\n' "$(date +%s)" "$trigger_ref" > .brik-trigger
+        # Trigger commit content depends on the ref. The default writes a
+        # neutral .brik-trigger file. The commit-context scenarios need a
+        # diff that classifies as docs-only or lock-only, so they patch
+        # only files of the matching class.
+        local _ts
+        _ts="$(date +%s)"
+        case "$trigger_ref" in
+            branch:docs-only-*)
+                # Append a delta line to docs/README.md. The test fixture
+                # must already ship docs/ (see test-projects/node-commit-context).
+                # _changed_files in init.sh classifies docs/* as docs-only.
+                if [[ ! -d docs ]]; then
+                    echo "branch:docs-only-* requires docs/ in the test fixture" >&2
+                    exit 1
+                fi
+                printf 'trigger %s\n' "$_ts" >> docs/README.md
+                ;;
+            branch:lock-only-*)
+                # Mutate package-lock.json by adding a benign top-level
+                # _brikTriggerTimestamp field. _changed_files in init.sh
+                # classifies a root-level package-lock.json change as
+                # lock-only.
+                if [[ ! -f package-lock.json ]]; then
+                    echo "branch:lock-only-* requires package-lock.json at repo root" >&2
+                    exit 1
+                fi
+                jq --arg ts "$_ts" '. + {_brikTriggerTimestamp: $ts}' \
+                    package-lock.json > package-lock.json.tmp \
+                    && mv package-lock.json.tmp package-lock.json
+                ;;
+            *)
+                # Default: neutral trigger that classifies as feature/main.
+                printf '%s %s\n' "$_ts" "$trigger_ref" > .brik-trigger
+                ;;
+        esac
         git add -A >/dev/null 2>&1
         git commit -m "trigger: ${trigger_ref}" >/dev/null 2>&1
 
