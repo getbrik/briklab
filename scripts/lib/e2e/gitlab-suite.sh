@@ -48,6 +48,9 @@ ensure_gitlab_pat
 
 SCENARIOS=(
     # --- Minimal stack coverage (branch push: no release, no package) ---
+    # NOTE: node-minimal has no .deploy block; required_jobs still lists brik-deploy here
+    # because P0 gating is not yet live. Once chantier/commit-context-and-orchestrator-gating
+    # is published on briklab, drop brik-deploy from node-minimal's required_jobs list.
     "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
     "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
     "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
@@ -76,6 +79,38 @@ SCENARIOS=(
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600|||workflow-trunk-main"
     "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600|||workflow-trunk-tag"
+    # --- Orchestrator gating: no-package / no-deploy (P0) + commit-context (P2) ---
+    # PREREQUISITE: all 4 scenarios below require the chantier branch to be available
+    # as a Git ref on briklab's local GitLab:
+    #   brik/gitlab-templates@chantier/commit-context-and-orchestrator-gating
+    # Until that ref is published, these scenarios will fail at template-include time.
+    # Run them individually once the ref is live:
+    #   briklab.sh test --only node-no-package
+    #   briklab.sh test --only node-no-deploy
+    #   briklab.sh test --only commit-docs-only
+    #   briklab.sh test --only commit-lock-only
+    #
+    # node-no-package: project with lint/sast/scan but no .package block.
+    # brik-package and brik-container-scan must NOT appear in the instantiated pipeline (P0 rules:).
+    "node-no-package|node-no-package|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    # node-no-deploy: project with lint/sast/scan but no .package and no .deploy block.
+    # brik-package, brik-container-scan, and brik-deploy must NOT appear (P0 rules:).
+    "node-no-deploy|node-no-deploy|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    # commit-docs-only: two-step scenario -- baseline push then a docs-only delta.
+    # BRIK_COMMIT_CONTEXT=docs-only must be detected by init (P1).
+    # Only brik-init, brik-lint, brik-notify must be instantiated (P2 matrix row: docs-only).
+    # Step 2 triggers on branch:docs-only-delta; the push helper must land a commit
+    # touching only docs/README.md before triggering the assertion pipeline.
+    # TODO: implement two-step push in gitlab-test.sh or a dedicated gitlab-commit-context.sh
+    # (sketched only -- not executable until P1+P2 are merged and ref is published).
+    "commit-docs-only|node-commit-context|branch:docs-only-delta|brik-init,brik-lint,brik-notify||600"
+    # commit-lock-only: two-step scenario -- baseline push then a lock-only delta.
+    # BRIK_COMMIT_CONTEXT=lock-only must be detected by init (P1).
+    # Only brik-init, brik-build, brik-scan, brik-test, brik-notify must be instantiated
+    # (P2 matrix row: lock-only -- no lint, no sast, no package/deploy).
+    # Step 2 triggers on branch:lock-only-delta; push helper must touch only package-lock.json.
+    # TODO: same two-step push infrastructure as commit-docs-only.
+    "commit-lock-only|node-commit-context|branch:lock-only-delta|brik-init,brik-build,brik-scan,brik-test,brik-notify||600"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
     "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
@@ -108,6 +143,7 @@ _suite_get_depends_on() { IFS='|' read -r _ _ _ _ _ _ _ _ dep _ _ <<< "$1"; echo
 #   F: gitops + rollback (sequential)
 #   G: workflow (sequential)
 #   H: error scenarios
+#   I: orchestrator gating (no-package, no-deploy, commit-context)
 _suite_get_group() {
     local name
     IFS='|' read -r name _ <<< "$1"
@@ -120,6 +156,7 @@ _suite_get_group() {
         *-deploy*)           echo "E" ;;
         workflow-*)          echo "G" ;;
         error-*)             echo "H" ;;
+        *-no-*|commit-*)     echo "I" ;;
         *)                   echo "" ;;
     esac
 }

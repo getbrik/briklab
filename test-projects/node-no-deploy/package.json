@@ -1,0 +1,15 @@
+{
+  "name": "node-no-deploy",
+  "version": "1.0.0",
+  "description": "Node.js fixture without package or deploy blocks for Brik E2E gating tests",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --platform=node --outfile=dist/index.js",
+    "test": "node test/index.test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "eslint": "^9.0.0"
+  },
+  "license": "MIT"
+}

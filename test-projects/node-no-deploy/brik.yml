@@ -1,0 +1,17 @@
+version: 1
+project:
+  name: node-no-deploy
+  stack: node
+  stack_version: "22"
+quality:
+  lint:
+    enabled: true
+    tool: eslint
+security:
+  deps:
+    severity: high
+  secrets: {}
+test:
+  framework: npm
+# No .package block and no .deploy block -- brik-package, brik-container-scan,
+# and brik-deploy must NOT be instantiated (P0 gating)

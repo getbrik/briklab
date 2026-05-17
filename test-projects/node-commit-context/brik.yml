@@ -1,0 +1,19 @@
+version: 1
+project:
+  name: node-commit-context
+  stack: node
+  stack_version: "22"
+quality:
+  lint:
+    enabled: true
+    tool: eslint
+security:
+  deps:
+    severity: high
+  sast: {}
+  secrets: {}
+test:
+  framework: npm
+# No .package and no .deploy blocks.
+# Used for commit-context E2E scenarios (docs-only, lock-only).
+# The pipeline dispatched here varies by BRIK_COMMIT_CONTEXT detected in init.
