@@ -82,6 +82,12 @@ SCENARIOS=(
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
     "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
     "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
+    # --- Dynamic-pipeline scenarios (parent: brik-plan + brik-downstream;
+    # the child pipeline is asserted via its own pipeline ID by the suite-runner
+    # hook below. Required-jobs here only covers parent jobs.) ---
+    "node-plan-balanced|node-plan-balanced|main|brik-plan,brik-downstream||900"
+    "node-plan-safe|node-plan-safe|main|brik-plan,brik-downstream||900"
+    "node-plan-tag|node-plan-tag|v0.1.0|brik-plan,brik-downstream||900"
 )
 
 # ---------------------------------------------------------------------------
@@ -120,6 +126,7 @@ _suite_get_group() {
         *-deploy*)           echo "E" ;;
         workflow-*)          echo "G" ;;
         error-*)             echo "H" ;;
+        node-plan-*)         echo "I" ;;
         *)                   echo "" ;;
     esac
 }
@@ -192,6 +199,15 @@ _suite_run_scenario() {
         trigger_mode="push"
     fi
 
+    # Dynamic-pipeline scenarios: the parent only runs brik-plan +
+    # brik-downstream. brik-notify (and the aggregate-report.json it
+    # produces) lives in the triggered child pipeline, so the
+    # parent-pipeline log/aggregate checks would falsely fail.
+    local e2e_skip_log_check="false"
+    if [[ "$name" == node-plan-* ]]; then
+        e2e_skip_log_check="true"
+    fi
+
     E2E_PROJECT_PATH="$project_encoded" \
     E2E_REQUIRED_JOBS="$required" \
     E2E_TRIGGER_REF="$ref" \
@@ -200,6 +216,7 @@ _suite_run_scenario() {
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
+    E2E_SKIP_LOG_CHECK="$e2e_skip_log_check" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"
