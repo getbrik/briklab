@@ -82,12 +82,15 @@ SCENARIOS=(
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
     "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
     "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
-    # --- Dynamic-pipeline scenarios (parent: brik-plan + brik-downstream;
-    # the child pipeline is asserted via its own pipeline ID by the suite-runner
-    # hook below. Required-jobs here only covers parent jobs.) ---
-    "node-plan-balanced|node-plan-balanced|main|brik-plan,brik-downstream||900"
-    "node-plan-safe|node-plan-safe|main|brik-plan,brik-downstream||900"
-    "node-plan-tag|node-plan-tag|v0.1.0|brik-plan,brik-downstream||900"
+    # --- Dynamic-pipeline scenarios (parent: brik-plan + brik-downstream
+    # bridge; the bridge inherits the child pipeline status via
+    # strategy:depend, so a green parent pipeline implies a green child.
+    # brik-downstream is a `trigger:` bridge -- GitLab's /jobs endpoint
+    # does NOT return bridges, so we only require brik-plan in the suite
+    # and trust the overall parent status to cover the rest.) ---
+    "node-plan-balanced|node-plan-balanced|main|brik-plan||900"
+    "node-plan-safe|node-plan-safe|main|brik-plan||900"
+    "node-plan-tag|node-plan-tag|v0.1.0|brik-plan||900"
 )
 
 # ---------------------------------------------------------------------------
