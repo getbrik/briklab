@@ -1,0 +1,4 @@
+# .brik-env is generated at runtime by the Jenkins wrapper to pass env
+# vars (including ARGOCD_AUTH_TOKEN) into the runner container. It is
+# never committed and lives only in the CI workspace.
+.brik-env

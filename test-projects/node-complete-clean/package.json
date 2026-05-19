@@ -1,0 +1,26 @@
+{
+  "name": "node-complete-clean",
+  "version": "1.0.0",
+  "description": "Complete Node.js project (clean deps, scan-green) for Brik E2E testing with Nexus publish",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --platform=node --outfile=dist/index.js --minify",
+    "test": "jest",
+    "lint": "eslint src/",
+    "format": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^10.0.0",
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "prettier": "^3.4.0"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100
+  },
+  "license": "MIT"
+}

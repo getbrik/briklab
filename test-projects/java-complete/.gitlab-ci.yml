@@ -7,12 +7,12 @@ include:
     ref: v0.1.0
     file: '/templates/dynamic-pipeline.yml'
 
-# java-complete uses the jacoco maven plugin (declared in pom.xml) so the
-# coverage report is jacoco, not the cobertura default. Override only the
-# coverage_report block; GitLab merges this hash into the templated job.
-brik-test:
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: jacoco
-        path: brik-artifacts/test/coverage/jacoco.xml
+# NOTE: java-complete used to override brik-test.artifacts.reports.coverage_report
+# to point at jacoco.xml. That override worked with the legacy
+# /templates/pipeline.yml because brik-test was defined in the include
+# that the parent merged into. With dynamic-pipeline.yml the parent has
+# only brik-plan + brik-downstream, so a top-level `brik-test:` block at
+# the parent is rejected by GitLab CI lint ("config should implement the
+# script:, run:, or trigger: keyword"). The jacoco XML is still produced
+# as a Brik artifact -- only the GitLab UI coverage badge is lost until
+# the child-pipeline generator learns to forward per-project overrides.

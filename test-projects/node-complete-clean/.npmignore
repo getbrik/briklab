@@ -1,0 +1,8 @@
+node_modules/
+.npm/
+.cache/
+.semgrep/
+.brik-env
+.m2/
+.gradle/
+*.log

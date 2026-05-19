@@ -61,7 +61,13 @@ SCENARIOS=(
     "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
     "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
     # --- Full pipelines (tag push: release + package; deploy via opt-in) ---
-    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    # node-full is INTENTIONALLY a CVE-detection fixture: its package-lock.json
+    # carries a known-vulnerable transitive dep (brace-expansion 5.0.5,
+    # GHSA-jxxr-4gwj-5jf2) so brik-scan exits non-zero. We expect-fail at
+    # brik-scan to prove brik catches real CVEs. The "node-full-clean" twin
+    # below uses up-to-date deps and is expected to pass end-to-end.
+    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast||600|brik-scan|BRIK_WITH_DEPLOY=true||GHSA|brik-init,brik-release,brik-build,brik-lint,brik-sast"
+    "node-full-clean|node-full-clean|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
     "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
     "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
     # --- Security and Deploy ---
@@ -74,7 +80,13 @@ SCENARIOS=(
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # --- Complete pipelines with Nexus publish (tag push: all stages + publish, no deploy) ---
-    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
+    # node-complete is the CVE-detection counterpart of node-complete-clean:
+    # the package-lock.json still carries the brace-expansion CVE, and the
+    # source has intentional lint format defects. The scenario expect-fails
+    # at brik-lint (first failing job in the dynamic ordering). The clean
+    # twin below has updated deps and prettier-clean sources.
+    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build||900|brik-lint||||format|brik-init,brik-release,brik-build"
+    "node-complete-clean|node-complete-clean|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
@@ -94,7 +106,12 @@ SCENARIOS=(
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
     "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
-    "error-config|invalid-config|main|||300|brik-plan|||validat~invalid~schema|"
+    # brik-init is still the failing job: brik-plan in the parent succeeds
+    # (the planner does not validate brik.yml schema, only the topology),
+    # then the child pipeline reaches brik-init which calls config.read
+    # and fails. The bridge-follow in gitlab-test.sh makes PIPELINE_ID
+    # point at the child, so checking expect_failed_job=brik-init works.
+    "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
     "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package||600|brik-deploy|BRIK_WITH_DEPLOY=true||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package"
     # --- Explicit mode/context coverage for the planner ---
     # Every project now includes /templates/dynamic-pipeline.yml, so
