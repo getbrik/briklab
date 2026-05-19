@@ -81,7 +81,14 @@ SCENARIOS=(
     "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     # --- Workflow scenarios (push-driven, sequential) ---
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
-    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true||workflow-trunk-main"
+    # workflow-trunk-tag intentionally does NOT set BRIK_WITH_DEPLOY:
+    # adding any E2E_CI_VARIABLES forces the harness from push mode
+    # to API trigger, and an API trigger on v0.2.0 reuses the stale
+    # tag commit (pre-migration) so the pipeline would resolve the
+    # legacy /templates/pipeline.yml. Push mode rewrites the tag at
+    # the latest source-tree commit and uses the current dynamic
+    # template. Deploy coverage is provided by the node-deploy* family.
+    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||600|||workflow-trunk-main"
     "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600|||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
