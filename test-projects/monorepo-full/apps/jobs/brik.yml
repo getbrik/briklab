@@ -1,0 +1,7 @@
+version: 1
+project:
+  name: monorepo-jobs
+  stack: java
+  stack_version: "21"
+test:
+  framework: junit
