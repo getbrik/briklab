@@ -1,0 +1,10 @@
+version: 1
+project:
+  name: monorepo-full
+  stack: node
+  stack_version: "22"
+pipeline:
+  selection:
+    mode: balanced
+test:
+  framework: npm
