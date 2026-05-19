@@ -20,8 +20,31 @@ _ensure_argocd_brik_account() {
 
     kubectl patch configmap argocd-cm -n argocd --type merge \
         -p '{"data":{"accounts.brik":"apiKey"}}' 2>/dev/null || true
+
+    # ArgoCD v3.x enforces stricter RBAC: with the apiKey JWT subject
+    # "brik:apiKey", the grouping rule "g, brik, role:admin" alone has
+    # been observed on v3.3.7 to leave the apiKey session without
+    # effective application/* permissions (server logs: "application
+    # does not exist" + PermissionDenied for user brik on app
+    # get/sync). Granting explicit per-resource policies on a
+    # project-scoped role works regardless of subject normalisation.
+    # We keep the legacy admin grouping for backward compat AND add an
+    # explicit role:brik with the actions the briklab E2E scenarios
+    # need (sync/get/override on applications, get/list on repos).
+    local _rbac
+    read -r -d '' _rbac <<'POLICY' || true
+p, role:brik, applications, get, */*, allow
+p, role:brik, applications, sync, */*, allow
+p, role:brik, applications, action/*, */*, allow
+p, role:brik, applications, override, */*, allow
+p, role:brik, repositories, get, *, allow
+p, role:brik, repositories, list, *, allow
+p, role:brik, clusters, get, *, allow
+g, brik, role:admin
+g, brik, role:brik
+POLICY
     kubectl patch configmap argocd-rbac-cm -n argocd --type merge \
-        -p '{"data":{"policy.csv":"g, brik, role:admin\n"}}' 2>/dev/null || true
+        -p "$(jq -nc --arg p "$_rbac" '{data:{"policy.csv":$p}}')" 2>/dev/null || true
 
     # Check if restart is needed (account just created or not yet recognized)
     local acct_check
