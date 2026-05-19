@@ -1,7 +1,7 @@
 {
-  "name": "node-complete-clean",
+  "name": "node-complete-cve",
   "version": "1.0.0",
-  "description": "Complete Node.js project (clean deps, scan-green) for Brik E2E testing with Nexus publish",
+  "description": "Complete Node.js fixture combining a known-vulnerable transitive dep (brace-expansion 5.0.5) and prettier-flagged format defects. Brik-lint and brik-scan are expected to fail on this project.",
   "main": "src/index.js",
   "scripts": {
     "build": "esbuild src/index.js --bundle --platform=node --outfile=dist/index.js --minify",

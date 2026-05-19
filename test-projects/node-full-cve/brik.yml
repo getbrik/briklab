@@ -1,6 +1,6 @@
 version: 1
 project:
-  name: node-full-clean
+  name: node-full-cve
   stack: node
   stack_version: "22"
 release:
@@ -14,5 +14,5 @@ quality:
     tool: eslint
 package:
   docker:
-    image: nexus.briklab.test:8082/brik/node-full-clean
+    image: nexus.briklab.test:8082/brik/node-full-cve
     dockerfile: Dockerfile

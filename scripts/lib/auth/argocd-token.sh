@@ -21,16 +21,20 @@ _ensure_argocd_brik_account() {
     kubectl patch configmap argocd-cm -n argocd --type merge \
         -p '{"data":{"accounts.brik":"apiKey"}}' 2>/dev/null || true
 
-    # ArgoCD v3.x enforces stricter RBAC: with the apiKey JWT subject
-    # "brik:apiKey", the grouping rule "g, brik, role:admin" alone has
-    # been observed on v3.3.7 to leave the apiKey session without
-    # effective application/* permissions (server logs: "application
-    # does not exist" + PermissionDenied for user brik on app
-    # get/sync). Granting explicit per-resource policies on a
-    # project-scoped role works regardless of subject normalisation.
-    # We keep the legacy admin grouping for backward compat AND add an
-    # explicit role:brik with the actions the briklab E2E scenarios
-    # need (sync/get/override on applications, get/list on repos).
+    # ArgoCD v3.x stricter RBAC for apiKey accounts: the JWT subject
+    # encoded by ArgoCD for an account-generated API token is
+    # "<account>:apiKey" (decoded from the JWT `sub` claim), NOT just
+    # "<account>". Casbin grouping rules must therefore reference the
+    # `apiKey` qualified subject, otherwise effective permissions
+    # fall back to policy.default (readonly or empty) and apps look
+    # like "application does not exist" even for an admin grant.
+    #
+    # We bind brik:apiKey to both role:admin (back-compat / future
+    # actions) and an explicit role:brik covering the actions the
+    # briklab E2E scenarios actually need (sync/get/override on
+    # applications, get/list on repos). The literal 'brik' bindings
+    # are kept so future SSO logins of a 'brik' user pick up the same
+    # role.
     local _rbac
     read -r -d '' _rbac <<'POLICY' || true
 p, role:brik, applications, get, */*, allow
@@ -42,6 +46,8 @@ p, role:brik, repositories, list, *, allow
 p, role:brik, clusters, get, *, allow
 g, brik, role:admin
 g, brik, role:brik
+g, brik:apiKey, role:admin
+g, brik:apiKey, role:brik
 POLICY
     kubectl patch configmap argocd-rbac-cm -n argocd --type merge \
         -p "$(jq -nc --arg p "$_rbac" '{data:{"policy.csv":$p}}')" 2>/dev/null || true
