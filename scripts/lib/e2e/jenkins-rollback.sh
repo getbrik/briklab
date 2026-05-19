@@ -116,8 +116,12 @@ _rollback_trigger_deploy() {
     # HEAD as a snapshot and tag the image with the short SHA instead of
     # the release tag -- the rollback assertion then compares image:0.1.0
     # against image:<random-sha> and the test fails.
+    #
+    # Deploy is opt-in in the brik planner: tag pushes auto-include release +
+    # package but NOT deploy. The rollback test cycles through two deploys
+    # (v0.1.0, v0.2.0) so we have to ask for it explicitly each time.
     local build_number
-    build_number=$(e2e.jenkins.trigger_build "$JOB_NAME" "BRIK_TAG=${tag}") || {
+    build_number=$(e2e.jenkins.trigger_build "$JOB_NAME" "BRIK_TAG=${tag},BRIK_WITH_DEPLOY=true") || {
         log_error "Failed to trigger ${tag} build"
         exit 1
     }

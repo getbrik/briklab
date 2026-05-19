@@ -183,6 +183,23 @@ _suite_run_scenario() {
         fi
     fi
 
+    # Deploy is opt-in in brik's planner: tag-context pipelines run release +
+    # package but skip deploy unless BRIK_WITH_DEPLOY=true is asserted. node-
+    # deploy*, node-deploy-rollback (handled in jenkins-rollback.sh), and
+    # error-deploy (whose whole point is for brik-deploy to fail on a missing
+    # kustomize app) all need deploy to actually run. Without this, the deploy
+    # stage is silently skipped and the pipeline ends in success, masking the
+    # tested behavior.
+    case "$name" in
+        node-deploy*|error-deploy)
+            if [[ -n "${ci_vars:-}" ]]; then
+                ci_vars="${ci_vars},BRIK_WITH_DEPLOY=true"
+            else
+                ci_vars="BRIK_WITH_DEPLOY=true"
+            fi
+            ;;
+    esac
+
     # node-workflow-trunk is a multibranch Jenkins job backed by gitea-plugin;
     # builds live under job/<name>/job/<branch>/... The api helpers pick up
     # E2E_JENKINS_BRANCH to build the correct URL prefix. Multibranch scan +

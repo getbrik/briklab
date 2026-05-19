@@ -102,7 +102,7 @@ e2e.jenkins.get_crumb() {
 # build (which would deploy snapshots or fail outright).
 #
 # Args: $1 = job full-name (e.g. "node-deploy-failure")
-# Side effect: idempotently attaches BRIK_DRY_RUN + BRIK_TAG to the job.
+# Side effect: idempotently attaches BRIK_DRY_RUN + BRIK_TAG + BRIK_WITH_DEPLOY to the job.
 e2e.jenkins.pre_register_params() {
     local job_full_name="$1"
     local crumb
@@ -121,7 +121,8 @@ if (j == null) { println 'job-not-found'; return }
 if (j.getProperty(ParametersDefinitionProperty.class) != null) { println 'already-set'; return }
 j.addProperty(new ParametersDefinitionProperty([
     new BooleanParameterDefinition('BRIK_DRY_RUN', false, 'Skip destructive deploy actions.'),
-    new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.')
+    new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.'),
+    new BooleanParameterDefinition('BRIK_WITH_DEPLOY', false, 'Opt into the deploy stage. Skipped by default.')
 ]))
 j.save()
 println 'registered'
