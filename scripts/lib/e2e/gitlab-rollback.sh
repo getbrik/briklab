@@ -87,7 +87,9 @@ _rollback_push_v020() {
 _rollback_trigger_deploy() {
     local tag="$1"
     local pipeline_id
-    pipeline_id=$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "$tag")
+    # Deploy is opt-in in the dynamic-pipeline planner: tag pushes auto-include
+    # release + package but NOT deploy, so we have to ask for it explicitly.
+    pipeline_id=$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "$tag" "BRIK_WITH_DEPLOY=true")
     if [[ -z "$pipeline_id" ]]; then
         log_error "Failed to trigger ${tag} pipeline"
         exit 1

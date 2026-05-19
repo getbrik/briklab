@@ -118,7 +118,7 @@ SCENARIOS=(
     # Their generic-name counterparts (node-full, node-complete) carry
     # cleaned-up deps and prettier-formatted sources and pass end to end.
     "node-full-cve|node-full-cve|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast||600|brik-scan|BRIK_WITH_DEPLOY=true||GHSA|brik-init,brik-release,brik-build,brik-lint,brik-sast"
-    "node-complete-cve|node-complete-cve|v0.1.0|brik-init,brik-release,brik-build||900|brik-lint||||format|brik-init,brik-release,brik-build"
+    "node-complete-cve|node-complete-cve|v0.1.0|brik-init,brik-release,brik-build||900|brik-lint|||format|brik-init,brik-release,brik-build"
     # --- Explicit mode/context coverage for the planner ---
     # Every project now includes /templates/dynamic-pipeline.yml, so
     # bridge-follow in gitlab-test.sh already exercises the parent+child
