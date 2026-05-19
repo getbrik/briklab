@@ -47,50 +47,58 @@ ensure_gitlab_pat
 # now produces a fragment for are required.
 
 SCENARIOS=(
-    # --- Minimal stack coverage (branch push: no release, no package) ---
-    "node-minimal|node-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
-    "python-minimal|python-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||900"
-    "java-minimal|java-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    # --- Full pipelines (tag push: all stages) ---
-    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-package,brik-deploy,brik-notify||600"
+    # All projects now use /templates/dynamic-pipeline.yml. The planner
+    # gates each stage by context + opt-in flag:
+    #   - tag push (v*.*.*) -> _plan.yml auto-passes --with-release --with-package.
+    #   - to also run deploy, pass BRIK_WITH_DEPLOY=true via CI variable.
+    # Scenarios that previously required brik-deploy on branch push are
+    # now corrected: deploy is opt-in only.
+
+    # --- Minimal stack coverage (branch push: no release, no package, no deploy) ---
+    "node-minimal|node-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||900"
+    "python-minimal|python-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||900"
+    "java-minimal|java-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    # --- Full pipelines (tag push: release + package; deploy via opt-in) ---
+    "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
     # --- Security and Deploy ---
-    "node-security|node-security|main|brik-init,brik-build,brik-sast,brik-scan,brik-test,brik-deploy,brik-notify||300"
-    "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true"
-    "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "node-deploy-helm|node-deploy-helm|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600"
-    "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||900"
+    "node-security|node-security|main|brik-init,brik-build,brik-sast,brik-scan,brik-test,brik-notify||300"
+    "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true,BRIK_WITH_DEPLOY=true"
+    "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "node-deploy-helm|node-deploy-helm|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
-    # --- Complete pipelines with Nexus publish (tag push: all stages + publish) ---
+    # --- Complete pipelines with Nexus publish (tag push: all stages + publish, no deploy) ---
     "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
     # --- Workflow scenarios (push-driven, sequential) ---
-    "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
-    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600|||workflow-trunk-main"
-    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-test,brik-notify||600|||workflow-trunk-tag"
+    "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
+    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true||workflow-trunk-main"
+    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600|||workflow-trunk-tag"
     # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
     # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
     "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
     "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
-    "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
-    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-test,brik-package||600|brik-deploy|||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-test,brik-package"
-    # --- Dynamic-pipeline scenarios (parent: brik-plan + brik-downstream
-    # bridge; the bridge inherits the child pipeline status via
-    # strategy:depend, so a green parent pipeline implies a green child.
-    # brik-downstream is a `trigger:` bridge -- GitLab's /jobs endpoint
-    # does NOT return bridges, so we only require brik-plan in the suite
-    # and trust the overall parent status to cover the rest.) ---
-    "node-plan-balanced|node-plan-balanced|main|brik-plan||900"
-    "node-plan-safe|node-plan-safe|main|brik-plan||900"
-    "node-plan-tag|node-plan-tag|v0.1.0|brik-plan||900"
+    "error-config|invalid-config|main|||300|brik-plan|||validat~invalid~schema|"
+    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package||600|brik-deploy|BRIK_WITH_DEPLOY=true||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package"
+    # --- Explicit mode/context coverage for the planner ---
+    # Every project now includes /templates/dynamic-pipeline.yml, so
+    # bridge-follow in gitlab-test.sh already exercises the parent+child
+    # split for every scenario. These three keep dedicated mode and
+    # tag-context coverage (balanced/safe and snapshot/release) so a
+    # planner regression on one of those axes shows up as its own line
+    # in the suite report rather than only as a cascading failure.
+    "node-plan-balanced|node-plan-balanced|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
+    "node-plan-safe|node-plan-safe|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
+    "node-plan-tag|node-plan-tag|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-notify||900"
 )
 
 # ---------------------------------------------------------------------------
@@ -202,15 +210,6 @@ _suite_run_scenario() {
         trigger_mode="push"
     fi
 
-    # Dynamic-pipeline scenarios: the parent only runs brik-plan +
-    # brik-downstream. brik-notify (and the aggregate-report.json it
-    # produces) lives in the triggered child pipeline, so the
-    # parent-pipeline log/aggregate checks would falsely fail.
-    local e2e_skip_log_check="false"
-    if [[ "$name" == node-plan-* ]]; then
-        e2e_skip_log_check="true"
-    fi
-
     E2E_PROJECT_PATH="$project_encoded" \
     E2E_REQUIRED_JOBS="$required" \
     E2E_TRIGGER_REF="$ref" \
@@ -219,7 +218,6 @@ _suite_run_scenario() {
     E2E_EXPECT_FAILURE="$e2e_expect_failure" \
     E2E_EXPECT_FAILED_JOB="$e2e_expect_failed_job" \
     E2E_CI_VARIABLES="${ci_vars:-}" \
-    E2E_SKIP_LOG_CHECK="$e2e_skip_log_check" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"

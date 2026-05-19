@@ -351,6 +351,17 @@ e2e.gitlab.get_jobs() {
     e2e.gitlab.api_get "projects/${project_id}/pipelines/${pipeline_id}/jobs?per_page=100"
 }
 
+# Get the downstream (child) pipeline ID for a parent pipeline that
+# triggered one via a `trigger:` bridge job. Returns empty when there is
+# no bridge or when the downstream has not been created yet.
+# Args: $1 = project ID, $2 = parent pipeline ID
+# Output: child pipeline ID on stdout, or empty
+e2e.gitlab.get_child_pipeline_id() {
+    local project_id="$1" pipeline_id="$2"
+    e2e.gitlab.api_get "projects/${project_id}/pipelines/${pipeline_id}/bridges" 2>/dev/null \
+        | jq -r 'first(.[] | select(.downstream_pipeline != null) | .downstream_pipeline.id) // empty' 2>/dev/null || true
+}
+
 # Get status of a specific job from jobs JSON.
 # Args: $1 = jobs JSON, $2 = job name
 # Output: status string on stdout (or "not_found")

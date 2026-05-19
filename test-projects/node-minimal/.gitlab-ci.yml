@@ -1,4 +1,8 @@
+variables:
+  BRIK_LIB_REF: "v0.1.0"
+  BRIK_GITLAB_TEMPLATES_REF: "v0.1.0"
+
 include:
   - project: "brik/gitlab-templates"
     ref: v0.1.0
-    file: "/templates/pipeline.yml"
+    file: "/templates/dynamic-pipeline.yml"

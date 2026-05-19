@@ -149,7 +149,24 @@ fi
 log_ok "Pipeline #${PIPELINE_ID} finished: ${FINAL_STATUS}"
 echo "  URL: ${GITLAB_URL}/${PROJECT_NAME}/-/pipelines/${PIPELINE_ID}"
 
-# 5. Get job details
+# 5. Follow the dynamic-pipeline bridge if any. Dynamic-pipeline parent
+# pipelines have brik-plan + a brik-downstream trigger job; the actual
+# stage grid (brik-init, brik-build, ..., brik-notify) lives in the
+# child pipeline. All downstream assertions (required_jobs, logs,
+# aggregate-report) must target the child to remain meaningful.
+# Legacy non-dynamic pipelines have no bridge, so PARENT == CHILD.
+PARENT_PIPELINE_ID="$PIPELINE_ID"
+CHILD_PIPELINE_ID="$(e2e.gitlab.get_child_pipeline_id "$PROJECT_ID" "$PIPELINE_ID")"
+if [[ -n "$CHILD_PIPELINE_ID" ]]; then
+    log_info "Dynamic pipeline detected: parent #${PARENT_PIPELINE_ID} -> child #${CHILD_PIPELINE_ID}"
+    # Use the child for all stage-grid assertions. Pipeline.status of
+    # the parent already reflects the child via strategy:depend, so we
+    # keep FINAL_STATUS as-is.
+    PIPELINE_ID="$CHILD_PIPELINE_ID"
+    echo "  Child URL: ${GITLAB_URL}/${PROJECT_NAME}/-/pipelines/${CHILD_PIPELINE_ID}"
+fi
+
+# 6. Get job details (from child if any, else parent)
 log_info "Pipeline status: ${FINAL_STATUS}"
 echo ""
 
