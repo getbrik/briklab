@@ -73,10 +73,15 @@ SCENARIOS=(
     "error-deploy|node-deploy-failure|node-deploy-failure|600|true|||brik-nonexistent~NotFound"
     # --- L.2 plan-driven scenarios (Jenkins counterparts of L.1) ---
     # node-plan-tag: full release context, driven by the BRIK_TAG build
-    # parameter. node-plan-invalid: the planner rejects the aggressive
-    # selection mode and the build fails before any stage runs.
+    # parameter -- the planner produces a release-context plan.
+    # node-plan-invalid: the brik.yml requests the aggressive selection
+    # mode, which the planner rejects. Unlike GitLab (where the brik-plan
+    # parent job failing kills the child pipeline), the Jenkins adapter
+    # treats a planner failure as non-fatal: it logs the rejection and
+    # falls back to the legacy fixed flow. The build therefore SUCCEEDS.
+    # This scenario locks in that graceful-degradation contract.
     "node-plan-tag|node-plan-tag|node-plan-tag|600|false|BRIK_TAG=v0.1.0"
-    "node-plan-invalid|node-plan-invalid|node-plan-invalid|300|true|||aggressive~not implemented"
+    "node-plan-invalid|node-plan-invalid|node-plan-invalid|300|false"
 )
 
 # ---------------------------------------------------------------------------
