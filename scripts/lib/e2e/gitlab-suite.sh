@@ -248,8 +248,20 @@ _suite_run_scenario() {
 
     # Auto-detect push mode for workflow scenarios or branch: refs
     local trigger_mode="${E2E_TRIGGER_MODE:-api}"
-    if [[ "$name" == workflow-* || "$ref" == branch:* ]]; then
+    # Push mode for workflow scenarios, branch: refs, and the docs-only
+    # two-phase trigger (an API trigger would target a non-existent
+    # "docs-only" ref; only e2e.git.trigger_via_push handles it).
+    if [[ "$name" == workflow-* || "$ref" == branch:* || "$ref" == docs-only ]]; then
         trigger_mode="push"
+    fi
+
+    # A docs-only commit reduces the dynamic child to brik-notify alone;
+    # the child aggregate-report carries zero stages (parent skip
+    # fragments are not propagated -- known D.5c gap), so the generic
+    # aggregate assertions do not apply.
+    local skip_aggregate=false
+    if [[ "$ref" == docs-only ]]; then
+        skip_aggregate=true
     fi
 
     E2E_PROJECT_PATH="$project_encoded" \
@@ -262,6 +274,7 @@ _suite_run_scenario() {
     E2E_CI_VARIABLES="${ci_vars:-}" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
+    E2E_SKIP_AGGREGATE="$skip_aggregate" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"
 }
 
