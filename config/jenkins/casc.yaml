@@ -620,3 +620,47 @@ jobs:
           }
         }
       }
+  # L.2 plan-driven scenarios -- the Jenkins counterparts of the L.1
+  # GitLab scenarios. node-plan-tag exercises the full release context
+  # (driven by the BRIK_TAG build parameter), node-plan-invalid proves
+  # the planner rejects an unimplemented selection mode.
+  - script: >
+      pipelineJob('node-plan-tag') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-plan-tag.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
+  - script: >
+      pipelineJob('node-plan-invalid') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-plan-invalid.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }
