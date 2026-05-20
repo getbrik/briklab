@@ -201,10 +201,15 @@ assert.json_ge() {
     fi
 }
 
-# assert.aggregate_v1 <artifact_path> <expected_platform>
+# assert.aggregate_v1 <artifact_path> <expected_platform> [min_stages]
 # Validates the shape of a Brik aggregate-report.json (v1.1).
+#
+# min_stages (default 4) is the floor for summary.stages.total. A
+# docs-only dynamic-pipeline child legitimately runs zero stages, so
+# such a scenario passes min_stages=0; when it is 0 the per-stage
+# stages[0].timestamp assertion is skipped (no stage to index).
 assert.aggregate_v1() {
-    local file="$1" expected_platform="$2"
+    local file="$1" expected_platform="$2" min_stages="${3:-4}"
     if [[ ! -f "$file" ]]; then
         assert._fail "Aggregate v1: file present (${file})" "not found"
         return
@@ -213,13 +218,15 @@ assert.aggregate_v1() {
     assert.json_eq    "Aggregate pipeline.platform"               "$file" '.pipeline.platform'             "\"${expected_platform}\""
     assert.json_match "Aggregate pipeline.id non-empty"           "$file" '.pipeline.id'                   '^.+$'
     assert.json_match "Aggregate pipeline.business.status pass"   "$file" '.pipeline.business.status // ""' '^(success|warning)$'
-    assert.json_ge    "Aggregate summary.stages.total >= 4"       "$file" '.summary.stages.total'          4
+    assert.json_ge    "Aggregate summary.stages.total >= ${min_stages}" "$file" '.summary.stages.total'    "$min_stages"
     local has_commit
     has_commit=$(jq -r '.pipeline | has("commit")' "$file" 2>/dev/null || echo "false")
     if [[ "$has_commit" == "true" ]]; then
         assert.json_match "Aggregate pipeline.commit.sha is 40-char hex" "$file" '.pipeline.commit.sha // ""' '^[a-f0-9]{40}$'
     fi
-    assert.json_match "Aggregate stages[0].timestamp is ISO-8601" "$file" '.stages[0].timestamp // ""' '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+    if [[ "$min_stages" -gt 0 ]]; then
+        assert.json_match "Aggregate stages[0].timestamp is ISO-8601" "$file" '.stages[0].timestamp // ""' '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+    fi
 }
 
 # ---------------------------------------------------------------------------

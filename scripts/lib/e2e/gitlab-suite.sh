@@ -246,10 +246,22 @@ _suite_run_scenario() {
         e2e_expect_failed_job="$expect_fail"
     fi
 
-    # Auto-detect push mode for workflow scenarios or branch: refs
+    # Auto-detect push mode for workflow scenarios, branch: refs, and
+    # the docs-only two-phase trigger. The docs-only ref drives an
+    # incremental push (baseline with ci.skip, then a docs commit) that
+    # only e2e.git.trigger_via_push knows how to do -- an API trigger
+    # would target a non-existent "docs-only" ref.
     local trigger_mode="${E2E_TRIGGER_MODE:-api}"
-    if [[ "$name" == workflow-* || "$ref" == branch:* ]]; then
+    if [[ "$name" == workflow-* || "$ref" == branch:* || "$ref" == docs-only ]]; then
         trigger_mode="push"
+    fi
+
+    # A docs-only commit reduces the dynamic child to brik-notify alone;
+    # its aggregate-report legitimately carries zero stages, so the
+    # summary.stages.total floor must drop to 0 for that scenario.
+    local min_stages=4
+    if [[ "$ref" == docs-only ]]; then
+        min_stages=0
     fi
 
     E2E_PROJECT_PATH="$project_encoded" \
@@ -262,6 +274,7 @@ _suite_run_scenario() {
     E2E_CI_VARIABLES="${ci_vars:-}" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
+    E2E_MIN_STAGES="$min_stages" \
         bash "${SCRIPT_DIR}/gitlab-test.sh"
 }
 

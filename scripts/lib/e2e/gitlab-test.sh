@@ -276,7 +276,7 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" ]]; then
         AGG_FILE="${AGG_TMP}/aggregate-report.json"
         if e2e.gitlab.download_artifact "$PROJECT_ID" "$NOTIFY_JOB_ID" \
                 "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
-            assert.aggregate_v1 "$AGG_FILE" "gitlab"
+            assert.aggregate_v1 "$AGG_FILE" "gitlab" "${E2E_MIN_STAGES:-4}"
             # On tag pushes (v<N>...), assert the package image tag mirrors
             # the release version. Catches the GitLab pipeline.env regression
             # class (package falls back to short SHA when BRIK_APP_VERSION
