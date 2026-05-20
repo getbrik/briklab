@@ -129,6 +129,12 @@ SCENARIOS=(
     "node-plan-balanced|node-plan-balanced|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
     "node-plan-safe|node-plan-safe|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
     "node-plan-tag|node-plan-tag|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-notify||900"
+    # L.1 scenario 3: an invalid plan must fail the parent's brik-plan
+    # job with an actionable message and create no child pipeline. The
+    # fixture's brik.yml sets pipeline.selection.mode=aggressive, which
+    # the planner rejects (reserved for v0.7+). brik-plan is the failing
+    # job; there is no bridge, so the checked pipeline stays the parent.
+    "node-plan-invalid|node-plan-invalid|main|||300|brik-plan|||aggressive~not implemented|"
 )
 
 # ---------------------------------------------------------------------------
