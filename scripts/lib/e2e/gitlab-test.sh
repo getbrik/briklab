@@ -114,8 +114,14 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     PUSH_SHA=$(e2e.git.trigger_via_push "gitlab" "$PROJECT_SHORT" "$TRIGGER_REF")
     log_ok "Push SHA: ${PUSH_SHA}"
 
-    # Strip "branch:" prefix when present so the ref filter matches the GitLab pipeline ref.
-    REF_FILTER="${TRIGGER_REF#branch:}"
+    # Resolve the ref the GitLab pipeline actually carries, so the
+    # SHA wait can filter on it. "branch:NAME" pipelines run on NAME;
+    # the docs-only two-phase trigger pushes its commit to main.
+    case "$TRIGGER_REF" in
+        branch:*)  REF_FILTER="${TRIGGER_REF#branch:}" ;;
+        docs-only) REF_FILTER="main" ;;
+        *)         REF_FILTER="$TRIGGER_REF" ;;
+    esac
 
     log_info "Waiting for pipeline triggered by SHA ${PUSH_SHA:0:8} on ref '${REF_FILTER}'..."
     PIPELINE_RESULT=$(e2e.gitlab.wait_pipeline_by_sha "$PROJECT_ID" "$PUSH_SHA" 60 "$TIMEOUT_SECONDS" "$REF_FILTER")
