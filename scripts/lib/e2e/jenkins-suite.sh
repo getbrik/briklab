@@ -71,6 +71,12 @@ SCENARIOS=(
     "error-test|node-error-test|node-error-test|300|true|||FAIL~test.*failed"
     "error-config|invalid-config|invalid-config|300|true|||validat~invalid~schema"
     "error-deploy|node-deploy-failure|node-deploy-failure|600|true|||brik-nonexistent~NotFound"
+    # --- L.2 plan-driven scenarios (Jenkins counterparts of L.1) ---
+    # node-plan-tag: full release context, driven by the BRIK_TAG build
+    # parameter. node-plan-invalid: the planner rejects the aggressive
+    # selection mode and the build fails before any stage runs.
+    "node-plan-tag|node-plan-tag|node-plan-tag|600|false|BRIK_TAG=v0.1.0"
+    "node-plan-invalid|node-plan-invalid|node-plan-invalid|300|true|||aggressive~not implemented"
 )
 
 # ---------------------------------------------------------------------------
