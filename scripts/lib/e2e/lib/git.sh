@@ -287,6 +287,45 @@ e2e.git.trigger_via_push() {
                     git -c "credential.username=${username}" \
                     push -u --force origin "$branch_name" >/dev/null 2>&1 || exit 1
                 ;;
+            docs-only)
+                # Two-phase trigger for an incremental docs-only commit.
+                #
+                # The dynamic-pipeline planner needs a real
+                # CI_COMMIT_BEFORE_SHA to compute a diff. A single
+                # force-push to a fresh repo is a planner cold-start
+                # (CI_COMMIT_BEFORE_SHA=0000) and balanced mode then
+                # conservatively runs every stage -- so a docs-only
+                # skip can never be exhibited.
+                #
+                # Phase 1 pushes the baseline (the pre-trigger HEAD) to
+                # main with `-o ci.skip` so the ref exists but no
+                # pipeline runs. Phase 2 amends the trigger commit to
+                # touch only a doc file and pushes it as a fast-forward;
+                # the pipeline for that commit sees baseline as its
+                # CI_COMMIT_BEFORE_SHA, the planner diffs a docs-only
+                # change, and the build/lint/test grid is skipped.
+                local baseline_sha
+                baseline_sha="$(git rev-parse HEAD~1)"
+
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push -o ci.skip --force origin \
+                    "${baseline_sha}:refs/heads/main" >/dev/null 2>&1 || exit 1
+
+                # Carry a genuine docs change so the scenario is
+                # self-documenting (the .brik-trigger plumbing file
+                # alone would also skip the grid, being unmatched by
+                # every stage's impact globs).
+                mkdir -p docs
+                printf 'E2E docs-only trigger at %s\n' "$(date +%s)" \
+                    >> docs/e2e-trigger.md
+                git add -A >/dev/null 2>&1
+                git commit --amend -m "docs: e2e docs-only trigger" >/dev/null 2>&1
+
+                GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+                    git -c "credential.username=${username}" \
+                    push origin "HEAD:refs/heads/main" >/dev/null 2>&1 || exit 1
+                ;;
             *)
                 # Default: push to main (or whatever ref name)
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \

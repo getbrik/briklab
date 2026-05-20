@@ -135,6 +135,12 @@ SCENARIOS=(
     # the planner rejects (reserved for v0.7+). brik-plan is the failing
     # job; there is no bridge, so the checked pipeline stays the parent.
     "node-plan-invalid|node-plan-invalid|main|||300|brik-plan|||aggressive~not implemented|"
+    # L.1 scenario 2: a docs-only incremental commit. The "docs-only"
+    # ref triggers the two-phase push (baseline with ci.skip, then a
+    # docs commit) so the planner sees a real docs-only diff. balanced
+    # mode skips the build/lint/sast/scan/test grid; only the report
+    # aggregator brik-notify runs in the child pipeline.
+    "node-plan-docs|node-plan-docs|docs-only|brik-notify||600"
 )
 
 # ---------------------------------------------------------------------------
