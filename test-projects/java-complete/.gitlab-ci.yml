@@ -5,12 +5,12 @@ variables:
 include:
   - project: 'brik/gitlab-templates'
     ref: v0.1.0
-    file: '/templates/dynamic-pipeline.yml'
+    file: '/templates/pipeline.yml'
 
 # NOTE: java-complete used to override brik-test.artifacts.reports.coverage_report
 # to point at jacoco.xml. That override worked with the legacy
 # /templates/pipeline.yml because brik-test was defined in the include
-# that the parent merged into. With dynamic-pipeline.yml the parent has
+# that the parent merged into. With pipeline.yml the parent has
 # only brik-plan + brik-downstream, so a top-level `brik-test:` block at
 # the parent is rejected by GitLab CI lint ("config should implement the
 # script:, run:, or trigger: keyword"). The jacoco XML is still produced

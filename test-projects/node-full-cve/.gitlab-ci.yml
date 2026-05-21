@@ -5,4 +5,4 @@ variables:
 include:
   - project: "brik/gitlab-templates"
     ref: v0.1.0
-    file: "/templates/dynamic-pipeline.yml"
+    file: "/templates/pipeline.yml"
