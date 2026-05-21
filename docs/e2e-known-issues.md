@@ -266,6 +266,32 @@ The next `briklab.sh test --gitlab --all` should report 21+/28 PASS
 remaining failures will all fall into OI-1, OI-2 or OI-3 above and
 need targeted attention as described.
 
+## Recently Fixed (2026-05-21)
+
+- **GitLab adapter: dynamic child pipeline -> classic plan-aware pipeline**
+  -- The GitLab adapter no longer ships `dynamic-pipeline.yml`. It is now a
+  single classic pipeline: a `brik-plan` job computes `plan.json`, and every
+  stage job consults it via `brik plan gate <stage>` (sourced from
+  `/tmp/brik-plan-gate.sh`), exiting 0 with a not-applicable fragment when
+  the plan marks the stage skip. Every job stays visible in the GitLab UI in
+  its natural stage -- GitLab now uses the same `brik plan gate` mechanism as
+  Jenkins. All 33 test-project `.gitlab-ci.yml` includes were switched from
+  `dynamic-pipeline.yml` to `pipeline.yml`.
+
+- **node-plan-docs: skipped job seeds cache markers** -- A plan-skipped stage
+  job exits before `brik.gitlab.run_stage`, so the `.brik-keep`
+  cache/artefact markers were never created and a skipped `brik-build` (cache
+  policy `pull-push`) logged `WARNING: No files to cache`, which the suite's
+  `false-positive-patterns.conf` flags. Fixed by `brik.gitlab.mark_skipped`,
+  called from the gate helper's skip path. node-plan-docs back to 15/15 green.
+
+GitLab full-suite scorecard 2026-05-21: **32/35 PASS**. The 3 fails are all
+non-migration: `rust-minimal` (INFRA-1, stale runner git lock),
+`dotnet-complete` (INFRA-2) -- both pass on Jenkins -- and
+`workflow-trunk-feature` (the `workflow:` filter suppresses a feature-branch
+push without an MR; the scenario predates the v0.6.0 workflow filter and
+needs reconciling, either triggering via an MR or accepting no pipeline).
+
 ## Recently Fixed (2026-05-08)
 
 - **python-complete environmental CVEs (no-fix in python:3.13 base)** --
