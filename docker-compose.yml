@@ -17,7 +17,7 @@ networks:
 services:
   # --- GitLab CE ---
   gitlab:
-    image: gitlab/gitlab-ce:18.10.1-ce.0
+    image: gitlab/gitlab-ce:19.0.0-ce.0
     container_name: brik-gitlab
     hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.test}
     restart: unless-stopped
