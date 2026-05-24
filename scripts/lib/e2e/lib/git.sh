@@ -55,7 +55,15 @@ e2e.git.init_from_template() {
         GIT_COMMITTER_DATE="@${_commit_epoch} +0000" \
             git commit -m "Initial commit" >/dev/null 2>&1
         if [[ -n "$tag" ]]; then
-            git tag "$tag" >/dev/null 2>&1
+            # Override global git config that may force GPG signing or
+            # forbid lightweight tags: with tag.gpgsign=true or
+            # tag.forceSignAnnotated=true set in the user's ~/.gitconfig,
+            # a bare `git tag X` would either prompt for a signature or
+            # error out ("no tag message?") and the tag would never be
+            # created in the tmp dir -- silently. The subsequent
+            # `git push --tags` would then push nothing and the remote
+            # would stay on the old tag. We force lightweight, unsigned.
+            git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag "$tag"
         fi
     )
 
