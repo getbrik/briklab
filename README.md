@@ -2,22 +2,49 @@
   <img src="docs/briklab.jpg" alt="Briklab">
 </p>
 
-Local Docker infrastructure for testing [Brik](https://github.com/getbrik/brik) pipelines end-to-end: write `brik.yml`, push to GitLab or Gitea, watch the pipeline run on real CI platforms.
+<p align="center">
+  <b>The Brik test lab.</b><br>
+  Local Docker infra for end-to-end validation of Brik pipelines on real GitLab and real Jenkins.<br>
+  <i>One command. Two CI platforms. 56 scenarios.</i>
+</p>
 
-## What is Briklab
+<p align="center">
+  <a href="https://github.com/getbrik/briklab/actions/workflows/ci.yml"><img src="https://github.com/getbrik/briklab/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="#coverage-in-numbers"><img src="https://img.shields.io/badge/E2E%20scenarios-56-brightgreen" alt="E2E scenarios"></a>
+  <a href="#coverage-in-numbers"><img src="https://img.shields.io/badge/validates-GitLab%20%2B%20Jenkins-blueviolet" alt="Platforms"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MPL--2.0-blue" alt="License"></a>
+</p>
 
-Brik needs real CI/CD platforms to validate its shared libraries and runtime. Briklab provides that infrastructure locally via Docker Compose -- no cloud accounts, no shared servers.
+## Why Briklab exists
 
-- One command to set up everything (`init`)
-- GitLab CE + Runner for GitLab CI pipelines
-- Gitea + Jenkins for Jenkins pipelines
-- Nexus 3 CE for artifact publishing (npm, Maven, PyPI, NuGet, Docker, Cargo)
-- k3d (K3s in Docker) + ArgoCD for Kubernetes and GitOps deploy E2E testing
-- SSH target container for deploy E2E testing
-- E2E pipeline testing with 28 automated scenarios on each platform
-- Managed by a Bash CLI (`scripts/briklab.sh`)
+You cannot validate a CI/CD framework with unit tests. Brik's shared libraries call real GitLab APIs, run inside real Jenkins agents, push to real artifact registries, deploy to real Kubernetes clusters. Validation requires the real thing.
+
+The alternatives are bad:
+
+- Renting GitLab/Jenkins cloud accounts per contributor: expensive, slow to iterate, shared state across PRs.
+- Hand-rolling GitLab CE + Jenkins (with Configuration-as-Code) + Nexus + k3d + ArgoCD in Docker: days of wiring per contributor for PAT registration, runner registration, Job DSL, Nexus repository creation, ArgoCD port-forwards.
+
+Briklab wires it once. Every contributor runs `./scripts/briklab.sh init` and gets the full stack ready in 5 minutes.
 
 For internal architecture details, see [docs/architecture.md](docs/architecture.md).
+
+## What makes Briklab different
+
+### 🏗️ Pre-wired infrastructure
+
+GitLab PAT, Runner registration, Gitea PAT, Jenkins Configuration-as-Code + Job DSL, Nexus repository creation (npm, Maven, PyPI, NuGet, Docker, Cargo), k3d cluster, ArgoCD install + port-forwards, SSH target container. All scripted, all idempotent, all under `scripts/setup/`.
+
+### 🧪 E2E framework
+
+28 scenarios per platform, with filtering by group (`--groups A,D,H`), batching (`--batch-size 4`), parallel execution (`--parallel-groups`), single-scenario targeting (`--project <name>`), and listing (`--list`). Built on 17 reusable Bash libraries under `scripts/lib/e2e/lib/`.
+
+### ⚓ Real deploy targets
+
+The deploy stage is validated against actual targets, not mocks: Kubernetes (`node-deploy-k8s`), Helm (`node-deploy-helm`), SSH (`node-deploy-ssh`), Docker Compose (`node-deploy`), GitOps via ArgoCD (`node-deploy-gitops`), and a 3-step rollback chain (`node-deploy-rollback`) that verifies ArgoCD rolls back to the previous image.
+
+### 🔁 Reset and infra-refresh
+
+E2E runs accumulate state -- repos, namespaces, ArgoCD apps, artifacts. `briklab.sh reset --gitlab` cleans everything in one command. Tokens and port-forwards expire on long sessions -- `briklab.sh infra-refresh` renews them without restarting any container.
 
 ## Quick Start
 
@@ -431,27 +458,15 @@ scripts/
 
 Auth libraries are reusable -- each validates and caches credentials, and can be sourced from any script.
 
-## Status
+## Coverage in numbers
 
-- [x] GitLab CE + Runner
-- [x] Gitea + Jenkins (CasC + Job DSL)
-- [x] Nexus 3 CE -- artifact publishing (npm, Maven, PyPI, NuGet, Docker, Cargo)
-- [x] Automated init with smoke tests
-- [x] E2E pipeline testing -- GitLab (28 scenarios: minimal, full, complete, security, deploy, helm, workflow, error)
-- [x] E2E pipeline testing -- Jenkins (28 scenarios, same coverage as GitLab)
-- [x] Security stage E2E
-- [x] Deploy stage E2E (k8s, ssh, compose, gitops, helm, rollback, failure)
-- [x] CI variable injection for E2E scenarios (dry-run, rollback tests)
-- [x] SSH target container for deploy E2E
-- [x] Error scenario E2E (build fail, test fail, invalid config, deploy fail)
-- [x] k3d + ArgoCD integration (setup script, CLI commands, gitops E2E scenario)
-- [x] Script refactoring into reusable libraries (auth, setup, e2e)
-- [x] Helm deploy E2E (k3d)
-- [x] Workflow trunk-based E2E (main, tag, feature branch)
-- [x] E2E framework with 17 reusable libraries
-- [x] Parallel groups and batch execution (`--groups`, `--batch-size`)
-- [x] State reset between runs (`reset` command)
-- [x] Infrastructure refresh (`infra-refresh` command)
+- ✅ **2** CI platforms validated end-to-end (GitLab CE + Jenkins, same scenarios on both)
+- ✅ **56** E2E scenarios (28 per platform: minimal, full, complete, security, deploy, helm, workflow, error)
+- ✅ **6** Nexus repository formats validated (npm, Maven, PyPI, NuGet, Docker, Cargo)
+- ✅ **5** deploy targets validated (Kubernetes, Helm, SSH, Docker Compose, GitOps via ArgoCD)
+- ✅ **17** reusable Bash libraries under `scripts/lib/e2e/lib/`
+- ✅ **1** rollback chain (3-step commit chain verifies ArgoCD rolls back to the previous image)
+- ✅ **Idempotent setup** -- every step under `scripts/setup/` re-runs safely; `briklab.sh setup` reconciles without `clean`
 
 ## Related
 
