@@ -89,6 +89,14 @@ unclassified:
     libraries:
       - name: "brik"
         defaultVersion: "main"
+        # NB: do not add `cachingConfiguration` here. Disabling the cache
+        # (refreshTimeMinutes=0) made the plugin switch from the
+        # `@libs/<SHA>/` workspace layout to `@libs/<lib_name>/`, which
+        # breaks brikPipeline's BRIK_HOME resolution (it expects the
+        # SHA-keyed dir produced by the cached path). Cache invalidation
+        # is handled instead by briklab's push flow:
+        # see scripts/lib/e2e/lib/push.sh::e2e.push.brik_repos which
+        # wipes `workspace/*@libs/<SHA>/` after every Gitea push.
         retriever:
           modernSCM:
             scm:
