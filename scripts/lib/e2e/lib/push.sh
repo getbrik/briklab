@@ -51,15 +51,28 @@ e2e.push.to_vcs() {
         user="root"
         token="${GITLAB_PAT:-}"
 
-        # Unprotect main branch to allow force push (GitLab protects it by default)
+        # URL-encode the project path (slashes become %2F) for the API calls below.
         local encoded_path
         encoded_path=$(printf '%s' "$remote_path" | jq -sRr @uri 2>/dev/null || \
             python3 -c "import urllib.parse; print(urllib.parse.quote('${remote_path}', safe=''))" 2>/dev/null)
+
+        # Unprotect main branch to allow force push (GitLab protects it by default).
         e2e.gitlab.api_delete "projects/${encoded_path}/protected_branches/main"
+
+        # Delete the existing tag via API so the subsequent `git push --tags`
+        # creates it fresh. `--tags --force` does NOT force-update existing
+        # tags (and GitLab protects `v*` tags by default, blocking even
+        # `--force` from pure git). API delete is the reliable way to ensure
+        # the tag tracks the new HEAD after each push.
+        e2e.gitlab.api_delete "projects/${encoded_path}/repository/tags/${tag}"
     else
         url="${_PUSH_GITEA_URL}"
         user="${GITEA_ADMIN_USER:-brik}"
         token="${GITEA_PAT:-}"
+
+        # Delete the existing tag via API (same rationale as GitLab above):
+        # without it, the pushed tag silently stays on the previous commit.
+        e2e.gitea.api_delete "repos/${remote_path}/tags/${tag}"
     fi
 
     if e2e.git.push "$tmp_dir" "${url}/${remote_path}.git" "$user" "$token" "--force"; then
@@ -104,6 +117,36 @@ e2e.push.brik_repos() {
         e2e.gitea.create_repo "brik"
         e2e.push.to_vcs "gitea" "$_PUSH_BRIK_ROOT" "brik/brik" "$_PUSH_TAG_NAME"
         echo ""
+
+        # Invalidate Jenkins shared-library cache: Jenkins caches
+        # `<job>@libs/<SHA>` checkouts and does NOT re-resolve the lib
+        # `defaultVersion` when the source tag/branch moves. Without this
+        # wipe, every Jenkins build keeps using a stale brik commit
+        # (sometimes a SHA that no longer exists on Gitea), so brik
+        # improvements pushed by `e2e.push.brik_repos` would never reach
+        # Jenkins-driven E2E. Wiping is cheap: Jenkins regenerates the
+        # cache from the fresh Gitea ref on the next build.
+        if docker ps --format '{{.Names}}' | grep -q '^brik-jenkins$'; then
+            log_info "Invalidating Jenkins shared-library cache..."
+            # POSIX sh inside the Jenkins container (busybox/alpine): `[[`
+            # is bash-only. Use `[` so the test actually runs.
+            docker exec brik-jenkins sh -c '
+                for d in /var/jenkins_home/workspace/*@libs; do
+                    [ -d "$d" ] || continue
+                    find "$d" -mindepth 1 -delete 2>/dev/null
+                    rmdir "$d" 2>/dev/null
+                    # Also clear the scm-key sidecar files (they sit next
+                    # to the @libs dir under the workspace, not inside it,
+                    # so the loop above does not catch them). Without
+                    # this, Jenkins re-uses the cached SHA -> ref mapping
+                    # for subsequent builds even after the lib content is
+                    # wiped.
+                    rm -f "${d}"*-scm-key.txt 2>/dev/null
+                done
+            ' 2>/dev/null || true
+            log_ok "Jenkins shared-library cache invalidated"
+            echo ""
+        fi
     fi
 }
 
