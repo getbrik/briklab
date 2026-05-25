@@ -98,7 +98,7 @@ e2e.git.push() {
 
         # shellcheck disable=SC2086  # Intentional word splitting on flags
         if GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-            git -c "credential.username=${username}" push -u origin main --tags $flags >/dev/null 2>&1; then
+            git -c "credential.helper=" -c "credential.username=${username}" push -u origin main --tags $flags >/dev/null 2>&1; then
             true
         else
             exit 1
@@ -159,7 +159,7 @@ e2e.git.push_tag() {
         fi
 
         if GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-            git -c "credential.username=${username}" push origin "$tag_name" >/dev/null 2>&1; then
+            git -c "credential.helper=" -c "credential.username=${username}" push origin "$tag_name" >/dev/null 2>&1; then
             true
         else
             exit 1
@@ -194,7 +194,7 @@ e2e.git.push_branch() {
         fi
 
         if GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-            git -c "credential.username=${username}" push -u origin "$branch" >/dev/null 2>&1; then
+            git -c "credential.helper=" -c "credential.username=${username}" push -u origin "$branch" >/dev/null 2>&1; then
             true
         else
             exit 1
@@ -256,7 +256,7 @@ e2e.git.trigger_via_push() {
         cd "$tmp_dir" || exit 1
 
         GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-            git -c "credential.username=${username}" \
+            git -c "credential.helper=" -c "credential.username=${username}" \
             clone "$remote_url" repo >/dev/null 2>&1 || exit 1
         cd repo || exit 1
 
@@ -269,17 +269,17 @@ e2e.git.trigger_via_push() {
             v[0-9]*)
                 # Tag push: push main first, then delete+recreate tag
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin main >/dev/null 2>&1 || exit 1
 
                 # Delete remote tag if it exists (to re-trigger)
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin ":refs/tags/${trigger_ref}" >/dev/null 2>&1 || true
 
                 git tag -f "$trigger_ref" >/dev/null 2>&1
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin "$trigger_ref" >/dev/null 2>&1 || exit 1
                 ;;
             branch:*)
@@ -292,7 +292,7 @@ e2e.git.trigger_via_push() {
                 # branches.
                 git checkout -b "$branch_name" >/dev/null 2>&1
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push -u --force origin "$branch_name" >/dev/null 2>&1 || exit 1
                 ;;
             docs-only)
@@ -316,7 +316,7 @@ e2e.git.trigger_via_push() {
                 baseline_sha="$(git rev-parse HEAD~1)"
 
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push -o ci.skip --force origin \
                     "${baseline_sha}:refs/heads/main" >/dev/null 2>&1 || exit 1
 
@@ -331,13 +331,13 @@ e2e.git.trigger_via_push() {
                 git commit --amend -m "docs: e2e docs-only trigger" >/dev/null 2>&1
 
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin "HEAD:refs/heads/main" >/dev/null 2>&1 || exit 1
                 ;;
             *)
                 # Default: push to main (or whatever ref name)
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
-                    git -c "credential.username=${username}" \
+                    git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin main >/dev/null 2>&1 || exit 1
                 ;;
         esac
