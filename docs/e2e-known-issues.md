@@ -266,6 +266,50 @@ The next `briklab.sh test --gitlab --all` should report 21+/28 PASS
 remaining failures will all fall into OI-1, OI-2 or OI-3 above and
 need targeted attention as described.
 
+## Recently Fixed (2026-05-25)
+
+### Local git `tag.gpgsign` trap (E-18 of 20260525 campaign)
+
+**Symptom**: `node-deploy-rollback` aborted silently mid-execution
+after `[INFO]  Pushing v0.2.0 to GitLab...`, with no verdict emitted
+and the suite jumping to the next scenario. Reproduced on both
+`gitlab-rollback.sh` and `jenkins-rollback.sh`.
+
+**Root cause**: with `tag.gpgsign=true` (or
+`tag.forceSignAnnotated=true`) in the operator's global
+`~/.gitconfig`, a bare `git tag X` is upgraded to an annotated signed
+tag -- which requires a message. Without `-m`, git exits 128 with
+`fatal: pas de message pour l'étiquette ?` (or its English
+equivalent). The rollback scripts run under `set -euo pipefail`, so
+the subshell containing the `git tag` exits non-zero, the `set -e`
+parent terminates the entire script without surfacing the error, and
+no log lines appear between "Pushing v0.2.0..." and the next
+scenario.
+
+**Why the harness operator triggers this**: a Brik maintainer who
+signs every tag in their day-to-day repos sets `tag.gpgsign=true`
+globally. The lab scripts shared the same shell environment.
+
+**Fix**: every `git tag` call in the lab harness now passes
+`-c tag.gpgsign=false -c tag.forceSignAnnotated=false` explicitly, so
+the harness produces lightweight unsigned tags regardless of the
+operator's global config. Five sites updated:
+
+- `briklab/scripts/lib/e2e/lib/git.sh:e2e.git.tag` (public helper, defence in depth)
+- `briklab/scripts/lib/e2e/gitlab-rollback.sh` (v0.1.0 + v0.2.0 in `_rollback_push_v020`)
+- `briklab/scripts/lib/e2e/jenkins-rollback.sh` (v0.1.0 + v0.2.0 in `_rollback_push_v020`)
+
+The pre-existing fix at `lib/git.sh:66` (`e2e.git.push.with_init`)
+documented the trap with a comment but did not propagate the pattern
+to the other call sites; this campaign closed the gap.
+
+**Operator note**: the lab is now self-defending. No change required
+on contributor machines. If a future helper introduces another
+`git tag` site, prefer `e2e.git.tag` (defence in depth) over a raw
+`git tag` to inherit the override automatically.
+
+---
+
 ## Recently Fixed (2026-05-21)
 
 - **GitLab adapter: dynamic child pipeline -> classic plan-aware pipeline**

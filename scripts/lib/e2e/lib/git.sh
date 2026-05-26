@@ -126,12 +126,19 @@ e2e.git.commit() {
 
 # Create a tag in a repo.
 # Args: $1 = repo dir, $2 = tag name
+#
+# tag.gpgsign=false / tag.forceSignAnnotated=false override the global
+# user config: with tag.gpgsign=true in ~/.gitconfig, `git tag X` would
+# require a message (annotated signed tag) and exit 128 -- silently
+# under `set -euo pipefail`. We force lightweight, unsigned tags so the
+# harness works regardless of the operator's global git config.
+# (see briklab/docs/e2e-known-issues.md "Local git tag.gpgsign trap")
 e2e.git.tag() {
     local repo_dir="$1"
     local tag_name="$2"
     (
         cd "$repo_dir" || exit 1
-        git tag "$tag_name" >/dev/null 2>&1
+        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag "$tag_name" >/dev/null 2>&1
     )
 }
 
@@ -277,7 +284,13 @@ e2e.git.trigger_via_push() {
                     git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin ":refs/tags/${trigger_ref}" >/dev/null 2>&1 || true
 
-                git tag -f "$trigger_ref" >/dev/null 2>&1
+                # tag.gpgsign override: see briklab/docs/e2e-known-issues.md
+                # "Local git tag.gpgsign trap". Without it, a global
+                # tag.gpgsign=true silently fails `git tag` here, the
+                # subsequent push fails, the subshell exits 1, and the
+                # whole scenario reports "Failed to trigger via push"
+                # without ever creating the tag remotely.
+                git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag -f "$trigger_ref" >/dev/null 2>&1
                 GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
                     git -c "credential.helper=" -c "credential.username=${username}" \
                     push origin "$trigger_ref" >/dev/null 2>&1 || exit 1

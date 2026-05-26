@@ -59,6 +59,12 @@ _rollback_push_v020() {
     local tmp_dir
     tmp_dir=$(mktemp -d)
     cp -r "${TEMPLATE_DIR}"/. "${tmp_dir}/"
+    # tag.gpgsign=false / tag.forceSignAnnotated=false neutralise the
+    # operator's global git config: with tag.gpgsign=true in ~/.gitconfig,
+    # bare `git tag X` requires a message (annotated signed tag) and
+    # exits 128 silently under `set -euo pipefail`, aborting the entire
+    # rollback test without a verdict.
+    # (see briklab/docs/e2e-known-issues.md "Local git tag.gpgsign trap")
     (
         cd "$tmp_dir" || exit 1
         rm -rf .git
@@ -66,10 +72,10 @@ _rollback_push_v020() {
         git init -b main >/dev/null 2>&1
         git add -A >/dev/null 2>&1
         git commit -m "Initial commit" >/dev/null 2>&1
-        git tag v0.1.0 >/dev/null 2>&1
+        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.1.0 >/dev/null 2>&1
         git add -A >/dev/null 2>&1
         git commit --allow-empty -m "Bump to v0.2.0" >/dev/null 2>&1
-        git tag v0.2.0 >/dev/null 2>&1
+        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.2.0 >/dev/null 2>&1
     )
 
     e2e.gitlab.api_delete "projects/${PROJECT_PATH}/protected_branches/main"

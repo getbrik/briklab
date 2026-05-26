@@ -298,11 +298,19 @@ e2e.gitlab.wait_pipeline_by_sha() {
 }
 
 # Cancel pipelines with a given status.
-# Args: $1 = project ID, $2 = status filter (running|pending)
+# Args: $1 = project ID
+#       $2 = status filter (running|pending)
+#       $3 = source filter (optional: push|api|trigger|schedule|web|...).
+#            When empty, cancels regardless of source. When set, only
+#            cancels pipelines triggered from that source -- useful to
+#            spare manually-triggered (api/trigger) pipelines while
+#            cleaning up auto-triggered (push) ones.
 e2e.gitlab.cancel_pipelines() {
-    local project_id="$1" status_filter="$2"
+    local project_id="$1" status_filter="$2" source_filter="${3:-}"
+    local query="projects/${project_id}/pipelines?status=${status_filter}&per_page=100"
+    [[ -n "$source_filter" ]] && query="${query}&source=${source_filter}"
     local pipeline_ids
-    pipeline_ids=$(e2e.gitlab.api_get "projects/${project_id}/pipelines?status=${status_filter}&per_page=100" | \
+    pipeline_ids=$(e2e.gitlab.api_get "$query" | \
         jq -r '.[].id' 2>/dev/null || true)
 
     for ppid in $pipeline_ids; do
@@ -311,6 +319,9 @@ e2e.gitlab.cancel_pipelines() {
 }
 
 # Cancel all running/pending pipelines for all projects in a group.
+# Only auto-triggered pipelines (source=push) are cancelled, so a run
+# launched in parallel against another project via api/trigger source
+# (the harness's real test triggers) is not collateral damage.
 # Args: $1 = group name (default: "brik")
 e2e.gitlab.cancel_all_group_pipelines() {
     local group_name="${1:-brik}"
@@ -322,7 +333,7 @@ e2e.gitlab.cancel_all_group_pipelines() {
 
     for pid in $project_ids; do
         for status in running pending; do
-            e2e.gitlab.cancel_pipelines "$pid" "$status"
+            e2e.gitlab.cancel_pipelines "$pid" "$status" "push"
         done
     done
 }

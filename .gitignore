@@ -8,6 +8,7 @@ data-backup/
 # Temporary files
 *.tmp
 *.bak
+e2e-validation-v0.6.0/
 
 # macOS
 .DS_Store

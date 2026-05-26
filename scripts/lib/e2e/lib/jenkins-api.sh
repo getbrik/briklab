@@ -116,16 +116,44 @@ import jenkins.model.Jenkins
 import hudson.model.ParametersDefinitionProperty
 import hudson.model.BooleanParameterDefinition
 import hudson.model.StringParameterDefinition
+
 def j = Jenkins.instance.getItemByFullName('__JOB__')
 if (j == null) { println 'job-not-found'; return }
-if (j.getProperty(ParametersDefinitionProperty.class) != null) { println 'already-set'; return }
-j.addProperty(new ParametersDefinitionProperty([
+
+// Expected parameters Brik consumes at pipeline runtime. Adding a new
+// entry here must stay safe across version upgrades: the early code
+// returned `already-set` as soon as ANY ParametersDefinitionProperty
+// existed on the job, so a job carrying stale params would not pick up
+// new ones -- and the next build would drop them silently (HARN-3 from
+// the 2026-05-20 campaign). We now merge missing entries into the
+// existing property instead.
+def expected = [
     new BooleanParameterDefinition('BRIK_DRY_RUN', false, 'Skip destructive deploy actions.'),
     new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.'),
     new BooleanParameterDefinition('BRIK_WITH_DEPLOY', false, 'Opt into the deploy stage. Skipped by default.')
-]))
-j.save()
-println 'registered'
+]
+
+def prop = j.getProperty(ParametersDefinitionProperty.class)
+if (prop == null) {
+    j.addProperty(new ParametersDefinitionProperty(expected))
+    j.save()
+    println 'registered (initial)'
+} else {
+    def existing = prop.getParameterDefinitions().collect { it.name } as Set
+    def missing = expected.findAll { !(it.name in existing) }
+    if (missing.isEmpty()) {
+        println 'already-set'
+    } else {
+        def merged = prop.getParameterDefinitions() + missing
+        // removeProperty + addProperty is the portable rebuild path:
+        // ParametersDefinitionProperty has no incremental add API that
+        // works across our Jenkins LTS matrix.
+        j.removeProperty(ParametersDefinitionProperty.class)
+        j.addProperty(new ParametersDefinitionProperty(merged))
+        j.save()
+        println 'registered (added=' + missing.collect { it.name }.join(',') + ')'
+    }
+}
 GROOVY
 )
     groovy="${groovy//__JOB__/${job_full_name}}"
