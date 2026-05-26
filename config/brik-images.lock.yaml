@@ -1,0 +1,18 @@
+# Pinned brik-runner images for briklab.
+# Consumed by scripts/lib/setup/sync-brik-images.sh: for each entry, the
+# script pulls the image into the local Docker daemon cache when absent.
+# Jenkins and GitLab runners are configured to use the cache only
+# (no re-pull when the image is already present).
+
+images:
+  - ghcr.io/getbrik/brik-runner-base:latest
+  - ghcr.io/getbrik/brik-runner-analysis:latest
+  - ghcr.io/getbrik/brik-runner-scanner:latest
+  - ghcr.io/getbrik/brik-runner-deploy:latest
+  - ghcr.io/getbrik/brik-runner-node:22
+  - ghcr.io/getbrik/brik-runner-node:24
+  - ghcr.io/getbrik/brik-runner-python:3.13
+  - ghcr.io/getbrik/brik-runner-python:3.14
+  - ghcr.io/getbrik/brik-runner-java:21
+  - ghcr.io/getbrik/brik-runner-rust:1.83
+  - ghcr.io/getbrik/brik-runner-dotnet:8

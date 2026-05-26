@@ -61,6 +61,27 @@ RUBY
     fi
 }
 
+# Bump the per-job dotenv variable limit to accommodate Brik's
+# init-stage dotenv (20 keys including the BRIK_IMG_<CLASS> mapping)
+# plus the release-stage BRIK_NEXT_VERSION + headroom for future
+# additions. GitLab's default is 20, which hits the cap as soon as
+# the planner reaches the release stage.
+configure_dotenv_limit() {
+    log_info "Raising dotenv_variables limit (default 20 -> 50)..."
+    local result
+    result=$(cat <<'RUBY' | docker exec -i brik-gitlab gitlab-rails runner - 2>/dev/null | tail -1
+limits = Plan.default.actual_limits
+limits.update!(dotenv_variables: 50)
+puts "OK #{Plan.default.actual_limits.dotenv_variables}"
+RUBY
+)
+    if [[ "$result" == OK* ]]; then
+        log_ok "dotenv_variables limit: 50"
+    else
+        log_warn "could not raise dotenv limit (continuing): ${result}"
+    fi
+}
+
 # Ensure a valid Personal Access Token exists.
 # Delegates to the shared auth library.
 create_pat() {
@@ -290,6 +311,7 @@ RUBY
 # === Main ===
 wait_for_gitlab
 setup_root_password
+configure_dotenv_limit
 create_pat
 create_test_project
 create_brik_group
