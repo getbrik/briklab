@@ -5,19 +5,19 @@
 <p align="center">
   <b>The Brik test lab.</b><br>
   Local Docker infra for end-to-end validation of Brik pipelines on real GitLab and real Jenkins.<br>
-  <i>One command. Two CI platforms. 56 scenarios.</i>
+  <i>One command. Two CI platforms. Real orchestrator and deploy validation.</i>
 </p>
 
 <p align="center">
   <a href="https://github.com/getbrik/briklab/actions/workflows/ci.yml"><img src="https://github.com/getbrik/briklab/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="#coverage-in-numbers"><img src="https://img.shields.io/badge/E2E%20scenarios-56-brightgreen" alt="E2E scenarios"></a>
+  <a href="#e2e-testing"><img src="https://img.shields.io/badge/E2E-orchestrator%20parity%20%2B%20real%20deploy-brightgreen" alt="E2E scope"></a>
   <a href="#coverage-in-numbers"><img src="https://img.shields.io/badge/validates-GitLab%20%2B%20Jenkins-blueviolet" alt="Platforms"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MPL--2.0-blue" alt="License"></a>
 </p>
 
 ## Why Briklab exists
 
-You cannot validate a CI/CD framework with unit tests. Brik's shared libraries call real GitLab APIs, run inside real Jenkins agents, push to real artifact registries, deploy to real Kubernetes clusters. Validation requires the real thing.
+Most of Brik's behavior is validated fast and offline by its own typed test suites (contracts, unit, and notion-pair integration tests in the `brik` repo, plus per-stack smoke tests in `brik-images`). But some things only a real orchestrator can prove: that the shared libraries drive real GitLab APIs and real Jenkins agents identically, and that the deploy stage syncs and rolls back against a real ArgoCD/GitOps target. That is what Briklab validates.
 
 The alternatives are bad:
 
@@ -36,11 +36,11 @@ GitLab PAT, Runner registration, Gitea PAT, Jenkins Configuration-as-Code + Job 
 
 ### 🧪 E2E framework
 
-28 scenarios per platform, with filtering by group (`--groups A,D,H`), batching (`--batch-size 4`), parallel execution (`--parallel-groups`), single-scenario targeting (`--project <name>`), and listing (`--list`). Built on 17 reusable Bash libraries under `scripts/lib/e2e/lib/`.
+A focused suite of orchestrator-parity and real-deploy scenarios per platform, with single-scenario targeting (`--project <name>`), batching (`--batch-size 4`), and listing (`--list`). Built on 17 reusable Bash libraries under `scripts/lib/e2e/lib/`. Per-stage, per-stack, planner and findings behavior is validated upstream by the `brik` repo's contract/unit/integration suites, so this lab stays small and fast.
 
 ### ⚓ Real deploy targets
 
-The deploy stage is validated against actual targets, not mocks: Kubernetes (`node-deploy-k8s`), Helm (`node-deploy-helm`), SSH (`node-deploy-ssh`), Docker Compose (`node-deploy`), GitOps via ArgoCD (`node-deploy-gitops`), and a 3-step rollback chain (`node-deploy-rollback`) that verifies ArgoCD rolls back to the previous image.
+The deploy stage is validated against actual infrastructure, not mocks: GitOps via ArgoCD (`node-deploy-gitops`) and a 3-step rollback chain (`node-deploy-rollback`) that verifies ArgoCD rolls back to the previous image. The other deploy targets (Kubernetes, Helm, SSH, Docker Compose) have their dispatch and argument handling covered by the `brik` repo's integration tests; their fixtures remain under `test-projects/` for on-demand manual runs.
 
 ### 🔁 Reset and infra-refresh
 
@@ -145,7 +145,6 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 |---------|-------------|
 | `briklab.sh test --gitlab` | Run `node-minimal` on GitLab |
 | `briklab.sh test --gitlab --all` | Run the full GitLab E2E suite |
-| `briklab.sh test --gitlab --complete` | Run only `*-complete` scenarios (with Nexus publish) |
 | `briklab.sh test --gitlab --project <name>` | Run a single GitLab scenario by name |
 | `briklab.sh test --gitlab --list` | List available GitLab scenarios |
 | `briklab.sh test --jenkins` | Run `node-minimal` on Jenkins |
@@ -154,8 +153,6 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 | `briklab.sh test --jenkins --project <name>` | Run a single Jenkins scenario by name |
 | `briklab.sh test --jenkins --list` | List available Jenkins scenarios |
 | `briklab.sh test --gitlab --batch-size N` | Execute scenarios in batches of N |
-| `briklab.sh test --gitlab --groups A,D,H` | Filter by group (A=stack, B=full, C=complete, D=security, E=deploy, F=gitops, G=workflow, H=error) |
-| `briklab.sh test --gitlab --parallel-groups` | Execute groups in parallel |
 
 ### Reset
 
@@ -206,110 +203,41 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 
 ## E2E Testing
 
+Briklab runs a small set of end-to-end scenarios that need a real orchestrator
+or real deploy infrastructure. Everything else -- per-stage logic, per-stack
+dispatch, the planner, findings normalization -- is validated upstream by the
+`brik` repo's contract/unit/integration suites and by `brik-images` smoke
+tests, so this lab stays fast.
+
 ### GitLab
 
-Each GitLab E2E scenario pushes a test project to briklab GitLab, triggers a pipeline, and validates that specific jobs pass.
+Each scenario pushes a test project to briklab GitLab, triggers a pipeline, and
+validates the expected jobs.
 
-#### Scenarios (28 total)
-
-##### Minimal stack coverage
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-minimal` | Node.js | push `main` | init, build, test, deploy, notify | pass |
-| `python-minimal` | Python | push `main` | init, build, test, deploy, notify | pass |
-| `java-minimal` | Java | push `main` | init, build, test, deploy, notify | pass |
-| `rust-minimal` | Rust | push `main` | init, build, test, deploy, notify | pass |
-| `dotnet-minimal` | .NET | push `main` | init, build, test, deploy, notify | pass |
-
-##### Full pipelines
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-full` | Node.js | tag `v0.1.0` | init, release, build, quality, test, package, deploy, notify | pass |
-| `python-full` | Python | tag `v0.1.0` | init, release, build, quality, security, test, package, deploy, notify | pass |
-| `java-full` | Java | tag `v0.1.0` | init, release, build, quality, test, package, deploy, notify | pass |
-
-##### Complete pipelines with Nexus publish
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-complete` | Node.js | tag `v0.1.0` | init, release, build, test, package, notify | pass |
-| `python-complete` | Python | tag `v0.1.0` | init, release, build, test, package, notify | pass |
-| `java-complete` | Java | tag `v0.1.0` | init, release, build, test, package, notify | pass |
-| `rust-complete` | Rust | tag `v0.1.0` | init, release, build, test, package, notify | pass |
-| `dotnet-complete` | .NET | tag `v0.1.0` | init, release, build, test, package, notify | pass |
-
-##### Security and Deploy
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-security` | Node.js | push `main` | init, build, security, test, notify | pass |
-| `node-deploy` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-dryrun` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-k8s` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-ssh` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-gitops` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-| `node-deploy-rollback` | Node.js | multi-step | v0.1.0 deploy, v0.2.0 deploy, config revert | pass |
-
-> `node-deploy-dryrun` reuses the `node-deploy` project with `BRIK_DRY_RUN=true`. `node-deploy-rollback` uses `node-deploy-gitops-rollback` with a 3-step commit chain: deploy v0.1.0, deploy v0.2.0, revert config repo to verify ArgoCD rolls back to v0.1.0 image.
-
-##### Helm deploy
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-deploy-helm` | Node.js | tag `v0.1.0` | init, release, build, test, package, deploy, notify | pass |
-
-##### Deploy failure scenario
-
-| Scenario | Stack | Trigger | Expected failure | Expected |
-|----------|-------|---------|-----------------|----------|
-| `node-deploy-failure` | Node.js | tag `v0.1.0` | brik-deploy job fails (non-existent namespace) | fail |
-
-##### Workflow scenarios
-
-| Scenario | Stack | Trigger | Validated stages | Expected |
-|----------|-------|---------|-----------------|----------|
-| `workflow-trunk-main` | Node.js | push `main` | init, build, test, deploy, notify | pass |
-| `workflow-trunk-tag` | Node.js | tag `v0.2.0` | init, release, build, test, package, deploy, notify | pass |
-| `workflow-trunk-feature` | Node.js | push `feature/test` | init, build, test, notify | pass |
-
-> Workflow scenarios run sequentially: `workflow-trunk-main` pushes to main, then `workflow-trunk-tag` creates a tag on the same project, then `workflow-trunk-feature` creates a feature branch. Each depends on the previous one.
-
-##### Error scenarios
-
-| Scenario | Stack | Trigger | Expected failure | Expected |
-|----------|-------|---------|-----------------|----------|
-| `error-build` | Node.js | push `main` | brik-build job fails | fail |
-| `error-test` | Node.js | push `main` | brik-test job fails | fail |
-| `error-config` | Node.js | push `main` | brik-init job fails (invalid brik.yml) | fail |
+| Scenario | Trigger | Validates | Expected |
+|----------|---------|-----------|----------|
+| `node-full` | tag `v0.1.0` | full flow (init, release, build, lint, sast, scan, test, package, deploy, notify) -- orchestrator parity | pass |
+| `node-deploy-gitops` | tag `v0.1.0` | deploy via GitOps with a real ArgoCD sync | pass |
+| `node-deploy-rollback` | multi-step | 3-step commit chain (deploy v0.1.0, deploy v0.2.0, revert config repo) verifying ArgoCD rolls back to the v0.1.0 image | pass |
 
 ### Jenkins
 
-Jenkins E2E testing mirrors the GitLab scenarios: pushes the Brik shared library and test projects to Gitea, then triggers Jenkins pipelines via the REST API.
+Jenkins mirrors GitLab for orchestrator parity: it pushes the Brik shared
+library and test projects to Gitea, then triggers pipelines via the REST API.
 
-The Jenkins pipeline runs the full Brik fixed flow:
-
-```
-Init -> Release -> Build -> Quality & Security -> Test -> Package -> Deploy -> Notify
-```
-
-#### Scenarios (28 total)
-
-Jenkins runs the same 28 scenarios as GitLab (minimal, full, complete, security, deploy, helm, workflow, error). The E2E framework supports CI variable injection via `buildWithParameters`.
+| Scenario | Trigger | Validates | Expected |
+|----------|---------|-----------|----------|
+| `node-full` | job build | full flow including deploy | pass |
+| `node-complete` | job build | full flow + Nexus publish, no deploy | pass |
 
 ```bash
-# Run the default Jenkins E2E pipeline (node-minimal)
-./scripts/briklab.sh test --jenkins
-
-# Run the full Jenkins E2E suite
+# Run the suite
+./scripts/briklab.sh test --gitlab --all
 ./scripts/briklab.sh test --jenkins --all
 
-# Run a specific scenario
-./scripts/briklab.sh test --jenkins --project node-deploy-k8s
-
-# List available scenarios
-./scripts/briklab.sh test --jenkins --list
+# Single scenario / list
+./scripts/briklab.sh test --gitlab --project node-deploy-gitops
+./scripts/briklab.sh test --gitlab --list
 ```
 
 ### Test projects
