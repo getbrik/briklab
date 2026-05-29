@@ -47,100 +47,16 @@ ensure_gitlab_pat
 # now produces a fragment for are required.
 
 SCENARIOS=(
-    # All projects now use /templates/dynamic-pipeline.yml. The planner
-    # gates each stage by context + opt-in flag:
-    #   - tag push (v*.*.*) -> _plan.yml auto-passes --with-release --with-package.
-    #   - to also run deploy, pass BRIK_WITH_DEPLOY=true via CI variable.
-    # Scenarios that previously required brik-deploy on branch push are
-    # now corrected: deploy is opt-in only.
-
-    # --- Minimal stack coverage (branch push: no release, no package, no deploy) ---
-    "node-minimal|node-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||900"
-    "python-minimal|python-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||900"
-    "java-minimal|java-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
-    "rust-minimal|rust-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
-    "dotnet-minimal|dotnet-minimal|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
-    # --- Full pipelines (tag push: release + package; deploy via opt-in) ---
-    # node-full is the generic clean Node fixture (deps up-to-date, scan
-    # green). The CVE-detection twin lives in the "Broken" section below
-    # under node-full-cve so its purpose is obvious from the name.
+    # The per-stage, per-stack, planner and findings behavior is covered by
+    # the brik repo's contract, unit and integration suites
+    # (spec/{contracts,unit,integration}/). Only scenarios that genuinely need
+    # a live orchestrator or real deploy infrastructure remain here:
+    #   - node-full: end-to-end happy path on GitLab (orchestrator parity).
+    #   - node-deploy-gitops: real ArgoCD / GitOps sync.
+    #   - node-deploy-rollback: real GitOps rollback (depends on the gitops run).
     "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    "python-full|python-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    "java-full|java-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    # --- Security and Deploy ---
-    "node-security|node-security|main|brik-init,brik-build,brik-sast,brik-scan,brik-test,brik-notify||300"
-    "node-deploy|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    "node-deploy-dryrun|node-deploy|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_DRY_RUN=true,BRIK_WITH_DEPLOY=true"
-    "node-deploy-k8s|node-deploy-k8s|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    "node-deploy-ssh|node-deploy-ssh|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    "node-deploy-helm|node-deploy-helm|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
-    # --- Complete pipelines with Nexus publish (tag push: all stages + publish, no deploy) ---
-    # node-complete is the generic clean Node fixture for publish flows.
-    # The CVE+format twin lives in the "Broken" section below under
-    # node-complete-cve so its purpose is obvious from the name.
-    "node-complete|node-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
-    "python-complete|python-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
-    "java-complete|java-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
-    "rust-complete|rust-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
-    "dotnet-complete|dotnet-complete|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||900"
-    # --- Workflow scenarios (push-driven, sequential) ---
-    "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600"
-    # workflow-trunk-tag intentionally does NOT set BRIK_WITH_DEPLOY:
-    # adding any E2E_CI_VARIABLES forces the harness from push mode
-    # to API trigger, and an API trigger on v0.2.0 reuses the stale
-    # tag commit (pre-migration) so the pipeline would resolve the
-    # legacy /templates/pipeline.yml. Push mode rewrites the tag at
-    # the latest source-tree commit and uses the current dynamic
-    # template. Deploy coverage is provided by the node-deploy* family.
-    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-notify||600|||workflow-trunk-main"
-    "workflow-trunk-feature|node-workflow-trunk|branch:feature/test|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-notify||600|||workflow-trunk-tag"
-    # --- Error scenarios (expect pipeline failure, with error pattern validation) ---
-    # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
-    "error-build|node-error-build|main|brik-init||300|brik-build|||Build failed intentionally|brik-init"
-    "error-test|node-error-test|main|brik-init,brik-build||300|brik-test|||FAIL~test.*failed|brik-init,brik-build"
-    # brik-init is still the failing job: brik-plan in the parent succeeds
-    # (the planner does not validate brik.yml schema, only the topology),
-    # then the child pipeline reaches brik-init which calls config.read
-    # and fails. The bridge-follow in gitlab-test.sh makes PIPELINE_ID
-    # point at the child, so checking expect_failed_job=brik-init works.
-    "error-config|invalid-config|main|||300|brik-init|||validat~invalid~schema|"
-    "error-deploy|node-deploy-failure|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package||600|brik-deploy|BRIK_WITH_DEPLOY=true||brik-nonexistent~NotFound|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package"
-    # --- CVE / "broken on purpose" fixtures (expect-fail) ---
-    # These projects ship with deliberately defective state so the suite
-    # proves brik catches the corresponding class of regression:
-    # node-full-cve     : known-vulnerable transitive dep
-    #                     (brace-expansion 5.0.5, GHSA-jxxr-4gwj-5jf2)
-    #                     -> brik-scan exits non-zero.
-    # node-complete-cve : same CVE + prettier format violations
-    #                     -> brik-lint exits before brik-scan even runs.
-    # Their generic-name counterparts (node-full, node-complete) carry
-    # cleaned-up deps and prettier-formatted sources and pass end to end.
-    "node-full-cve|node-full-cve|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast||600|brik-scan|BRIK_WITH_DEPLOY=true||GHSA|brik-init,brik-release,brik-build,brik-lint,brik-sast"
-    "node-complete-cve|node-complete-cve|v0.1.0|brik-init,brik-release,brik-build||900|brik-lint|||format|brik-init,brik-release,brik-build"
-    # --- Explicit mode/context coverage for the planner ---
-    # Every project now includes /templates/dynamic-pipeline.yml, so
-    # bridge-follow in gitlab-test.sh already exercises the parent+child
-    # split for every scenario. These three keep dedicated mode and
-    # tag-context coverage (balanced/safe and snapshot/release) so a
-    # planner regression on one of those axes shows up as its own line
-    # in the suite report rather than only as a cascading failure.
-    "node-plan-balanced|node-plan-balanced|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
-    "node-plan-safe|node-plan-safe|main|brik-init,brik-build,brik-lint,brik-test,brik-notify||900"
-    "node-plan-tag|node-plan-tag|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-test,brik-notify||900"
-    # L.1 scenario 3: an invalid plan must fail the parent's brik-plan
-    # job with an actionable message and create no child pipeline. The
-    # fixture's brik.yml sets pipeline.selection.mode=aggressive, which
-    # the planner rejects (reserved for v0.7+). brik-plan is the failing
-    # job; there is no bridge, so the checked pipeline stays the parent.
-    "node-plan-invalid|node-plan-invalid|main|||300|brik-plan|||aggressive~not implemented|"
-    # L.1 scenario 2: a docs-only incremental commit. The "docs-only"
-    # ref triggers the two-phase push (baseline with ci.skip, then a
-    # docs commit) so the planner sees a real docs-only diff. balanced
-    # mode skips the build/lint/sast/scan/test grid; only the report
-    # aggregator brik-notify runs in the child pipeline.
-    "node-plan-docs|node-plan-docs|docs-only|brik-notify||600"
 )
 
 # ---------------------------------------------------------------------------

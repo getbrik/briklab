@@ -40,48 +40,13 @@ reload_env
 # Format: name|jenkins_job|projects_to_push|timeout|expect_failure|ci_vars|depends_on|error_pattern
 # ---------------------------------------------------------------------------
 SCENARIOS=(
-    "node-minimal|node-minimal|node-minimal|300|false"
-    "python-minimal|python-minimal|python-minimal|300|false"
-    "java-minimal|java-minimal|java-minimal|300|false"
-    "rust-minimal|rust-minimal|rust-minimal|300|false"
-    "dotnet-minimal|dotnet-minimal|dotnet-minimal|300|false"
-    "node-complete|node-complete|node-complete|600|false"
-    "python-complete|python-complete|python-complete|600|false"
-    "java-complete|java-complete|java-complete|900|false"
-    "rust-complete|rust-complete|rust-complete|900|false"
-    "dotnet-complete|dotnet-complete|dotnet-complete|900|false"
+    # Per-stage, per-stack, planner and findings behavior is covered by the
+    # brik repo's contract, unit and integration suites. The Jenkins suite
+    # keeps two end-to-end scenarios for orchestrator parity with GitLab:
+    #   - node-full: full release + package + deploy happy path.
+    #   - node-complete: full release + package (Nexus publish), no deploy.
     "node-full|node-full|node-full|600|false"
-    "python-full|python-full|python-full|600|false"
-    "java-full|java-full|java-full|600|false"
-    "node-security|node-security|node-security|300|false"
-    "node-deploy|node-deploy|node-deploy|600|false"
-    "node-deploy-dryrun|node-deploy|node-deploy|600|false|BRIK_DRY_RUN=true"
-    "node-deploy-k8s|node-deploy-k8s|node-deploy-k8s|600|false"
-    "node-deploy-ssh|node-deploy-ssh|node-deploy-ssh|600|false"
-    "node-deploy-helm|node-deploy-helm|node-deploy-helm|600|false"
-    "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
-    "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false||node-deploy-gitops"
-    # --- Workflow scenarios (push-driven, sequential) ---
-    "workflow-trunk-main|node-workflow-trunk|node-workflow-trunk|600|false"
-    "workflow-trunk-tag|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-main"
-    "workflow-trunk-feature|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-tag"
-    # --- Error scenarios ---
-    # Note: error_pattern uses ~ as OR separator (converted to | at runtime)
-    "error-build|node-error-build|node-error-build|300|true|||Build failed intentionally"
-    "error-test|node-error-test|node-error-test|300|true|||FAIL~test.*failed"
-    "error-config|invalid-config|invalid-config|300|true|||validat~invalid~schema"
-    "error-deploy|node-deploy-failure|node-deploy-failure|600|true|||brik-nonexistent~NotFound"
-    # --- L.2 plan-driven scenarios (Jenkins counterparts of L.1) ---
-    # node-plan-tag: full release context, driven by the BRIK_TAG build
-    # parameter -- the planner produces a release-context plan.
-    # node-plan-invalid: the brik.yml requests the aggressive selection
-    # mode, which the planner rejects. Unlike GitLab (where the brik-plan
-    # parent job failing kills the child pipeline), the Jenkins adapter
-    # treats a planner failure as non-fatal: it logs the rejection and
-    # falls back to the legacy fixed flow. The build therefore SUCCEEDS.
-    # This scenario locks in that graceful-degradation contract.
-    "node-plan-tag|node-plan-tag|node-plan-tag|600|false|BRIK_TAG=v0.1.0"
-    "node-plan-invalid|node-plan-invalid|node-plan-invalid|300|false"
+    "node-complete|node-complete|node-complete|600|false"
 )
 
 # ---------------------------------------------------------------------------
