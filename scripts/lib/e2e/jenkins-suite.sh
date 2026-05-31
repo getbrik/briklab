@@ -47,6 +47,14 @@ SCENARIOS=(
     #   - node-complete: full release + package (Nexus publish), no deploy.
     "node-full|node-full|node-full|600|false"
     "node-complete|node-complete|node-complete|600|false"
+    # Stub-image variant: every stage runs on the single brik-runner-stub
+    # image via the BRIK_RUNNER_CLASSES_FILE override. The path is RELATIVE to
+    # the brik library root because Jenkins checks the shared lib into a
+    # hash-named ${WORKSPACE}@libs/<hash>/ dir; brikRunStage resolves it
+    # against brikHome per stage container. init still boots on its default
+    # base image, then emits the stub image map via its dotenv. Reuses the
+    # node-full project repo.
+    "node-full-stub|node-full|node-full|600|false|BRIK_WITH_DEPLOY=true,BRIK_RUNNER_CLASSES_FILE=lib/registry/runner_classes.stub.yml"
 )
 
 # ---------------------------------------------------------------------------
