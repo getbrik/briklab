@@ -130,7 +130,8 @@ if (j == null) { println 'job-not-found'; return }
 def expected = [
     new BooleanParameterDefinition('BRIK_DRY_RUN', false, 'Skip destructive deploy actions.'),
     new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.'),
-    new BooleanParameterDefinition('BRIK_WITH_DEPLOY', false, 'Opt into the deploy stage. Skipped by default.')
+    new BooleanParameterDefinition('BRIK_WITH_DEPLOY', false, 'Opt into the deploy stage. Skipped by default.'),
+    new StringParameterDefinition('BRIK_RUNNER_CLASSES_FILE', '', 'Runner-class image registry override (absolute, or relative to the brik library root).')
 ]
 
 def prop = j.getProperty(ParametersDefinitionProperty.class)
@@ -192,17 +193,27 @@ e2e.jenkins.trigger_build() {
     has_params=$(e2e.jenkins.api_get "${job_path}/api/json?tree=property[parameterDefinitions[name]]" 2>/dev/null | \
         jq -r '[.property[]?.parameterDefinitions // []] | flatten | length' 2>/dev/null || echo "0")
 
-    # First-build race: a Pipeline that declares parameters via
-    # properties([parameters(...)]) only registers them when the build
-    # actually runs, so /buildWithParameters fails on the very first
-    # invocation. When ci_vars is requested but params are not yet
-    # registered, pre-register them via the /scriptText admin API so the
-    # POST below succeeds. Multibranch sub-jobs (E2E_JENKINS_BRANCH set)
-    # are skipped because their property model is owned by the parent.
-    # pre_register_params calls get_crumb internally, which rewrites the
-    # cookie jar -- re-fetch the crumb afterwards so the build POST below
-    # ships a crumb bound to the current session.
-    if [[ -n "$ci_vars" && "${has_params:-0}" -eq 0 && -z "${E2E_JENKINS_BRANCH:-}" ]]; then
+    # Parameter registration before trigger. Jenkins silently DROPS any
+    # buildWithParameters value whose parameter is not already declared on
+    # the job (default ParametersAction behaviour). Two ways a param goes
+    # undeclared at trigger time:
+    #   1. First-build race: a Pipeline declares its params via
+    #      properties([parameters(...)]) only when the build runs, so the
+    #      very first /buildWithParameters has no ParametersDefinitionProperty.
+    #   2. Partial seed: the casc Job DSL declares a SUBSET (BRIK_DRY_RUN +
+    #      BRIK_TAG) at job creation, so has_params>0 from the start but the
+    #      Brik-specific params (BRIK_WITH_DEPLOY, BRIK_RUNNER_CLASSES_FILE)
+    #      are still missing -- and would be dropped on every trigger until a
+    #      build happens to run properties() first.
+    # So pre-register whenever ci_vars is requested, NOT only when
+    # has_params==0. pre_register_params is idempotent: it merges only the
+    # missing expected params and is a no-op ('already-set') otherwise.
+    # Multibranch sub-jobs (E2E_JENKINS_BRANCH set) are skipped because their
+    # property model is owned by the parent. pre_register_params calls
+    # get_crumb internally, which rewrites the cookie jar -- re-fetch the
+    # crumb afterwards so the build POST below ships a crumb bound to the
+    # current session.
+    if [[ -n "$ci_vars" && -z "${E2E_JENKINS_BRANCH:-}" ]]; then
         e2e.jenkins.pre_register_params "$job_name" >/dev/null 2>&1 || true
         crumb=$(e2e.jenkins.get_crumb)
         has_params=$(e2e.jenkins.api_get "${job_path}/api/json?tree=property[parameterDefinitions[name]]" 2>/dev/null | \
