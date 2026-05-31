@@ -86,7 +86,6 @@ _rollback_push_v020() {
     # bare `git tag X` requires a message (annotated signed tag) and
     # exits 128 silently under `set -euo pipefail`, aborting the entire
     # rollback test without a verdict.
-    # (see briklab/docs/e2e-known-issues.md "Local git tag.gpgsign trap")
     (
         cd "$tmp_dir" || exit 1
         rm -rf .git
