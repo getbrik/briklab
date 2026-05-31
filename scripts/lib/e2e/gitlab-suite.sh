@@ -55,6 +55,14 @@ SCENARIOS=(
     #   - node-deploy-gitops: real ArgoCD / GitOps sync.
     #   - node-deploy-rollback: real GitOps rollback (depends on the gitops run).
     "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
+    # Stub-image variant: every stage runs on the single brik-runner-stub
+    # image via the BRIK_RUNNER_CLASSES_FILE override (built locally from
+    # brik-images/images/stub/Dockerfile). Validates the FULL shared-library
+    # workflow (context, planner, gates, needs, image parity) on the real
+    # orchestrator without pulling heavy stack images. init itself boots on
+    # its default base image, then emits the stub image map via its dotenv.
+    # Reuses the node-full project repo.
+    "node-full-stub|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true,BRIK_RUNNER_CLASSES_FILE=/opt/brik/lib/registry/runner_classes.stub.yml"
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
 )
