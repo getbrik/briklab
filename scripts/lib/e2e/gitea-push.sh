@@ -30,4 +30,4 @@ if [[ -z "${GITEA_PAT:-}" ]]; then
 fi
 
 e2e.push.brik_repos "gitea"
-e2e.push.test_projects "gitea" "${E2E_JENKINS_PROJECTS:-node-minimal}"
+e2e.push.test_projects "gitea" "${E2E_JENKINS_PROJECTS:-node-full}"

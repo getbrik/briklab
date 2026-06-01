@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
-# Briklab - Main CLI
+# Briklab - Main CLI (thin dispatcher).
+# Commands live in lib/cli/*.sh; shared helpers in lib/*.sh.
 # Usage: ./scripts/briklab.sh <command> [options]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRIKLAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# LIB_SETUP/LIB_E2E/COMPOSE_FILE are consumed by the sourced lib/cli/*.sh
+# modules below, not in this file -- hence the shellcheck exemption.
+# shellcheck disable=SC2034
 LIB_SETUP="${SCRIPT_DIR}/lib/setup"
+# shellcheck disable=SC2034
 LIB_E2E="${SCRIPT_DIR}/lib/e2e"
+# shellcheck disable=SC2034
 COMPOSE_FILE="${BRIKLAB_DIR}/docker-compose.yml"
 
 # shellcheck source=lib/common.sh
 BRIKLAB_ROOT="$BRIKLAB_DIR" source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/runner-images.sh
+source "${SCRIPT_DIR}/lib/runner-images.sh"
 
 # Check prerequisites
 check_prereqs() {
@@ -41,476 +49,37 @@ load_env() {
     fi
 }
 
-# === HELPERS ===
+# CLI command modules. Sourced AFTER the shared helpers above so their cmd_*
+# functions resolve check_prereqs/load_env/log_*/SCRIPT_DIR/... at call time.
+# shellcheck source=lib/cli/lifecycle.sh
+source "${SCRIPT_DIR}/lib/cli/lifecycle.sh"
+# shellcheck source=lib/cli/setup.sh
+source "${SCRIPT_DIR}/lib/cli/setup.sh"
+# shellcheck source=lib/cli/reset.sh
+source "${SCRIPT_DIR}/lib/cli/reset.sh"
+# shellcheck source=lib/cli/test.sh
+source "${SCRIPT_DIR}/lib/cli/test.sh"
 
-# Brik runner images used by the briklab test-projects.
-# Mirrors brik/lib/pipeline/runner-images.sh (source of truth) restricted to
-# the (stack, version) combos actually exercised by briklab/test-projects/*,
-# plus the 4 special-purpose images set by shared-libs/gitlab/templates/pipeline.yml.
-# With pull_policy="if-not-present" on the runner, these are pulled once and
-# reused on every pipeline; we make sure they are local before launching tests.
-BRIK_RUNNER_IMAGES=(
-    "ghcr.io/getbrik/brik-runner-base:latest"
-    "ghcr.io/getbrik/brik-runner-node:22"
-    "ghcr.io/getbrik/brik-runner-node:24"
-    "ghcr.io/getbrik/brik-runner-python:3.13"
-    "ghcr.io/getbrik/brik-runner-python:3.14"
-    "ghcr.io/getbrik/brik-runner-java:21"
-    "ghcr.io/getbrik/brik-runner-java:25"
-    "ghcr.io/getbrik/brik-runner-rust:1"
-    "ghcr.io/getbrik/brik-runner-dotnet:9.0"
-    "ghcr.io/getbrik/brik-runner-dotnet:10.0"
-    "ghcr.io/getbrik/brik-runner-analysis:latest"
-    "ghcr.io/getbrik/brik-runner-scanner:latest"
-    "ghcr.io/getbrik/brik-runner-deploy:latest"
-)
-
-# Ensure all brik runner images are available locally. Pulls only those missing.
-pull_brik_images() {
-    local missing=()
-    local image
-    for image in "${BRIK_RUNNER_IMAGES[@]}"; do
-        if ! docker image inspect "$image" >/dev/null 2>&1; then
-            missing+=("$image")
-        fi
-    done
-    if [[ ${#missing[@]} -eq 0 ]]; then
-        log_info "Brik runner images: ${#BRIK_RUNNER_IMAGES[@]} cached, none to pull"
-        return 0
-    fi
-    log_info "Pulling ${#missing[@]} brik runner image(s)..."
-    for image in "${missing[@]}"; do
-        if docker pull "$image" >/dev/null 2>&1; then
-            log_ok "  pulled ${image}"
-        else
-            log_warn "  failed to pull ${image} (runner will retry on first use)"
-        fi
-    done
-}
-
-# Reload Jenkins CasC configuration without a full restart.
-# Use when only CasC YAML changed (e.g. new job definitions).
-# For env var changes (e.g. BRIK_PUBLISH_NPM_TOKEN), a full restart is needed.
-jenkins_reload_casc() {
-    local jenkins_url="http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}"
-    local crumb
-    crumb=$(curl -sf -u "admin:${JENKINS_ADMIN_PASSWORD:-changeme_jenkins}" \
-        "${jenkins_url}/crumbIssuer/api/json" | jq -r '.crumb') || {
-        log_error "Failed to get Jenkins crumb - is Jenkins running?"
-        return 1
-    }
-    curl -sf -X POST -u "admin:${JENKINS_ADMIN_PASSWORD:-changeme_jenkins}" \
-        -H "Jenkins-Crumb: ${crumb}" \
-        "${jenkins_url}/configuration-as-code/reload" || {
-        log_error "Failed to reload Jenkins CasC"
-        return 1
-    }
-    log_ok "Jenkins CasC reloaded"
-}
-
-# === COMMANDS ===
-
-cmd_start() {
+# preflight: E2E readiness gate (lib/preflight.sh is sourced by lib/cli/test.sh
+# above, so briklab.preflight.e2e is already defined). Accepts --gitlab/--jenkins
+# (like test) and forwards --with-deploy / --fix.
+cmd_preflight() {
     check_prereqs
     load_env
-
-    # Pre-create bind-mount files/dirs so Docker doesn't create them as directories
-    mkdir -p "${BRIKLAB_DIR}/data/ssh-target"
-    touch "${BRIKLAB_DIR}/data/ssh-target/authorized_keys"
-    mkdir -p "${BRIKLAB_DIR}/data/gitlab-runner"
-    mkdir -p "${BRIKLAB_DIR}/data/k3d"
-    [[ -d "${BRIKLAB_DIR}/data/k3d/kubeconfig" ]] && rm -rf "${BRIKLAB_DIR}/data/k3d/kubeconfig"
-    touch "${BRIKLAB_DIR}/data/k3d/kubeconfig"
-
-    log_info "Starting containers..."
-    docker compose -f "$COMPOSE_FILE" up -d
-
-    log_ok "Containers started"
-    cmd_status
-}
-
-cmd_stop() {
-    load_env
-    log_info "Stopping all containers..."
-    docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
-    log_ok "Containers stopped"
-}
-
-cmd_restart() {
-    cmd_stop
-    cmd_start
-}
-
-cmd_status() {
-    load_env
-    echo ""
-    echo -e "${BLUE}=== Briklab - Status ===${NC}"
-    echo ""
-
-    local gitlab_port="${GITLAB_HTTP_PORT:-8929}"
-    local gitea_port="${GITEA_HTTP_PORT:-3000}"
-    local jenkins_port="${JENKINS_HTTP_PORT:-9090}"
-    local nexus_port="${NEXUS_HTTP_PORT:-8081}"
-    local gitlab_host="${GITLAB_HOSTNAME:-gitlab.briklab.test}"
-    local gitea_host="${GITEA_HOSTNAME:-gitea.briklab.test}"
-    local jenkins_host="${JENKINS_HOSTNAME:-jenkins.briklab.test}"
-    local nexus_host="${NEXUS_HOSTNAME:-nexus.briklab.test}"
-
-    # Check each container
-    local health=""
-    for container in brik-gitlab brik-runner brik-gitea brik-jenkins brik-nexus; do
-        if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-            health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null | tr -d '[:space:]')
-            health="${health:-none}"
-            case "$health" in
-                healthy)   echo -e "  ${GREEN}●${NC} ${container} (healthy)" ;;
-                starting)  echo -e "  ${YELLOW}●${NC} ${container} (starting...)" ;;
-                none)      echo -e "  ${GREEN}●${NC} ${container} (running)" ;;
-                *)         echo -e "  ${YELLOW}●${NC} ${container} (running, health: ${health})" ;;
-            esac
-        else
-            echo -e "  ${RED}○${NC} ${container} (stopped)"
-        fi
-    done
-
-    echo ""
-    echo -e "${BLUE}Access URLs:${NC}"
-    echo "  GitLab   : http://${gitlab_host}:${gitlab_port}"
-    echo "  Gitea    : http://${gitea_host}:${gitea_port}"
-    echo "  Jenkins  : http://${jenkins_host}:${jenkins_port}"
-    echo "  Nexus    : http://${nexus_host}:${nexus_port}"
-    echo ""
-}
-
-cmd_logs() {
-    local service="${1:-}"
-    if [[ -z "$service" ]]; then
-        log_error "Usage: briklab.sh logs <service>"
-        log_info "Services: gitlab, gitlab-runner, gitea, jenkins, nexus, ssh-target"
-        exit 1
-    fi
-
-    local container="brik-${service}"
-    if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
-        docker logs -f --tail 100 "$container"
-    else
-        log_error "Container '${container}' not found"
-        exit 1
-    fi
-}
-
-cmd_setup() {
-    check_prereqs
-    load_env
-    # shellcheck source=lib/infra-verify.sh
-    source "${SCRIPT_DIR}/lib/infra-verify.sh"
-
-    local errors=0
-
-    # 1. GitLab
-    _run_setup "GitLab" "gitlab.sh" "brik-gitlab" && {
-        load_env
-        verify_gitlab_pat || ((errors++)) || true
-        verify_env_set "GITLAB_RUNNER_TOKEN" || ((errors++)) || true
-    }
-
-    # 2. Runner
-    _run_setup "Runner" "runner.sh" "brik-runner" && {
-        verify_cmd "Runner config" "docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml" || ((errors++)) || true
-    }
-
-    # 3. Gitea
-    _run_setup "Gitea" "gitea.sh" "brik-gitea" && {
-        load_env
-        verify_gitea_pat || ((errors++)) || true
-    }
-
-    # 4. Jenkins
-    _run_setup "Jenkins" "jenkins.sh" "brik-jenkins" && {
-        verify_http "Jenkins login" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" || ((errors++)) || true
-    }
-
-    # 5. Nexus
-    _run_setup "Nexus" "nexus.sh" "brik-nexus" && {
-        load_env
-        verify_nexus_auth || ((errors++)) || true
-        verify_env_set "NEXUS_NPM_TOKEN" || ((errors++)) || true
-    }
-
-    # 6. SSH target
-    _run_setup "SSH target" "ssh-target.sh" "brik-ssh-target" && {
-        verify_ssh_connection || ((errors++)) || true
-    }
-
-    # 7. Restart Jenkins (to pick up Nexus env vars)
-    if docker ps --format '{{.Names}}' | grep -q "^brik-jenkins$"; then
-        log_info "Restarting Jenkins..."
-        docker restart brik-jenkins >/dev/null
-        _wait_for_http "Jenkins" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" 120
-    fi
-
-    # Summary
-    if [[ $errors -eq 0 ]]; then
-        log_ok "Setup complete -- all verifications passed"
-    else
-        log_error "Setup complete -- ${errors} verification(s) failed"
-        return 1
-    fi
-}
-
-# Launch a setup script if its container is running
-_run_setup() {
-    local name="$1" script="$2" container="$3"
-    if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-        log_info "Configuring ${name}..."
-        bash "${LIB_SETUP}/${script}"
-    else
-        log_warn "${name} not running -- skipping"
-        return 1
-    fi
-}
-
-# Wait for an HTTP endpoint to respond
-_wait_for_http() {
-    local name="$1" url="$2" timeout="${3:-60}"
-    local elapsed=0
-    while [[ $elapsed -lt $timeout ]]; do
-        if curl -sf -o /dev/null "$url" 2>/dev/null; then
-            log_ok "${name} ready"
-            return 0
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
-    log_warn "${name} not ready after ${timeout}s"
-    return 1
-}
-
-cmd_k3d_start() {
-    check_prereqs
-
-    if ! command -v k3d &>/dev/null; then
-        log_error "k3d not installed: brew install k3d"
-        exit 1
-    fi
-
-    log_info "Starting k3d cluster + ArgoCD..."
-    bash "${LIB_SETUP}/k3d.sh"
-    log_ok "k3d cluster ready"
-}
-
-cmd_k3d_stop() {
-    if ! command -v k3d &>/dev/null; then
-        log_error "k3d not installed"
-        exit 1
-    fi
-
-    log_info "Destroying k3d cluster..."
-    k3d cluster delete brik 2>/dev/null || true
-    log_ok "k3d cluster deleted"
-}
-
-cmd_clean() {
-    if [[ "${1:-}" != "--yes" ]]; then
-        echo -e "${RED}WARNING: This action deletes ALL persistent data.${NC}"
-        echo -e "${RED}GitLab, Gitea, Jenkins, Nexus volumes will be lost.${NC}"
-        echo ""
-        read -rp "Confirm deletion (type 'yes'): " confirm
-        if [[ "$confirm" != "yes" ]]; then
-            log_info "Cancelled"
-            exit 0
-        fi
-    fi
-
-    cmd_stop
-    log_info "Deleting data..."
-    rm -rf "${BRIKLAB_DIR}/data"
-    mkdir -p "${BRIKLAB_DIR}/data"
-    log_ok "Data deleted"
-}
-
-cmd_smoke_test() {
-    check_prereqs
-    load_env
-    log_info "Running smoke tests..."
-    bash "${LIB_SETUP}/smoke-test.sh"
-}
-
-cmd_reset() {
-    check_prereqs
-    load_env
-
-    # Source reset library
-    source "${LIB_E2E}/lib/reset.sh"
-
-    local what=""              # repos, k8s, argocd, artifacts, (empty)=all
-    local only=""              # specific repo name
-    local platform=""
-
+    local platform="" rest=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --gitlab)    platform="gitlab"; shift ;;
-            --jenkins)   platform="gitea"; shift ;;  # Jenkins uses Gitea repos
-            --repos)     what="repos"; shift ;;
-            --k8s)       what="k8s"; shift ;;
-            --argocd)    what="argocd"; shift ;;
-            --artifacts) what="artifacts"; shift ;;
-            --only)
-                only="${2:-}"
-                if [[ -z "$only" ]]; then
-                    log_error "--only requires a project name"
-                    exit 1
-                fi
-                shift 2
-                ;;
-            *)
-                log_error "Unknown reset option: $1"
-                exit 1
-                ;;
+            --gitlab)  platform="gitlab"; shift ;;
+            --jenkins) platform="jenkins"; shift ;;
+            *)         rest+=("$1"); shift ;;
         esac
     done
-
-    case "$what" in
-        repos)
-            if [[ -z "$platform" ]]; then
-                log_error "--repos requires --gitlab or --jenkins"
-                exit 1
-            fi
-            e2e.reset.all_repos "$platform" "$only"
-            ;;
-        k8s)
-            e2e.reset.all_deploy_namespaces
-            ;;
-        argocd)
-            e2e.reset.all_argocd_apps
-            ;;
-        artifacts)
-            e2e.reset.nexus_artifacts
-            e2e.reset.registry_images
-            ;;
-        "")
-            # Full reset -- platform required
-            if [[ -z "$platform" ]]; then
-                log_error "Full reset requires --gitlab or --jenkins"
-                log_info "Or use a targeted reset: --repos, --k8s, --argocd, --artifacts"
-                exit 1
-            fi
-            e2e.reset.all "$platform"
-            ;;
-    esac
-}
-
-cmd_test() {
-    check_prereqs
-    load_env
-    pull_brik_images
-
-    local platform=""          # gitlab or jenkins (required)
-    local action=""            # (empty)=default, all, list, project, complete, groups
-    local project=""
-    local batch_args=()
-    local group_args=()
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --gitlab)    platform="gitlab"; shift ;;
-            --jenkins)   platform="jenkins"; shift ;;
-            --all)       action="all"; shift ;;
-            --list)      action="list"; shift ;;
-            --complete)  action="complete"; shift ;;
-            --batch-size)
-                batch_args=(--batch-size "${2:-}")
-                if [[ -z "${2:-}" ]]; then
-                    log_error "--batch-size requires a number"
-                    exit 1
-                fi
-                shift 2
-                ;;
-            --groups)
-                action="groups"
-                group_args=(--groups "${2:-}")
-                if [[ -z "${2:-}" ]]; then
-                    log_error "--groups requires comma-separated group letters (e.g. A,D,H)"
-                    exit 1
-                fi
-                shift 2
-                ;;
-            --parallel-groups)
-                group_args+=(--parallel-groups)
-                shift
-                ;;
-            --project)
-                action="project"
-                project="${2:-}"
-                if [[ -z "$project" ]]; then
-                    log_error "Usage: briklab.sh test --gitlab|--jenkins --project <name>"
-                    exit 1
-                fi
-                shift 2
-                ;;
-            *) shift ;;
-        esac
-    done
-
     if [[ -z "$platform" ]]; then
         log_error "Platform required. Use --gitlab or --jenkins."
-        log_info "Examples:"
-        log_info "  briklab.sh test --gitlab"
-        log_info "  briklab.sh test --jenkins --all"
+        log_info "Examples: briklab.sh preflight --gitlab --with-deploy [--fix]"
         exit 1
     fi
-
-    if [[ "$platform" == "jenkins" ]]; then
-        local suite="${LIB_E2E}/jenkins-suite.sh"
-    else
-        local suite="${LIB_E2E}/gitlab-suite.sh"
-    fi
-
-    case "$action" in
-        list)     bash "$suite" --list ;;
-        all)      bash "$suite" ${batch_args[@]+"${batch_args[@]}"} ;;
-        complete) bash "$suite" --complete ${batch_args[@]+"${batch_args[@]}"} ;;
-        project)  bash "$suite" --only "$project" ;;
-        groups)   bash "$suite" ${group_args[@]+"${group_args[@]}"} ${batch_args[@]+"${batch_args[@]}"} ;;
-        *)        bash "$suite" --only node-minimal ;;
-    esac
-}
-
-cmd_init() {
-    # 1. Prerequisites
-    log_info "Step 1 -- Prerequisites"
-    check_prereqs
-    log_ok "Prerequisites OK"
-
-    # 2. .env
-    log_info "Step 2 -- Environment"
-    if [[ ! -f "$ENV_FILE" ]]; then
-        cp "${BRIKLAB_DIR}/.env.example" "$ENV_FILE"
-        log_ok ".env created"
-    fi
-    load_env
-
-    # 3. Start containers
-    log_info "Step 3 -- Starting containers"
-    cmd_start
-
-    # 4. Setup
-    log_info "Step 4 -- Configuring services"
-    cmd_setup
-
-    # 5. k3d (if installed)
-    if command -v k3d &>/dev/null; then
-        log_info "Step 5 -- k3d cluster + ArgoCD"
-        cmd_k3d_start
-    else
-        log_warn "Step 5 -- k3d not installed, skipping"
-    fi
-
-    # 6. Smoke test
-    log_info "Step 6 -- Verification"
-    cmd_smoke_test
-
-    cmd_status
+    briklab.preflight.e2e "$platform" ${rest[@]+"${rest[@]}"}
 }
 
 # === HELP ===
@@ -539,22 +108,33 @@ Configuration:
                      with verification (only needed if setup failed during init)
   smoke-test         Verify that each component is reachable
   infra-refresh      Validate tokens, port-forwards, propagate to CI platforms
+  preflight --gitlab|--jenkins [--with-deploy] [--fix]
+                     Readiness gate (PAT, Nexus, ArgoCD, k3d node + controller).
+                     --fix self-heals (regenerate token, restart NotReady node,
+                     reschedule stranded controller), then re-verifies.
 
 Testing (--gitlab or --jenkins required):
-  test --gitlab              Run node-minimal on GitLab
+  test --gitlab              Run node-full on GitLab (default scenario)
   test --gitlab --all        Run full GitLab E2E suite
   test --gitlab --complete   Run only *-complete scenarios
   test --gitlab --project X  Run a single GitLab scenario
   test --gitlab --list       List available GitLab scenarios
-  test --jenkins             Run node-minimal on Jenkins
+  test --jenkins             Run node-full on Jenkins (default scenario)
   test --jenkins --all       Run full Jenkins E2E suite
   test --jenkins --complete  Run only *-complete scenarios
   test --jenkins --project X Run a single Jenkins scenario
   test --jenkins --list      List available Jenkins scenarios
+  --stub                     Pin every stage to the stub image (any scenario)
+  test self-heals the lab before running (preflight --fix). Opt out with:
+  --no-repair                Detect issues but do not auto-heal
+  --no-preflight             Skip the readiness gate entirely
   --batch-size N             Run scenarios in parallel batches of N
   --groups A,D,H             Run only scenarios in specified groups
   --parallel-groups          Auto-batch independent groups in parallel
-Groups: A=stack, B=full, C=complete, D=security, E=deploy, F=gitops, G=workflow, H=error
+Groups: B=full, C=complete, D=scan/cve, F=gitops, G=workflow, I=plan
+
+Stub mode example:
+  test --gitlab --project node-full --stub   Full workflow on the stub image
 
 Reset (clean test state between runs):
   reset --gitlab             Full reset (repos + k8s + ArgoCD + artifacts)
@@ -595,6 +175,7 @@ case "${1:-help}" in
     setup)       cmd_setup ;;
     test)        cmd_test "${@:2}" ;;
     reset)       cmd_reset "${@:2}" ;;
+    preflight)   cmd_preflight "${@:2}" ;;
     k3d-start)   cmd_k3d_start ;;
     k3d-stop)    cmd_k3d_stop ;;
     clean)       cmd_clean "${@:2}" ;;

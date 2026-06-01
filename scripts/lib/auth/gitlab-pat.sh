@@ -10,24 +10,20 @@ _BRIKLAB_GITLAB_PAT_LOADED=1
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
+# shellcheck source=../checks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure a valid GitLab PAT exists.
 # If GITLAB_PAT is valid, does nothing.
 # If invalid/missing, creates a fresh one via rails runner and updates .env.
 ensure_gitlab_pat() {
-    local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-
-    # Fast path: validate existing PAT
+    # Fast path: validate existing PAT (shared probe with verify/preflight)
+    if briklab.check.gitlab_pat; then
+        log_ok "GitLab PAT valid"
+        return 0
+    fi
     if [[ -n "${GITLAB_PAT:-}" ]]; then
-        local http_code
-        http_code=$(curl -sf -o /dev/null -w "%{http_code}" \
-            -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-            "${gitlab_url}/api/v4/user" 2>/dev/null || echo "000")
-        if [[ "$http_code" == "200" ]]; then
-            log_ok "GitLab PAT valid"
-            return 0
-        fi
-        log_warn "GitLab PAT invalid (HTTP ${http_code}), regenerating..."
+        log_warn "GitLab PAT invalid, regenerating..."
     else
         log_warn "No GITLAB_PAT set, creating one..."
     fi

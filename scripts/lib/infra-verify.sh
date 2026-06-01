@@ -3,6 +3,10 @@
 # Source this file, then call verify_* functions.
 # Each function returns 0 on success, 1 on failure, and logs the result.
 
+# Single source of probe truth (pure predicates).
+# shellcheck source=checks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/checks.sh"
+
 # Counters for summary
 VERIFY_PASS=0
 VERIFY_FAIL=0
@@ -100,23 +104,20 @@ verify_cmd() {
 
 # --- Service-specific checks ---
 
+# Service-specific verifies are thin presentation wrappers over the pure
+# predicates in checks.sh -- the probe logic lives there once.
+
 verify_gitlab_pat() {
-    local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-    local code
-    code=$(curl -so /dev/null -w '%{http_code}' --max-time 10 \
-        "${gitlab_url}/api/v4/user?private_token=${GITLAB_PAT:-}" 2>/dev/null || echo "000")
-    if [[ "$code" == "200" ]]; then
+    if briklab.check.gitlab_pat; then
         _verify_ok "GitLab PAT valid"
         return 0
     fi
-    _verify_fail "GitLab PAT invalid (HTTP $code)"
+    _verify_fail "GitLab PAT invalid"
     return 1
 }
 
 verify_gitea_pat() {
-    local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
-    if curl -sf -H "Authorization: token ${GITEA_PAT:-}" \
-        "${gitea_url}/api/v1/user" &>/dev/null; then
+    if briklab.check.gitea_pat; then
         _verify_ok "Gitea PAT valid"
         return 0
     fi
@@ -125,10 +126,7 @@ verify_gitea_pat() {
 }
 
 verify_nexus_auth() {
-    local nexus_url="http://${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_HTTP_PORT:-8081}"
-    local nexus_pass="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
-    if curl -sf -u "admin:${nexus_pass}" \
-        "${nexus_url}/service/rest/v1/status" &>/dev/null; then
+    if briklab.check.nexus_auth; then
         _verify_ok "Nexus admin auth"
         return 0
     fi
@@ -137,14 +135,30 @@ verify_nexus_auth() {
 }
 
 verify_ssh_connection() {
-    local key_file="${BRIKLAB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/data/ssh-target/deploy_key"
     local port="${SSH_TARGET_PORT:-2223}"
-    if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=5 -i "$key_file" -p "$port" deploy@localhost echo ok &>/dev/null; then
+    if briklab.check.ssh; then
         _verify_ok "SSH connection to deploy@localhost:$port"
         return 0
     fi
     _verify_fail "SSH connection to deploy@localhost:$port"
+    return 1
+}
+
+verify_argocd_port_forward() {
+    if briklab.check.argocd_portfwd; then
+        _verify_ok "ArgoCD port-forward active on :${ARGOCD_PORT:-9080}"
+        return 0
+    fi
+    _verify_fail "ArgoCD port-forward not reachable on :${ARGOCD_PORT:-9080}"
+    return 1
+}
+
+verify_argocd_token() {
+    if briklab.check.argocd_token; then
+        _verify_ok "ArgoCD API token valid"
+        return 0
+    fi
+    _verify_fail "ArgoCD API token invalid or unset"
     return 1
 }
 

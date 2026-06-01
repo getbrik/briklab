@@ -11,6 +11,8 @@ _BRIKLAB_GITEA_PAT_LOADED=1
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
+# shellcheck source=../checks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure a valid Gitea PAT exists.
 # If GITEA_PAT is valid, does nothing.
@@ -21,17 +23,13 @@ ensure_gitea_pat() {
     local admin_user="${GITEA_ADMIN_USER:-brik}"
     local admin_pass="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
 
-    # Fast path: validate existing PAT
+    # Fast path: validate existing PAT (shared probe with verify/preflight)
+    if briklab.check.gitea_pat; then
+        log_ok "Gitea PAT valid"
+        return 0
+    fi
     if [[ -n "${GITEA_PAT:-}" ]]; then
-        local code
-        code=$(curl -sf -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${GITEA_PAT}" \
-            "${gitea_url}/api/v1/user" 2>/dev/null || echo "000")
-        if [[ "$code" == "200" ]]; then
-            log_ok "Gitea PAT valid"
-            return 0
-        fi
-        log_warn "Gitea PAT invalid (HTTP ${code}), regenerating..."
+        log_warn "Gitea PAT invalid, regenerating..."
     else
         log_warn "No GITEA_PAT set, creating one..."
     fi

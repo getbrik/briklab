@@ -50,21 +50,36 @@ SCENARIOS=(
     # The per-stage, per-stack, planner and findings behavior is covered by
     # the brik repo's contract, unit and integration suites
     # (spec/{contracts,unit,integration}/). Only scenarios that genuinely need
-    # a live orchestrator or real deploy infrastructure remain here:
+    # a live orchestrator or real infrastructure remain here:
     #   - node-full: end-to-end happy path on GitLab (orchestrator parity).
     #   - node-deploy-gitops: real ArgoCD / GitOps sync.
     #   - node-deploy-rollback: real GitOps rollback (depends on the gitops run).
+    #   - node-plan-tag / node-full-cve / workflow-trunk-*: live coverage for the
+    #     promote / scan-CVE / workflow-filter gaps (see docs/e2e-coverage.md).
     "node-full|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true"
-    # Stub-image variant: every stage runs on the single brik-runner-stub
-    # image via the BRIK_RUNNER_CLASSES_FILE override (built locally from
-    # brik-images/images/stub/Dockerfile). Validates the FULL shared-library
-    # workflow (context, planner, gates, needs, image parity) on the real
-    # orchestrator without pulling heavy stack images. init itself boots on
-    # its default base image, then emits the stub image map via its dotenv.
-    # Reuses the node-full project repo.
-    "node-full-stub|node-full|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||600||BRIK_WITH_DEPLOY=true,BRIK_RUNNER_CLASSES_FILE=/opt/brik/lib/registry/runner_classes.stub.yml"
+    # The stub-image variant is no longer a dedicated row: run any scenario
+    # with `briklab.sh test --gitlab --stub` to pin every stage to the single
+    # brik-runner-stub image (BRIK_RUNNER_CLASSES_FILE injected by
+    # _suite_run_scenario). `test --gitlab --project node-full --stub`
+    # reproduces the former node-full-stub exactly.
     "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
+    # Gap-coverage scenarios (kept after the consolidation because brik/spec
+    # cannot prove the live orchestrator behaviour) -- see docs/e2e-coverage.md:
+    #   - node-plan-tag: tagged commit runs the planner inline + the full
+    #     pipeline incl. brik-promote (live proof the promote stage runs on a
+    #     release tag).
+    #   - node-full-cve: a CVE in deps must FAIL brik-scan (live gating proof).
+    #   - workflow-trunk-{main,tag}: trunk-based `workflow:` filter -- the default
+    #     branch and a tag must each create a pipeline. A bare feature-branch push
+    #     is intentionally suppressed by the anti-duplicate push+MR rule (no
+    #     pipeline), so it has no live scenario (the framework cannot assert the
+    #     ABSENCE of a pipeline); the rule itself is unit-tested in brik/spec
+    #     (gitlab_pipeline_template_spec.sh).
+    "node-plan-tag|node-plan-tag|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-promote,brik-notify||600"
+    "node-full-cve|node-full-cve|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast||600|brik-scan|BRIK_WITH_DEPLOY=true||GHSA|brik-init,brik-release,brik-build,brik-lint,brik-sast"
+    "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
+    "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600|||workflow-trunk-main"
 )
 
 # ---------------------------------------------------------------------------
@@ -95,15 +110,11 @@ _suite_get_group() {
     local name
     IFS='|' read -r name _ <<< "$1"
     case "$name" in
-        *-minimal)           echo "A" ;;
-        *-full)              echo "B" ;;
-        *-complete)          echo "C" ;;
-        *-security)          echo "D" ;;
+        *-cve)               echo "D" ;;   # scan/CVE gating
         *-deploy-gitops|*-deploy-rollback) echo "F" ;;
-        *-deploy*)           echo "E" ;;
         workflow-*)          echo "G" ;;
-        error-*)             echo "H" ;;
         node-plan-*)         echo "I" ;;
+        *-full)              echo "B" ;;
         *)                   echo "" ;;
     esac
 }
@@ -126,6 +137,15 @@ _suite_run_scenario() {
     local scenario="$1"
     IFS='|' read -r name project ref required _optional timeout expect_fail ci_vars _depends_on error_pattern success_jobs <<< "$scenario"
 
+    # Stub mode (briklab.sh test --stub): pin every stage to the stub image by
+    # injecting the runner_classes override into this scenario's CI variables.
+    # The path is absolute -- it is where brik is installed inside the runner
+    # image (/opt/brik). init still boots on its default base image, then emits
+    # the stub image map via its dotenv.
+    if [[ "${E2E_STUB:-}" == "true" ]]; then
+        ci_vars="${ci_vars:+${ci_vars},}BRIK_RUNNER_CLASSES_FILE=/opt/brik/lib/registry/runner_classes.stub.yml"
+    fi
+
     echo ""
     echo -e "${BOLD}========================================${NC}"
     echo -e "${BOLD}  Scenario: ${name}${NC}"
@@ -140,16 +160,9 @@ _suite_run_scenario() {
     fi
     echo -e "${BOLD}========================================${NC}"
 
-    # Per-scenario pre-cleanup: wipe stale state that would cause false
-    # failures (stale compose stacks holding ports, cargo crates already
-    # published in Nexus, dead ArgoCD port-forward on the host).
+    # Per-scenario pre-cleanup: ensure the ArgoCD port-forward is up before a
+    # gitops/rollback scenario (dead host-side port-forward causes false fails).
     case "$name" in
-        node-deploy|node-deploy-dryrun)
-            e2e.compose.teardown_stack "node-deploy"
-            ;;
-        rust-complete)
-            e2e.nexus.delete_cargo_crate "rust-complete" "0.1.0"
-            ;;
         *-deploy-gitops|*-deploy-rollback)
             e2e.argocd.ensure_port_forward || \
                 log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"

@@ -47,14 +47,13 @@ SCENARIOS=(
     #   - node-complete: full release + package (Nexus publish), no deploy.
     "node-full|node-full|node-full|600|false"
     "node-complete|node-complete|node-complete|600|false"
-    # Stub-image variant: every stage runs on the single brik-runner-stub
-    # image via the BRIK_RUNNER_CLASSES_FILE override. The path is RELATIVE to
-    # the brik library root because Jenkins checks the shared lib into a
-    # hash-named ${WORKSPACE}@libs/<hash>/ dir; brikRunStage resolves it
-    # against brikHome per stage container. init still boots on its default
-    # base image, then emits the stub image map via its dotenv. Reuses the
-    # node-full project repo.
-    "node-full-stub|node-full|node-full|600|false|BRIK_WITH_DEPLOY=true,BRIK_RUNNER_CLASSES_FILE=lib/registry/runner_classes.stub.yml"
+    # The stub-image variant is no longer a dedicated row: run any scenario
+    # with `briklab.sh test --jenkins --stub` to pin every stage to the single
+    # brik-runner-stub image (BRIK_RUNNER_CLASSES_FILE injected by
+    # _suite_run_scenario). --stub only swaps the image fleet; unlike the
+    # former node-full-stub it does NOT force BRIK_WITH_DEPLOY (Jenkins gates
+    # deploy via a build parameter), so the deploy stage runs only when the
+    # scenario already enables it.
 )
 
 # ---------------------------------------------------------------------------
@@ -75,14 +74,8 @@ _suite_get_group() {
     local name
     IFS='|' read -r name _ <<< "$1"
     case "$name" in
-        *-minimal)           echo "A" ;;
-        *-full)              echo "B" ;;
         *-complete)          echo "C" ;;
-        *-security)          echo "D" ;;
-        *-deploy-gitops|*-deploy-rollback) echo "F" ;;
-        *-deploy*)           echo "E" ;;
-        workflow-*)          echo "G" ;;
-        error-*)             echo "H" ;;
+        *-full)              echo "B" ;;
         *)                   echo "" ;;
     esac
 }
@@ -105,6 +98,14 @@ _suite_run_scenario() {
     local scenario="$1"
     IFS='|' read -r name job _projects timeout expect_fail ci_vars _depends_on error_pattern <<< "$scenario"
 
+    # Stub mode (briklab.sh test --stub): pin every stage to the stub image.
+    # The path is RELATIVE to the brik library root -- Jenkins checks the shared
+    # lib into a hash-named ${WORKSPACE}@libs/<hash>/ dir and brikRunStage
+    # resolves it against brikHome per stage container.
+    if [[ "${E2E_STUB:-}" == "true" ]]; then
+        ci_vars="${ci_vars:+${ci_vars},}BRIK_RUNNER_CLASSES_FILE=lib/registry/runner_classes.stub.yml"
+    fi
+
     echo ""
     echo -e "${BOLD}========================================${NC}"
     echo -e "${BOLD}  Jenkins Scenario: ${name}${NC}"
@@ -116,16 +117,9 @@ _suite_run_scenario() {
         echo -e "${YELLOW}  Error pattern: ${error_pattern}${NC}"
     fi
 
-    # Per-scenario pre-cleanup: wipe stale state that would cause false
-    # failures (stale compose stacks holding ports, cargo crates already
-    # published in Nexus, dead ArgoCD port-forward on the host).
+    # Per-scenario pre-cleanup: ensure the ArgoCD port-forward is up before a
+    # gitops/rollback scenario (dead host-side port-forward causes false fails).
     case "$name" in
-        node-deploy|node-deploy-dryrun)
-            e2e.compose.teardown_stack "node-deploy"
-            ;;
-        rust-complete)
-            e2e.nexus.delete_cargo_crate "rust-complete" "0.1.0"
-            ;;
         *-deploy-gitops|*-deploy-rollback)
             e2e.argocd.ensure_port_forward || \
                 log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"

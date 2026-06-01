@@ -33,4 +33,4 @@ if [[ -z "${GITLAB_PAT:-}" ]]; then
 fi
 
 e2e.push.brik_repos "gitlab"
-e2e.push.test_projects "gitlab" "${E2E_TEST_PROJECTS:-node-minimal}"
+e2e.push.test_projects "gitlab" "${E2E_TEST_PROJECTS:-node-full}"
