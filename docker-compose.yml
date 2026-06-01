@@ -197,7 +197,7 @@ services:
 
   # --- Sonatype Nexus 3 CE ---
   nexus:
-    image: sonatype/nexus3:3.92.2-alpine
+    image: sonatype/nexus3:3.92.3-alpine
     container_name: brik-nexus
     hostname: ${NEXUS_HOSTNAME:-nexus.briklab.test}
     restart: unless-stopped
