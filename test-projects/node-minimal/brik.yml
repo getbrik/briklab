@@ -1,7 +1,0 @@
-version: 1
-project:
-  name: node-minimal
-  stack: node
-  stack_version: "22"
-test:
-  framework: npm

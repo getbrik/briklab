@@ -1,7 +1,0 @@
-version: 1
-project:
-  name: monorepo-api
-  stack: python
-  stack_version: "3.13"
-test:
-  framework: pytest

@@ -1,7 +1,0 @@
-version: 1
-project:
-  name: monorepo-web
-  stack: node
-  stack_version: "22"
-test:
-  framework: npm

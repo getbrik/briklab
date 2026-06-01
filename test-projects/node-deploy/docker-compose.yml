@@ -1,7 +1,0 @@
-services:
-  app:
-    image: nexus.briklab.test:8082/brik/node-deploy:${IMAGE_TAG:-latest}
-    ports:
-      - "13000:3000"
-    environment:
-      - NODE_ENV=staging
