@@ -10,6 +10,8 @@ _BRIKLAB_ARGOCD_PORTFWD_LOADED=1
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
+# shellcheck source=../checks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure ArgoCD port-forward is active on the configured port.
 # Restarts it if not reachable.
@@ -19,8 +21,8 @@ ensure_argocd_port_forward() {
     local wait_sec=3
     local attempt=0
 
-    # Already active?
-    if curl -sk -o /dev/null -w "%{http_code}" "https://localhost:${port}/api/version" 2>/dev/null | grep -q "200"; then
+    # Already active? (shared probe with verify/preflight)
+    if briklab.check.argocd_portfwd; then
         log_ok "ArgoCD port-forward active on :${port}"
         return 0
     fi

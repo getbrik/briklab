@@ -32,7 +32,7 @@ source "${SCRIPT_DIR}/lib/jenkins-api.sh"
 # shellcheck source=lib/nexus.sh
 source "${SCRIPT_DIR}/lib/nexus.sh"
 
-JOB_NAME="${E2E_JENKINS_JOB:-node-minimal}"
+JOB_NAME="${E2E_JENKINS_JOB:-node-full}"
 TIMEOUT_SECONDS="${E2E_JENKINS_TIMEOUT:-300}"
 EXPECT_FAILURE="${E2E_JENKINS_EXPECT_FAILURE:-false}"
 SKIP_LOG_CHECK="${E2E_SKIP_LOG_CHECK:-false}"

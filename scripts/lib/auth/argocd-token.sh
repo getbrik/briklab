@@ -12,6 +12,8 @@ _BRIKLAB_ARGOCD_TOKEN_LOADED=1
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 # shellcheck source=./argocd-portfwd.sh
 source "$(dirname "${BASH_SOURCE[0]}")/argocd-portfwd.sh"
+# shellcheck source=../checks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure the 'brik' account exists in ArgoCD configmaps.
 # Patches argocd-cm and argocd-rbac-cm, restarts if needed.
@@ -71,17 +73,13 @@ POLICY
 ensure_argocd_token() {
     local port="${ARGOCD_PORT:-9080}"
 
-    # Fast path: validate existing token
+    # Fast path: validate existing token (shared probe with verify/preflight)
+    if briklab.check.argocd_token; then
+        log_ok "ArgoCD API token valid"
+        return 0
+    fi
     if [[ -n "${ARGOCD_AUTH_TOKEN:-}" ]]; then
-        local code
-        code=$(curl -sk -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
-            "https://localhost:${port}/api/v1/account/brik" 2>/dev/null || echo "000")
-        if [[ "$code" == "200" ]]; then
-            log_ok "ArgoCD API token valid"
-            return 0
-        fi
-        log_warn "ArgoCD API token invalid (HTTP ${code}), regenerating..."
+        log_warn "ArgoCD API token invalid, regenerating..."
     else
         log_warn "No ARGOCD_AUTH_TOKEN set, creating one..."
     fi

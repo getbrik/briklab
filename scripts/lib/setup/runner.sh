@@ -112,8 +112,8 @@ if ! docker exec brik-runner grep -q "allowed_pull_policies" /etc/gitlab-runner/
 fi
 
 # Set pull_policy to if-not-present so each job reuses locally cached
-# images. briklab.sh pull_brik_images pre-fetches them before running
-# tests so this is safe.
+# images. briklab.sh pre-fetches them (briklab.runner_images.pull, derived
+# from brik's registry) before running tests so this is safe.
 log_info "Setting pull_policy = if-not-present..."
 if docker exec brik-runner grep -q "pull_policy = " /etc/gitlab-runner/config.toml 2>/dev/null; then
     docker exec brik-runner sed -i \
