@@ -40,11 +40,13 @@ A focused suite of orchestrator-parity and real-deploy scenarios per platform, w
 
 ### ⚓ Real deploy targets
 
-The deploy stage is validated against actual infrastructure, not mocks: GitOps via ArgoCD (`node-deploy-gitops`) and a 3-step rollback chain (`node-deploy-rollback`) that verifies ArgoCD rolls back to the previous image. The other deploy targets (Kubernetes, Helm, SSH, Docker Compose) have their dispatch and argument handling covered by the `brik` repo's integration tests; their fixtures remain under `test-projects/` for on-demand manual runs.
+The deploy stage is validated against actual infrastructure, not mocks: GitOps via ArgoCD (`node-deploy-gitops`) and a 3-step rollback chain (`node-deploy-rollback`) that verifies ArgoCD rolls back to the previous image. The other deploy targets (Kubernetes, Helm, SSH, Docker Compose) have their dispatch and argument handling covered by the `brik` repo's integration tests, so their fixtures no longer live in the lab.
 
-### 🔁 Reset and infra-refresh
+### 🔁 Reset, refresh and self-healing
 
 E2E runs accumulate state -- repos, namespaces, ArgoCD apps, artifacts. `briklab.sh reset --gitlab` cleans everything in one command. Tokens and port-forwards expire on long sessions -- `briklab.sh infra-refresh` renews them without restarting any container.
+
+Deeper failures (a stale PAT, a `NotReady` k3d node, a stranded ArgoCD application-controller) used to make deploys hang silently. The readiness gate now catches them, and `briklab.sh preflight --gitlab --with-deploy --fix` repairs them. You rarely call it directly: `briklab.sh test` runs the gate in `--fix` mode automatically, so launching the tests also heals the lab. The goal is to *run* the E2E suite, not babysit the infra.
 
 ## Quick Start
 
@@ -143,16 +145,29 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh test --gitlab` | Run `node-minimal` on GitLab |
+| `briklab.sh test --gitlab` | Run `node-full` on GitLab |
 | `briklab.sh test --gitlab --all` | Run the full GitLab E2E suite |
 | `briklab.sh test --gitlab --project <name>` | Run a single GitLab scenario by name |
 | `briklab.sh test --gitlab --list` | List available GitLab scenarios |
-| `briklab.sh test --jenkins` | Run `node-minimal` on Jenkins |
+| `briklab.sh test --jenkins` | Run `node-full` on Jenkins |
 | `briklab.sh test --jenkins --all` | Run the full Jenkins E2E suite |
 | `briklab.sh test --jenkins --complete` | Run only Jenkins `*-complete` scenarios |
 | `briklab.sh test --jenkins --project <name>` | Run a single Jenkins scenario by name |
 | `briklab.sh test --jenkins --list` | List available Jenkins scenarios |
 | `briklab.sh test --gitlab --batch-size N` | Execute scenarios in batches of N |
+| `briklab.sh test --gitlab --project <name> --stub` | Run any scenario on the single stub image (no heavy stack images) |
+
+**Self-healing by default.** Before touching the lab, `test` runs the readiness
+gate (`preflight`) in `--fix` mode: a stale PAT, a dropped ArgoCD port-forward, a
+`NotReady` k3d node, or a stranded `argocd-application-controller` is repaired
+automatically, then re-verified, so the run proceeds instead of aborting. For
+deploy/gitops scenarios (or `--all`) the ArgoCD + cluster checks are blocking.
+
+| Flag | Effect |
+|------|--------|
+| `--stub` | Pin every stage to `brik-runner-stub` (validates the workflow without real tools) |
+| `--no-repair` | Run the readiness gate but only report -- do not mutate the lab |
+| `--no-preflight` | Skip the readiness gate entirely (run on a known-good lab) |
 
 ### Reset
 
@@ -170,6 +185,9 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 | Command | Description |
 |---------|-------------|
 | `briklab.sh infra-refresh` | Refresh expired tokens and port-forwards |
+| `briklab.sh preflight --gitlab\|--jenkins` | Read-only readiness check (PAT, Nexus, ArgoCD, k3d node + controller) |
+| `briklab.sh preflight --gitlab --with-deploy` | Make ArgoCD/cluster checks blocking (deploy-ready) |
+| `briklab.sh preflight --gitlab --with-deploy --fix` | Self-heal: regenerate token, restart a `NotReady` node, reschedule a stranded ArgoCD controller, then re-verify |
 
 ### Monitoring
 
@@ -244,33 +262,20 @@ library and test projects to Gitea, then triggers pipelines via the REST API.
 
 Test project fixtures live in `test-projects/`. Each has a `brik.yml` and platform-specific CI config (`.gitlab-ci.yml` for GitLab, `Jenkinsfile` for Jenkins).
 
-| Project | Stack | Runner Image | Purpose |
-|---------|-------|--------------|---------|
-| `node-minimal` | Node.js | `brik-runner-node:22` | Basic flow (init, build, test) |
-| `node-full` | Node.js | `brik-runner-node:22` | All stages (release, quality, package) |
-| `node-security` | Node.js | `brik-runner-node:22` | Security stage (npm audit) |
-| `node-deploy` | Node.js | `brik-runner-node:22` | Deploy stage validation (compose target) |
-| `node-deploy-k8s` | Node.js | `brik-runner-node:22` | Deploy to Kubernetes (k8s target) |
-| `node-deploy-ssh` | Node.js | `brik-runner-node:22` | Deploy via SSH (ssh target) |
-| `node-deploy-gitops` | Node.js | `brik-runner-node:22` | Deploy via GitOps + ArgoCD (gitops target) |
-| `node-deploy-helm` | Node.js | `brik-runner-node:22` | Deploy via Helm chart on k3d |
-| `node-deploy-failure` | Node.js | `brik-runner-node:22` | Intentional deploy failure (non-existent namespace) |
-| `node-deploy-gitops-rollback` | Node.js | `brik-runner-node:22` | GitOps rollback (ArgoCD, 3-step commit chain) |
-| `node-workflow-trunk` | Node.js | `brik-runner-node:22` | Trunk-based workflow (main, tag, feature branch) |
-| `python-minimal` | Python | `brik-runner-python:3.13` | Python stack (pytest) |
-| `python-full` | Python | `brik-runner-python:3.13` | Full Python pipeline (ruff, pip-audit, Docker) |
-| `java-minimal` | Java | `brik-runner-java:21` | Java stack (JUnit 5) |
-| `java-full` | Java | `brik-runner-java:21` | Full Java pipeline (checkstyle, Docker) |
-| `rust-minimal` | Rust | `brik-runner-rust:1` | Rust stack (cargo test) |
-| `dotnet-minimal` | .NET | `brik-runner-dotnet:9.0` | .NET stack (xUnit) |
-| `node-complete` | Node.js | `brik-runner-node:22` | Full pipeline + npm/Docker publish to Nexus |
-| `python-complete` | Python | `brik-runner-python:3.13` | Full pipeline + PyPI/Docker publish to Nexus |
-| `java-complete` | Java | `brik-runner-java:21` | Full pipeline + Maven/Docker publish to Nexus |
-| `rust-complete` | Rust | `brik-runner-rust:1` | Full pipeline + Cargo/Docker publish to Nexus |
-| `dotnet-complete` | .NET | `brik-runner-dotnet:9.0` | Full pipeline + NuGet/Docker publish to Nexus |
-| `node-error-build` | Node.js | `brik-runner-node:22` | Intentionally broken build |
-| `node-error-test` | Node.js | `brik-runner-node:22` | Intentionally failing tests |
-| `invalid-config` | Node.js | `brik-runner-base:latest` | Invalid brik.yml (version: 99) |
+Per-stage and per-stack behaviour is validated in the `brik` repo's spec suites
+(`spec/{unit,contracts,integration}`). The lab keeps only the projects that need
+a **live orchestrator** or **real external infrastructure** -- see
+[docs/e2e-coverage.md](docs/e2e-coverage.md) for the full coverage map.
+
+| Project | Stack | Purpose (live-only justification) |
+|---------|-------|-----------------------------------|
+| `node-full` | Node.js | Full happy path end-to-end on the real orchestrator (needs/sequence, per-job containers, dotenv) |
+| `node-complete` | Node.js | Full pipeline + real npm/Docker publish to Nexus |
+| `node-deploy-gitops` | Node.js | Deploy via GitOps + real ArgoCD sync |
+| `node-deploy-gitops-rollback` | Node.js | Real GitOps rollback (ArgoCD, 3-step commit chain) |
+| `node-workflow-trunk` | Node.js | Trunk-based workflow (push+MR anti-duplication filter) |
+| `node-plan-tag` | Node.js | Tagged-commit release/promote (registry retag) |
+| `node-full-cve` | Node.js | Container scan against a CVE-bearing image |
 
 > Runner images are selected automatically by the init job based on `project.stack` and `project.stack_version` in `brik.yml`. The init job resolves the image and propagates it via dotenv to downstream jobs. Images are published at `ghcr.io/getbrik/brik-runner-<stack>:<version>`.
 

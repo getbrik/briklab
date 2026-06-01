@@ -236,12 +236,21 @@ briklab/
 |-- docker-compose.yml            # All services (GitLab + Runner + Gitea + Jenkins + Nexus + SSH Target)
 |-- .env.example                  # Variables template
 |-- scripts/
-|   |-- briklab.sh                # Main CLI
+|   |-- briklab.sh                # Thin CLI dispatcher (commands -> lib/cli/*)
 |   +-- lib/
 |       |-- common.sh             # Shared utilities (logging, retry, env loading)
-|       |-- infra-verify.sh       # Environment verification
-|       |-- infra-refresh.sh      # Token/port-forward refresh
-|       |-- auth/                 # Credential management
+|       |-- checks.sh             # Pure state predicates (single probe truth)
+|       |-- preflight.sh          # E2E readiness gate (--fix self-heals)
+|       |-- recovery.sh           # briklab.recover.* (mutating: node/controller/token)
+|       |-- runner-images.sh      # Pre-pull set derived from brik's registry
+|       |-- infra-verify.sh       # verify_* presentation (for setup)
+|       |-- infra-refresh.sh      # Token/port-forward refresh + propagate
+|       |-- cli/                  # Command modules (sourced by briklab.sh)
+|       |   |-- lifecycle.sh      # start/stop/restart/status/logs/clean/k3d/init
+|       |   |-- setup.sh          # setup + smoke-test
+|       |   |-- test.sh           # test (preflight --fix -> run)
+|       |   +-- reset.sh          # reset
+|       |-- auth/                 # Credential management (ensure_* token repair)
 |       |   |-- gitlab-pat.sh     # GitLab PAT management
 |       |   |-- gitea-pat.sh      # Gitea PAT management
 |       |   |-- argocd-token.sh   # ArgoCD token retrieval
@@ -264,38 +273,20 @@ briklab/
 |           |-- jenkins-test.sh   # Single Jenkins pipeline test
 |           |-- jenkins-suite.sh  # Jenkins scenario orchestrator
 |           |-- jenkins-rollback.sh # Jenkins rollback E2E
-|           +-- lib/              # Reusable E2E libraries (17 files)
+|           +-- lib/              # Reusable E2E libraries (18 files)
 |               |-- assert.sh, auth.sh, suite.sh, push.sh, git.sh
 |               |-- reset.sh, rollback.sh
 |               |-- gitlab-api.sh, jenkins-api.sh, gitea-api.sh
 |               |-- nexus.sh, k8s.sh, argocd.sh, compose.sh, ssh.sh
 |               +-- error-patterns.conf, error-ignore-patterns.conf
-|-- test-projects/                # E2E fixtures (25 projects)
-|   |-- node-minimal/             # Node.js minimal (init, build, test)
-|   |-- node-full/                # Node.js full (release, quality, package)
-|   |-- node-complete/            # Full pipeline + npm/Docker publish to Nexus
-|   |-- node-security/            # Node.js security stage (npm audit)
-|   |-- node-deploy/              # Deploy stage (compose target)
-|   |-- node-deploy-k8s/          # Deploy to Kubernetes
-|   |-- node-deploy-ssh/          # Deploy via SSH
-|   |-- node-deploy-helm/         # Deploy via Helm chart on k3d
-|   |-- node-deploy-gitops/       # Deploy via GitOps + ArgoCD
-|   |-- node-deploy-gitops-rollback/ # GitOps rollback (3-step commit chain)
-|   |-- node-deploy-failure/      # Intentional deploy failure
-|   |-- node-workflow-trunk/      # Trunk-based workflow (main, tag, feature)
-|   |-- python-minimal/           # Python minimal (pytest)
-|   |-- python-full/              # Python full (ruff, pip-audit, Docker)
-|   |-- python-complete/          # Full pipeline + PyPI/Docker publish
-|   |-- java-minimal/             # Java minimal (JUnit 5)
-|   |-- java-full/                # Java full (checkstyle, Docker)
-|   |-- java-complete/            # Full pipeline + Maven/Docker publish
-|   |-- rust-minimal/             # Rust minimal (cargo test)
-|   |-- rust-complete/            # Full pipeline + Cargo/Docker publish
-|   |-- dotnet-minimal/           # .NET minimal (xUnit)
-|   |-- dotnet-complete/          # Full pipeline + NuGet/Docker publish
-|   |-- node-error-build/         # Error: intentionally broken build
-|   |-- node-error-test/          # Error: intentionally failing tests
-|   +-- invalid-config/           # Error: invalid brik.yml (version: 99)
+|-- test-projects/                # E2E fixtures (live-only; per-stage/stack -> brik/spec)
+|   |-- node-full/                # Full happy path on the real orchestrator
+|   |-- node-complete/            # Full pipeline + real npm/Docker publish to Nexus
+|   |-- node-deploy-gitops/       # Deploy via GitOps + real ArgoCD sync
+|   |-- node-deploy-gitops-rollback/ # Real GitOps rollback (3-step commit chain)
+|   |-- node-workflow-trunk/      # Trunk-based workflow (push+MR anti-dup filter)
+|   |-- node-plan-tag/            # Tagged-commit release/promote (registry retag)
+|   +-- node-full-cve/            # Container scan against a CVE-bearing image
 |-- images/
 |   |-- jenkins/                  # Custom Jenkins image (Dockerfile + entrypoint)
 |   +-- ssh-target/               # SSH target container (Dockerfile + entrypoint)
