@@ -320,33 +320,18 @@ e2e.reset.registry_images() {
 # Repo reset (all test projects)
 # ---------------------------------------------------------------------------
 
-# All test projects that have a template directory in test-projects/
+# All test projects that have a template directory in test-projects/.
+# Trimmed to the irreducible live set + the 3 gap projects (promote /
+# container-scan / workflow) kept for live scenarios; per-stage/per-stack
+# coverage now lives in brik/spec (see briklab/docs/e2e-coverage.md).
 _E2E_TEST_PROJECTS=(
-    node-minimal
-    python-minimal
-    java-minimal
-    rust-minimal
-    dotnet-minimal
     node-full
-    python-full
-    java-full
-    node-security
-    node-deploy
-    node-deploy-k8s
-    node-deploy-ssh
-    node-deploy-helm
+    node-complete
     node-deploy-gitops
     node-deploy-gitops-rollback
-    node-deploy-failure
-    node-complete
-    python-complete
-    java-complete
-    rust-complete
-    dotnet-complete
     node-workflow-trunk
-    node-error-build
-    node-error-test
-    invalid-config
+    node-plan-tag
+    node-full-cve
 )
 
 # Config repos (gitops/rollback) -- reset to empty baseline
