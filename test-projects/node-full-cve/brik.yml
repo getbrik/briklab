@@ -12,6 +12,12 @@ quality:
   lint:
     enabled: true
     tool: eslint
+security:
+  # The fixture's vulnerable dep (brace-expansion, GHSA-jxxr-4gwj-5jf2) is
+  # rated medium. Lower the gating floor from the default 'high' to 'medium' so
+  # the dependency scan actually gates on it -- this project exists to prove
+  # CVE gating fails the scan.
+  severity_threshold: medium
 package:
   docker:
     image: nexus.briklab.test:8082/brik/node-full-cve
