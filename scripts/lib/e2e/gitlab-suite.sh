@@ -51,7 +51,10 @@ SCENARIOS=(
     # the brik repo's contract, unit and integration suites
     # (spec/{contracts,unit,integration}/). Only scenarios that genuinely need
     # a live orchestrator or real infrastructure remain here:
-    #   - node-full: end-to-end happy path on GitLab (orchestrator parity).
+    #   - node-full: end-to-end happy path on GitLab (orchestrator parity). It
+    #     has no deploy config, so brik-deploy runs as a no-op success: this
+    #     proves the deploy stage is wired into the orchestrator, NOT that a
+    #     real deployment works. Real deploy coverage is node-deploy-gitops.
     #   - node-deploy-gitops: real ArgoCD / GitOps sync.
     #   - node-deploy-rollback: real GitOps rollback (depends on the gitops run).
     #   - node-plan-tag / node-full-cve / workflow-trunk-*: live coverage for the
@@ -62,13 +65,24 @@ SCENARIOS=(
     # brik-runner-stub image (BRIK_RUNNER_CLASSES_FILE injected by
     # _suite_run_scenario). `test --gitlab --project node-full --stub`
     # reproduces the former node-full-stub exactly.
-    "node-deploy-gitops|node-deploy-gitops|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true"
+    # Triggered on `branch:main` (NOT a tag): the trunk-based profile gates the
+    # gitops `staging` env on `when: branch=='main'`, so only a main-branch
+    # pipeline actually exercises the gitops/ArgoCD path. On a tag, staging is
+    # skipped and the inherited `production` (target k8s) runs instead -- which
+    # is why the former tag-based row never tested gitops. brik-release is absent
+    # (no tag); package is opted in explicitly so the published image exists for
+    # the ArgoCD sync. The post-pipeline ArgoCD assertion lives in
+    # _suite_run_scenario (see _suite_assert_gitops_sync).
+    "node-deploy-gitops|node-deploy-gitops|branch:main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true,BRIK_WITH_PACKAGE=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # Gap-coverage scenarios (kept after the consolidation because brik/spec
     # cannot prove the live orchestrator behaviour) -- see docs/e2e-coverage.md:
-    #   - node-plan-tag: tagged commit runs the planner inline + the full
-    #     pipeline incl. brik-promote (live proof the promote stage runs on a
-    #     release tag).
+    #   - node-plan-tag: tagged commit runs the planner inline AND exercises a
+    #     real candidate->release docker promote. package publishes the
+    #     candidate image, then on the tag brik-promote pulls/retags/pushes it
+    #     to the release zone. The post-pipeline assertion checks the release
+    #     image landed in Nexus (_suite_assert_promote_retag), so a self-skipping
+    #     or no-op promote can no longer pass.
     #   - node-full-cve: a CVE in deps must FAIL brik-scan (live gating proof).
     #   - workflow-trunk-{main,tag}: trunk-based `workflow:` filter -- the default
     #     branch and a tag must each create a pipeline. A bare feature-branch push
@@ -135,6 +149,7 @@ _suite_list_scenarios() {
 
 _suite_run_scenario() {
     local scenario="$1"
+    local _test_rc=0
     IFS='|' read -r name project ref required _optional timeout expect_fail ci_vars _depends_on error_pattern success_jobs <<< "$scenario"
 
     # Stub mode (briklab.sh test --stub): pin every stage to the stub image by
@@ -212,7 +227,28 @@ _suite_run_scenario() {
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
     E2E_SKIP_AGGREGATE="$skip_aggregate" \
-        bash "${SCRIPT_DIR}/gitlab-test.sh"
+    E2E_ASSERT_PROMOTE="$([[ "$name" == "node-plan-tag" ]] && echo true || echo false)" \
+        bash "${SCRIPT_DIR}/gitlab-test.sh" && _test_rc=0 || _test_rc=$?
+
+    # A green pipeline is necessary but NOT sufficient for a gitops scenario:
+    # gitlab-test.sh checks job status, not the ArgoCD controller. Without this
+    # a skipped or no-op gitops deploy would pass unnoticed (the coverage gap
+    # that hid the --namespace bug). Assert the app actually reached Synced +
+    # Healthy after the pipeline succeeds.
+    if [[ "$_test_rc" -eq 0 && "$name" == *-deploy-gitops ]]; then
+        _suite_assert_gitops_sync "brik-e2e-gitops" || _test_rc=1
+    fi
+    return "$_test_rc"
+}
+
+# Assert that the ArgoCD app driven by a *-deploy-gitops scenario actually
+# synced the rendered manifests. A green pipeline alone does not prove the
+# gitops path ran. Args: $1 = ArgoCD app name. Returns: 0 if Synced+Healthy.
+_suite_assert_gitops_sync() {
+    # Thin wrapper over the shared assertion (lib/argocd.sh), kept so the
+    # dispatch reads naturally; the Jenkins suite calls e2e.argocd.assert_synced
+    # directly.
+    e2e.argocd.assert_synced "$1"
 }
 
 _suite_push_projects() {

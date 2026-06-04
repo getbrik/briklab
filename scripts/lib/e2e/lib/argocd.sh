@@ -221,3 +221,24 @@ e2e.argocd.wait_sync() {
     log_error "ArgoCD app '${app_name}' not synced/healthy after ${timeout}s"
     return 1
 }
+
+# Assert an ArgoCD app reached Synced + Healthy after a gitops deploy. A green
+# pipeline/build alone does not prove the gitops path ran -- the orchestrator
+# reports job status, not the controller. Triggers a hard-refresh sync first to
+# pick up freshly pushed manifests. Shared by the GitLab and Jenkins suites.
+# Args: $1 = app name, $2 = timeout (default 180). Returns 0 if Synced+Healthy.
+e2e.argocd.assert_synced() {
+    local app="$1" timeout="${2:-180}"
+    log_info "Asserting ArgoCD sync for app '${app}'..."
+    if ! e2e.argocd.app_exists "$app"; then
+        log_error "ArgoCD app '${app}' does not exist -- gitops deploy did not run"
+        return 1
+    fi
+    e2e.argocd.trigger_sync "$app" || true
+    if e2e.argocd.wait_sync "$app" "$timeout"; then
+        log_ok "ArgoCD app '${app}' is Synced + Healthy"
+        return 0
+    fi
+    log_error "ArgoCD app '${app}' not Synced+Healthy within ${timeout}s"
+    return 1
+}

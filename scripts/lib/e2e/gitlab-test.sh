@@ -100,6 +100,13 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     if [[ -n "${E2E_CI_VARIABLES:-}" ]]; then
         log_warn "Push mode + CI variables: falling back to API trigger"
         TRIGGER_MODE="api"
+        # The API trigger targets a real git ref. "branch:NAME" is a
+        # suite-level push-mode hint, not a ref -- strip it so GitLab sees
+        # e.g. "main" (a tracked branch) instead of "branch:main" (which is
+        # not a ref and makes the trigger fail). An API trigger on "main"
+        # still produces a branch pipeline (CI_COMMIT_BRANCH=main), which is
+        # exactly what a branch-gated deploy env needs.
+        TRIGGER_REF="${TRIGGER_REF#branch:}"
     fi
 fi
 
@@ -294,6 +301,15 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" \
             # is dropped by reports.dotenv collisions).
             if [[ "$TRIGGER_REF" =~ ^v[0-9] ]]; then
                 assert.image_tag "$AGG_FILE" "${TRIGGER_REF#v}"
+            fi
+            # When the scenario opts in, assert the promote stage actually ran
+            # and recorded a successful candidate->release retag in THIS
+            # pipeline's report. A green brik-promote job alone can be a
+            # plan-skip (balanced mode) and a Nexus tag check can pass on a
+            # stale image -- the report status is run-specific and is only
+            # "success" after the real docker push returns 0.
+            if [[ "${E2E_ASSERT_PROMOTE:-false}" == "true" ]]; then
+                assert.promote_succeeded "$AGG_FILE"
             fi
         else
             log_warn "could not download aggregate-report.json from notify job (skipping aggregate assertions)"

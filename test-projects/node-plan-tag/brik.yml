@@ -5,6 +5,39 @@ project:
   stack_version: "22"
 pipeline:
   selection:
-    mode: balanced
+    # safe = context-only selection. balanced impact-gates promote (its impact
+    # patterns are **/Dockerfile + **/docker-compose*.yml) and skips it on a
+    # tag when no such file is in the diff range -- which silently defeats the
+    # promote validation. safe runs every context-applicable stage on the tag,
+    # so promote actually executes on this release pipeline.
+    mode: safe
+release:
+  strategy: semver
+  tag_prefix: v
+  # Two-zone promotion: package publishes the candidate image, and on a tag
+  # the promote stage retags candidate -> release. This makes brik-promote do
+  # real work (a docker pull/tag/push), so the scenario actually validates the
+  # promote stage instead of letting it self-skip.
+  candidate:
+    docker:
+      registry: nexus.briklab.test:8082
+      image: brik/node-plan-tag
+      username_var: BRIK_PUBLISH_DOCKER_USER
+      password_var: BRIK_PUBLISH_DOCKER_PASSWORD
+  release:
+    docker:
+      registry: nexus.briklab.test:8082
+      image: brik/node-plan-tag-released
+      username_var: BRIK_PUBLISH_DOCKER_USER
+      password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 test:
   framework: npm
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-plan-tag
+    dockerfile: Dockerfile
+publish:
+  docker:
+    registry: nexus.briklab.test:8082
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD

@@ -333,6 +333,29 @@ assert.image_tag() {
     fi
 }
 
+# assert.promote_succeeded <aggregate_file>
+# Verify the promote stage actually ran and recorded a successful
+# candidate->release retag in THIS pipeline's report. Run-specific and
+# stale-proof: fails if promote is absent (plan-skipped), not "success", or
+# has no release_ref (the business key promote only sets after `docker push`
+# returns 0). Preferred over a Nexus tag query, which can pass on a stale
+# image left by a previous run.
+assert.promote_succeeded() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "Promote stage succeeded (real retag)" "aggregate file missing: ${file}"
+        return
+    fi
+    local status release_ref
+    status=$(jq -r '(.stages[]? | select(.stage == "promote") | .status) // "<absent>"' "$file" 2>/dev/null || echo "<jq-error>")
+    release_ref=$(jq -r '(.stages[]? | select(.stage == "promote") | .business.release_ref) // ""' "$file" 2>/dev/null || echo "")
+    if [[ "$status" == "success" && -n "$release_ref" ]]; then
+        assert._pass "Promote stage succeeded (release_ref=${release_ref})"
+    else
+        assert._fail "Promote stage succeeded (real retag)" "status='${status}' release_ref='${release_ref}' -- promote did not run/push (plan-skip?)"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Pipeline / Build status assertions
 # ---------------------------------------------------------------------------
