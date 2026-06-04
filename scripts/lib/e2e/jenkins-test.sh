@@ -268,6 +268,12 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" && "$FINAL_RESU
         if [[ "$_trigger_ref" =~ ^v[0-9] ]]; then
             assert.image_tag "$AGG_FILE" "${_trigger_ref#v}"
         fi
+        # Opt-in: assert the promote stage really ran a candidate->release
+        # retag in THIS build's report (run-specific, stale-proof). Parity
+        # with the GitLab suite.
+        if [[ "${E2E_ASSERT_PROMOTE:-false}" == "true" ]]; then
+            assert.promote_succeeded "$AGG_FILE"
+        fi
     else
         log_warn "could not download aggregate-report.json from build (skipping aggregate assertions)"
     fi

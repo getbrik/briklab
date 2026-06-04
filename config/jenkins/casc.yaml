@@ -248,3 +248,23 @@ jobs:
           }
         }
       }
+  - script: >
+      pipelineJob('node-full-cve') {
+        parameters {
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions (compose up, k8s apply, helm upgrade, argocd sync, rsync). Print what would run instead.')
+          stringParam('BRIK_TAG', '', 'Release tag for this build (e.g. v0.1.0). Leave empty for snapshot builds.')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-full-cve.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

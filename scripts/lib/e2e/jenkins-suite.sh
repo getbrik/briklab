@@ -42,11 +42,50 @@ reload_env
 SCENARIOS=(
     # Per-stage, per-stack, planner and findings behavior is covered by the
     # brik repo's contract, unit and integration suites. The Jenkins suite
-    # keeps two end-to-end scenarios for orchestrator parity with GitLab:
-    #   - node-full: full release + package + deploy happy path.
-    #   - node-complete: full release + package (Nexus publish), no deploy.
+    # keeps end-to-end scenarios for orchestrator parity with GitLab. The
+    # Jenkins adapter (brikPipeline.groovy) runs each stage in an isolated
+    # docker.image().inside() container on the same Alpine brik-runner images
+    # as GitLab, so the deploy / promote / gitops / CVE-gating paths must be
+    # exercised here too -- that is where the v0.6.x execution-model bugs
+    # (#25 namespace leak, #26 profile mktemp, #27 promote auth) lived.
+    #   - node-full: full release + package happy path (orchestrator parity).
+    #     It has no deploy config; the deploy stage only runs as a no-op when
+    #     BRIK_WITH_DEPLOY=true, proving stage wiring, NOT a real deploy. Real
+    #     deploy coverage is node-deploy-gitops.
+    #   - node-complete: full release + package + real Nexus publish, no deploy.
     "node-full|node-full|node-full|600|false"
     "node-complete|node-complete|node-complete|600|false"
+    # Real GitOps / ArgoCD sync. node-deploy-gitops is a pipelineJob building
+    # */main, so it runs in BRANCH context (BRIK_BRANCH=main). It must NOT get
+    # a BRIK_TAG: the trunk-based staging env is gated on `when: branch=='main'`
+    # and a tag build would skip it (running the inherited production k8s env
+    # instead). The dispatch (a) excludes it from the brik_tag case and (b)
+    # injects BRIK_WITH_DEPLOY=true + BRIK_WITH_PACKAGE=true (the published
+    # image must exist for the ArgoCD sync). Post-build ArgoCD sync is asserted
+    # in _suite_run_scenario via the shared e2e.argocd.assert_synced helper.
+    "node-deploy-gitops|node-deploy-gitops|node-deploy-gitops|900|false"
+    # Real GitOps rollback. Self-contained in jenkins-rollback.sh (pushes its
+    # own v0.1.0 baseline + v0.2.0, manages config-deploy-rollback and the
+    # brik-e2e-rollback ArgoCD app). depends_on node-deploy-gitops mirrors the
+    # GitLab suite (ordering parity on the shared k8s/argocd infra).
+    "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false||node-deploy-gitops"
+    # Live promote coverage (#27). Tagged build (BRIK_TAG=v0.1.0 via dispatch)
+    # runs release + package + a real candidate->release docker retag. The
+    # brik.yml is in `safe` planner mode so promote is not impact-skipped.
+    # E2E_ASSERT_PROMOTE=true (set in _suite_run_scenario) makes jenkins-test.sh
+    # assert the promote stage really retagged in THIS build's aggregate-report.
+    "node-plan-tag|node-plan-tag|node-plan-tag|600|false"
+    # Live CVE-gating: a known-vulnerable dep must FAIL brik-scan (expect
+    # failure + GHSA advisory id in the console). Mirrors GitLab. Needs a
+    # dedicated CasC pipelineJob (node-full-cve).
+    "node-full-cve|node-full-cve|node-full-cve|600|true|BRIK_WITH_DEPLOY=true||GHSA"
+    # Trunk-based triggering parity. The GitLab counterpart asserts the
+    # pipeline.yml `workflow:` rules (GitLab-specific); the Jenkins equivalent
+    # is the Multibranch scan firing a build on the default branch and on a tag
+    # -- same intent (trunk-based), different mechanism. Push-driven (dispatch
+    # sets trigger_mode=push); the tag variant pushes v0.2.0 (release context).
+    "workflow-trunk-main|node-workflow-trunk|node-workflow-trunk|600|false"
+    "workflow-trunk-tag|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-main"
     # The stub-image variant is no longer a dedicated row: run any scenario
     # with `briklab.sh test --jenkins --stub` to pin every stage to the single
     # brik-runner-stub image (BRIK_RUNNER_CLASSES_FILE injected by
@@ -96,6 +135,7 @@ _suite_list_scenarios() {
 
 _suite_run_scenario() {
     local scenario="$1"
+    local _test_rc=0
     IFS='|' read -r name job _projects timeout expect_fail ci_vars _depends_on error_pattern <<< "$scenario"
 
     # Stub mode (briklab.sh test --stub): pin every stage to the stub image.
@@ -149,7 +189,12 @@ _suite_run_scenario() {
     # release tag -- breaking parity with GitLab.
     local brik_tag=""
     case "$name" in
-        *-full|*-complete|node-deploy*|error-deploy)
+        # node-deploy-gitops MUST stay in branch context (no tag) so its
+        # `when: branch=='main'` staging gitops env runs -- see the SCENARIOS
+        # comment. It matches node-deploy* below, so catch it first and leave
+        # brik_tag empty.
+        node-deploy-gitops) ;;
+        *-full|*-complete|node-deploy*|error-deploy|node-plan-tag|node-full-cve)
             brik_tag="v0.1.0"
             ;;
     esac
@@ -169,12 +214,13 @@ _suite_run_scenario() {
     # stage is silently skipped and the pipeline ends in success, masking the
     # tested behavior.
     case "$name" in
+        node-deploy-gitops)
+            # Branch-context gitops also needs the package published so the
+            # ArgoCD sync has a real image to pull (mirrors the GitLab row).
+            ci_vars="${ci_vars:+${ci_vars},}BRIK_WITH_DEPLOY=true,BRIK_WITH_PACKAGE=true"
+            ;;
         node-deploy*|error-deploy)
-            if [[ -n "${ci_vars:-}" ]]; then
-                ci_vars="${ci_vars},BRIK_WITH_DEPLOY=true"
-            else
-                ci_vars="BRIK_WITH_DEPLOY=true"
-            fi
+            ci_vars="${ci_vars:+${ci_vars},}BRIK_WITH_DEPLOY=true"
             ;;
     esac
 
@@ -217,8 +263,16 @@ _suite_run_scenario() {
     E2E_TRIGGER_REF="$trigger_ref" \
     E2E_JENKINS_BRANCH="$branch" \
     E2E_JENKINS_DISCOVER_TIMEOUT="$discover_timeout" \
+    E2E_ASSERT_PROMOTE="$([[ "$name" == "node-plan-tag" ]] && echo true || echo false)" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
-        bash "${SCRIPT_DIR}/jenkins-test.sh"
+        bash "${SCRIPT_DIR}/jenkins-test.sh" && _test_rc=0 || _test_rc=$?
+
+    # A green gitops build proves job status, not that ArgoCD synced. Assert it
+    # (parity with the GitLab suite; shared helper in lib/argocd.sh).
+    if [[ "$_test_rc" -eq 0 && "$name" == *-deploy-gitops ]]; then
+        e2e.argocd.assert_synced "brik-e2e-gitops" || _test_rc=1
+    fi
+    return "$_test_rc"
 }
 
 _suite_push_projects() {
