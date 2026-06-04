@@ -18,10 +18,15 @@ publish:
     username_var: BRIK_PUBLISH_DOCKER_USER
     password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 deploy:
-  workflow: trunk-based
+  # No `workflow:` profile here on purpose: this project exercises GitOps
+  # rollback via version tags, so its staging env is gated on tags. A
+  # trunk-based profile would gate staging on `branch == 'main'` (skipping it
+  # on the tag pipelines this scenario triggers) and inject a spurious
+  # production/k8s env. Keep the deploy config explicit and self-contained.
   environments:
     staging:
       target: gitops
+      when: "tag =~ 'v*'"
       strategy: rolling
       repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-rollback.git
       path: k8s
