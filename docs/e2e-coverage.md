@@ -113,9 +113,41 @@ docs). The 3 KEEP-pending projects were retained and now back a live scenario.
 |---|---|---|
 | node-full | GitLab + Jenkins | Real orchestrator runs the full plan end-to-end (needs/sequence, per-job containers, dotenv) |
 | node-complete | Jenkins | Only live proof of real Nexus publish (gap 3) |
-| node-deploy-gitops | GitLab | Real ArgoCD sync |
+| node-deploy-gitops | GitLab | Real ArgoCD sync. Triggered on `branch:main` (NOT a tag): the trunk-based profile gates the gitops `staging` env on `branch=='main'`, so only a main-branch pipeline exercises gitops -- a tag pipeline skips staging and runs `production`/k8s instead. The suite asserts the `brik-e2e-gitops` app reaches Synced+Healthy after the pipeline (a green pipeline alone does not prove the gitops path ran). |
 | node-deploy-rollback | GitLab | Real GitOps rollback (depends on gitops) |
 | node-plan-tag | GitLab | Tagged commit runs planner inline + asserts brik-promote -- gap 1 |
 | node-full-cve | GitLab | CVE must fail brik-scan (live scan gating) -- gap 2 |
 | workflow-trunk-{main,tag} | GitLab | `workflow:` filter: default branch + tag each create a pipeline -- gap 4 |
 | any scenario `--stub` | GitLab + Jenkins | Full workflow on the single stub image (replaces the old node-full-stub row) |
+
+## Test validity audit (2026-06-04)
+
+Audit of "does each scenario actually validate what its name/comment claims",
+prompted by finding that `node-deploy-gitops` was green without ever exercising gitops
+(it ran on a tag -> production/k8s, and nothing asserted the ArgoCD sync). brik stages
+exit 0 even when they self-skip / no-op, so "brik-<stage> = success" is a weak
+assertion. Findings:
+
+- **node-full (GitLab + Jenkins) -- deploy is a no-op.** No `deploy:` config, yet the
+  scenario forces `BRIK_WITH_DEPLOY=true` and requires `brik-deploy`. The deploy stage
+  runs with zero environments and succeeds vacuously. Treatment: comments corrected --
+  node-full proves the deploy stage is *wired into the orchestrator* (parity), NOT that a
+  real deploy works. Real deploy coverage = node-deploy-gitops.
+- **node-plan-tag -- promote self-skips.** No `release.{candidate,release}.docker`
+  config, so on a tag `brik-promote` runs but self-skips its retag (status=skipped,
+  reason=no-docker-promotion-config) and the job still succeeds. Treatment: comment
+  corrected -- node-plan-tag proves the planner *activates/schedules* promote on a tag,
+  NOT a real candidate->release retag. **Open gap:** a real promote-retag has no live
+  coverage; it needs a dedicated publish+promote project + a registry/report assertion
+  (candidate chantier).
+- **node-complete -- "real Nexus publish" verified via report, not a Nexus query.** The
+  publish does happen, but the only assertion is `assert.image_tag` reading the
+  aggregate-report `.business.image.tag`. The ready-made `assert.nexus_docker_exists`
+  (queries `/v2/<path>/tags/list`) is defined but **called by no scenario**.
+  **Recommendation:** wire `assert.nexus_docker_exists "brik/node-complete"` (+ the
+  release tag) post-pipeline so the publish is verified against Nexus, not only brik's
+  own report. Lower severity (behaviour occurs; only the verification is report-based).
+
+Robust pattern (to replicate): assert the *effect* in the source of truth -- e.g.
+node-deploy-gitops asserts the ArgoCD app is Synced+Healthy; node-full-cve uses
+`expect_fail` + error pattern. Avoid relying on job status alone.
