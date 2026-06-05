@@ -27,6 +27,8 @@ reload_env
 # Source E2E libraries
 # shellcheck source=lib/assert.sh
 source "${SCRIPT_DIR}/lib/assert.sh"
+# shellcheck source=lib/scenario.sh
+source "${SCRIPT_DIR}/lib/scenario.sh"
 # shellcheck source=lib/jenkins-api.sh
 source "${SCRIPT_DIR}/lib/jenkins-api.sh"
 # shellcheck source=lib/nexus.sh
@@ -242,29 +244,8 @@ echo ""
 # reached notify or archived the aggregate.
 if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" && "$FINAL_RESULT" == "SUCCESS" ]]; then
     log_info "Validating aggregate-report.json aggregate (build #${BUILD_NUMBER})..."
-    AGG_TMP="$(mktemp -d)"
-    AGG_FILE="${AGG_TMP}/aggregate-report.json"
-    if e2e.jenkins.download_artifact "$JOB_NAME" "$BUILD_NUMBER" \
-            "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
-        assert.aggregate_v1 "$AGG_FILE" "jenkins"
-        # On tag scenarios (E2E_TRIGGER_REF=v<N>...), assert the package
-        # image tag mirrors the release version. Parity counterpart to the
-        # GitLab assertion -- both platforms must produce the same tag on
-        # the same release commit.
-        _trigger_ref="${E2E_TRIGGER_REF:-main}"
-        if [[ "$_trigger_ref" =~ ^v[0-9] ]]; then
-            assert.image_tag "$AGG_FILE" "${_trigger_ref#v}"
-        fi
-        # Opt-in: assert the promote stage really ran a candidate->release
-        # retag in THIS build's report (run-specific, stale-proof). Parity
-        # with the GitLab suite.
-        if [[ "${E2E_ASSERT_PROMOTE:-false}" == "true" ]]; then
-            assert.promote_succeeded "$AGG_FILE"
-        fi
-    else
-        log_warn "could not download aggregate-report.json from build (skipping aggregate assertions)"
-    fi
-    rm -rf "$AGG_TMP"
+    e2e.scenario.assert_aggregate "jenkins" "${E2E_TRIGGER_REF:-main}" "${E2E_ASSERT_PROMOTE:-false}" \
+        e2e.jenkins.download_artifact "$JOB_NAME" "$BUILD_NUMBER"
     echo ""
 fi
 
