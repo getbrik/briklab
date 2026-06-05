@@ -313,6 +313,8 @@ Full suite run on 2026-04-18
 
 **ArgoCD won't sync** -- ArgoCD default polling is ~3 minutes. Use `argocd app get <app> --refresh hard` to force, or run `./scripts/briklab.sh infra-refresh` to renew port-forwards and tokens.
 
+**`brik-deploy` fails with `token signature is invalid`** -- After a lab reset (`make clean` + `make init`) or any k3d/ArgoCD recreation, the ArgoCD signing key rotates and the `ARGOCD_AUTH_TOKEN` stored in GitLab CI variables goes stale. The `test` self-heal only refreshes the local token in `.env`; run `./scripts/briklab.sh infra-refresh` to propagate a fresh token to the GitLab CI variables (and Jenkins), then re-run the deploy/gitops scenarios.
+
 **E2E timeout** -- Use `--batch-size 4` to limit concurrent pipelines. Check runner saturation with `./scripts/briklab.sh logs runner`. Run `./scripts/briklab.sh infra-refresh` if tokens expired.
 
 **Reset between E2E runs** -- `./scripts/briklab.sh reset --gitlab` cleans repos, k8s namespaces, ArgoCD apps, and Nexus artifacts.
