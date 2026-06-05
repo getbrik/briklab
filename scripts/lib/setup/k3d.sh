@@ -40,15 +40,34 @@ if k3d cluster list 2>/dev/null | grep -q "$CLUSTER_NAME"; then
     k3d cluster delete "$CLUSTER_NAME"
 fi
 
-# Create registries config for the Nexus Docker hosted registry
+# Create registries config for the Nexus Docker hosted registry.
+# The Nexus docker repo enforces basic auth (forceBasicAuth), so containerd
+# must authenticate: with no credentials the pull is anonymous, Nexus returns
+# 401, and deployed pods are stuck in ImagePullBackOff. Inject the same admin
+# credentials the CI uses to push (BRIK_PUBLISH_DOCKER_USER=admin) so the
+# cluster can pull released images. Both hosts need an auth entry: containerd
+# routes the pull through the mirror endpoint (brik-nexus:8082) and matches
+# credentials against the host it actually contacts, not just the image's
+# registry host (nexus.briklab.test:8082).
 REGISTRIES_FILE=$(mktemp /tmp/k3d-registries-XXXXXX.yaml)
 trap 'rm -f "$REGISTRIES_FILE"' EXIT
 
-cat > "$REGISTRIES_FILE" <<'YAML'
+nexus_registry_user="admin"
+nexus_registry_pass="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
+cat > "$REGISTRIES_FILE" <<YAML
 mirrors:
   "nexus.briklab.test:8082":
     endpoint:
       - "http://brik-nexus:8082"
+configs:
+  "nexus.briklab.test:8082":
+    auth:
+      username: "${nexus_registry_user}"
+      password: "${nexus_registry_pass}"
+  "brik-nexus:8082":
+    auth:
+      username: "${nexus_registry_user}"
+      password: "${nexus_registry_pass}"
 YAML
 
 # Create the k3d cluster
