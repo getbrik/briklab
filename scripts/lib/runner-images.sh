@@ -89,7 +89,7 @@ _briklab_runner_images.pins() {
 
 # Verify the digest lock covers exactly the tags brik resolves (no drift).
 # Skips (returns 0) when the brik registry is unreachable so the artifact
-# staleness check in generate-versions.sh still runs standalone.
+# staleness check in briklab.versions.check still runs standalone.
 briklab.runner_images.verify_pins() {
     local resolved pinned
     resolved="$(briklab.runner_images.list 2>/dev/null)" || {
@@ -195,6 +195,6 @@ briklab.runner_images.pull() {
     log_info "Brik runner images: ${cached} cached, ${pulled} pulled, ${unpinned} unpinned, ${failed} failed"
     # Non-fatal by design (preserves the original contract): a failed warm-pull
     # is only a warning -- the runner retries the image on first use. Reproducibility
-    # is enforced by the digest pins + generate-versions.sh --check, not here.
+    # is enforced by the digest pins + make versions-check, not here.
     return 0
 }

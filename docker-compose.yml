@@ -3,7 +3,7 @@
 # K8s cluster is managed separately via k3d (see scripts/lib/setup/k3d.sh)
 #
 # Image versions and build args come from versions.env (generated from
-# versions.yml by scripts/generate-versions.sh). briklab.sh loads it into the
+# versions.yml by 'make versions'). The dispatchers load it into the
 # environment automatically; for a bare invocation, source it first:
 #
 # Usage:

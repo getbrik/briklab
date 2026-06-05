@@ -39,7 +39,7 @@ briklab.env.reload() {
 
 # Load generated component versions (versions.env) into the environment so that
 # docker compose substitution and the setup scripts resolve every version from
-# the single source of truth (generated from versions.yml by generate-versions.sh).
+# the single source of truth (generated from versions.yml by 'make versions').
 briklab.env.load_versions() {
     if [[ -f "$VERSIONS_ENV_FILE" ]]; then
         set -a
@@ -47,6 +47,6 @@ briklab.env.load_versions() {
         source "$VERSIONS_ENV_FILE"
         set +a
     else
-        briklab.log.warn "versions.env not found - run scripts/generate-versions.sh"
+        briklab.log.warn "versions.env not found - run 'make versions'"
     fi
 }

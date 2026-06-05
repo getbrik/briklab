@@ -24,7 +24,7 @@ The alternatives are bad:
 - Renting GitLab/Jenkins cloud accounts per contributor: expensive, slow to iterate, shared state across PRs.
 - Hand-rolling GitLab CE + Jenkins (with Configuration-as-Code) + Nexus + k3d + ArgoCD in Docker: days of wiring per contributor for PAT registration, runner registration, Job DSL, Nexus repository creation, ArgoCD port-forwards.
 
-Briklab wires it once. Every contributor runs `./scripts/briklab.sh init` and gets the full stack ready in 5 minutes.
+Briklab wires it once. Every contributor runs `make init` and gets the full stack ready in 5 minutes.
 
 For internal architecture details, see [docs/architecture.md](docs/architecture.md).
 
@@ -85,7 +85,7 @@ Add to Docker Desktop (Settings > Docker Engine):
 ### Initialize
 
 ```bash
-./scripts/briklab.sh init
+make init
 ```
 
 > GitLab takes 3-5 minutes on first start. Jenkins builds a custom Docker image on first start. Nexus takes 2-3 minutes. The script waits automatically.
@@ -122,15 +122,21 @@ Setup creates 6 hosted repositories for artifact publishing:
 
 ## CLI Commands
 
-### Lifecycle
+### Lifecycle (Makefile)
+
+Infra lifecycle is driven by the root `Makefile` (or `./scripts/infra.sh <command>`
+directly). Testing, configuration and reset stay on `./scripts/briklab.sh`.
 
 | Command | Description |
 |---------|-------------|
-| `briklab.sh init` | First launch (start + setup + smoke-test) |
-| `briklab.sh start` | Start all containers (+ set root password) |
-| `briklab.sh stop` | Stop all containers |
-| `briklab.sh restart` | Stop + start |
-| `briklab.sh clean` | Delete all data and volumes (irreversible) |
+| `make init` | First launch (start + setup + k3d + smoke-test) |
+| `make start` | Start all containers |
+| `make stop` | Stop all containers |
+| `make restart` | Stop + start |
+| `make clean` | Delete all data and volumes (prompts; `make clean-force` skips it) |
+| `make k3d-start` / `make k3d-stop` | Create / destroy the k3d cluster + ArgoCD |
+| `make versions` | Regenerate versions.env + Jenkins plugins + image lock from `versions.yml` |
+| `make versions-check` | Fail if any generated artifact drifts from `versions.yml` (CI guard) |
 
 ### Configuration
 
@@ -198,25 +204,23 @@ deploy/gitops scenarios (or `--all`) the ArgoCD + cluster checks are blocking.
 
 ### Kubernetes
 
-| Command | Description |
-|---------|-------------|
-| `briklab.sh k3d-start` | Create k3d cluster + install ArgoCD |
-| `briklab.sh k3d-stop` | Destroy the k3d cluster |
+k3d lifecycle lives in the Makefile: `make k3d-start` / `make k3d-stop` (see the
+Lifecycle table above).
 
 ## Typical Workflow
 
 ```bash
 # Day 1 - Full setup
-./scripts/briklab.sh init                    # First time setup (~5 min)
+make init                                     # First time setup (~5 min)
 ./scripts/briklab.sh test --gitlab --all     # Run GitLab E2E suite
 ./scripts/briklab.sh test --jenkins --all    # Run Jenkins E2E suite
-./scripts/briklab.sh stop                    # Done for the day
+make stop                                     # Done for the day
 
 # Day N
-./scripts/briklab.sh start                   # Restart (fast, data preserved)
+make start                                    # Restart (fast, data preserved)
 ./scripts/briklab.sh test --gitlab           # Quick GitLab smoke test
 ./scripts/briklab.sh test --jenkins          # Quick Jenkins smoke test
-./scripts/briklab.sh stop                    # Done
+make stop                                     # Done
 ```
 
 ## E2E Testing
@@ -305,7 +309,7 @@ Full suite run on 2026-04-18
 
 **Nexus repository creation fails** -- If `setup` is run before Nexus is fully ready, repository creation may fail. Wait for the healthcheck to pass, then re-run: `./scripts/briklab.sh setup`
 
-**k3d cluster already exists** -- `k3d cluster delete brik && ./scripts/briklab.sh k3d-start`
+**k3d cluster already exists** -- `k3d cluster delete brik && make k3d-start`
 
 **ArgoCD won't sync** -- ArgoCD default polling is ~3 minutes. Use `argocd app get <app> --refresh hard` to force, or run `./scripts/briklab.sh infra-refresh` to renew port-forwards and tokens.
 
@@ -319,13 +323,13 @@ For the complete list of known issues and solutions, see [docs/architecture.md -
 
 ```bash
 # Stop containers (data preserved)
-./scripts/briklab.sh stop
+make stop
 
 # Delete all data and volumes (irreversible, requires confirmation)
-./scripts/briklab.sh clean
+make clean
 
 # Delete k3d cluster
-k3d cluster delete brik
+make k3d-stop
 
 # Full removal: after clean, remove Docker images manually
 docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding
