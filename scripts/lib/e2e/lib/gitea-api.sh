@@ -32,9 +32,8 @@ _E2E_GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-
 # Output: JSON response on stdout
 e2e.gitea.api_get() {
     local endpoint="$1"
-    curl -sf --max-time 30 \
-        -H "Authorization: token ${GITEA_PAT}" \
-        "${_E2E_GITEA_URL}/api/v1/${endpoint}"
+    briklab.http.get "${_E2E_GITEA_URL}/api/v1/${endpoint}" \
+        -H "Authorization: token ${GITEA_PAT}"
 }
 
 # POST request with JSON body.
@@ -44,17 +43,11 @@ e2e.gitea.api_post() {
     local endpoint="$1"
     local json_body="${2:-}"
     if [[ -n "$json_body" ]]; then
-        curl -sf --max-time 30 \
-            -H "Authorization: token ${GITEA_PAT}" \
-            -H "Content-Type: application/json" \
-            -X POST \
-            -d "$json_body" \
-            "${_E2E_GITEA_URL}/api/v1/${endpoint}"
+        briklab.http.post_json "${_E2E_GITEA_URL}/api/v1/${endpoint}" "$json_body" \
+            -H "Authorization: token ${GITEA_PAT}"
     else
-        curl -sf --max-time 30 \
-            -H "Authorization: token ${GITEA_PAT}" \
-            -X POST \
-            "${_E2E_GITEA_URL}/api/v1/${endpoint}"
+        briklab.http.get "${_E2E_GITEA_URL}/api/v1/${endpoint}" \
+            -X POST -H "Authorization: token ${GITEA_PAT}"
     fi
 }
 
@@ -62,10 +55,8 @@ e2e.gitea.api_post() {
 # Args: $1 = endpoint
 e2e.gitea.api_delete() {
     local endpoint="$1"
-    curl -sf --max-time 30 \
-        -H "Authorization: token ${GITEA_PAT}" \
-        -X DELETE \
-        "${_E2E_GITEA_URL}/api/v1/${endpoint}" 2>/dev/null || true
+    briklab.http.delete "${_E2E_GITEA_URL}/api/v1/${endpoint}" \
+        -H "Authorization: token ${GITEA_PAT}" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -77,12 +68,11 @@ e2e.gitea.api_delete() {
 e2e.gitea.create_repo() {
     local repo_name="$1"
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    http_code=$(briklab.http.code "${_E2E_GITEA_URL}/api/v1/user/repos" --max-time 10 \
         -H "Authorization: token ${GITEA_PAT}" \
         -H "Content-Type: application/json" \
         -X POST \
-        -d "{\"name\":\"${repo_name}\",\"auto_init\":false,\"private\":false}" \
-        "${_E2E_GITEA_URL}/api/v1/user/repos")
+        -d "{\"name\":\"${repo_name}\",\"auto_init\":false,\"private\":false}")
 
     case "$http_code" in
         201) log_ok "Gitea repo '${repo_name}' created" ;;

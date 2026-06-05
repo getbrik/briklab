@@ -61,9 +61,8 @@ e2e.argocd.ensure_port_forward() {
 # Output: JSON response on stdout
 e2e.argocd.api_get() {
     local path="$1"
-    curl -sf --max-time 30 -k \
-        -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
-        "${_E2E_ARGOCD_URL}${path}"
+    briklab.http.get "${_E2E_ARGOCD_URL}${path}" \
+        -k -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}"
 }
 
 # ---------------------------------------------------------------------------
@@ -142,9 +141,8 @@ e2e.argocd.get_app_status() {
 # Returns: 0 on success, 1 on failure
 e2e.argocd.hard_refresh() {
     local app_name="$1"
-    curl -sf --max-time 30 -k \
-        -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
-        "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}?refresh=hard" &>/dev/null
+    briklab.http.get "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}?refresh=hard" \
+        -k -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" &>/dev/null
 }
 
 # Trigger a sync on an ArgoCD application.
@@ -157,12 +155,8 @@ e2e.argocd.trigger_sync() {
     # Hard refresh to pick up latest commits from git
     e2e.argocd.hard_refresh "$app_name" || true
     sleep 2
-    curl -sf --max-time 30 -k \
-        -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -X POST \
-        "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}/sync" \
-        -d '{}' &>/dev/null
+    briklab.http.post_json "${_E2E_ARGOCD_URL}/api/v1/applications/${app_name}/sync" '{}' \
+        -k -H "Authorization: Bearer ${ARGOCD_AUTH_TOKEN}" &>/dev/null
 }
 
 # Wait for ArgoCD app image to change from a known value.

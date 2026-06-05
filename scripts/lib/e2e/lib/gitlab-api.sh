@@ -29,9 +29,8 @@ _E2E_GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PO
 # Output: JSON response on stdout
 e2e.gitlab.api_get() {
     local endpoint="$1"
-    curl -sf --max-time 30 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        "${_E2E_GITLAB_URL}/api/v4/${endpoint}"
+    briklab.http.get "${_E2E_GITLAB_URL}/api/v4/${endpoint}" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}"
 }
 
 # POST request to GitLab API (form-encoded).
@@ -40,11 +39,8 @@ e2e.gitlab.api_get() {
 e2e.gitlab.api_post() {
     local endpoint="$1"
     shift
-    curl -sf --max-time 30 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        -X POST \
-        "$@" \
-        "${_E2E_GITLAB_URL}/api/v4/${endpoint}"
+    briklab.http.get "${_E2E_GITLAB_URL}/api/v4/${endpoint}" \
+        -X POST -H "PRIVATE-TOKEN: ${GITLAB_PAT}" "$@"
 }
 
 # POST request with JSON body.
@@ -53,12 +49,8 @@ e2e.gitlab.api_post() {
 e2e.gitlab.api_post_json() {
     local endpoint="$1"
     local json_body="$2"
-    curl -sf --max-time 30 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        -H "Content-Type: application/json" \
-        -X POST \
-        -d "$json_body" \
-        "${_E2E_GITLAB_URL}/api/v4/${endpoint}"
+    briklab.http.post_json "${_E2E_GITLAB_URL}/api/v4/${endpoint}" "$json_body" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}"
 }
 
 # PUT request to GitLab API.
@@ -67,21 +59,16 @@ e2e.gitlab.api_post_json() {
 e2e.gitlab.api_put() {
     local endpoint="$1"
     shift
-    curl -sf --max-time 30 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        -X PUT \
-        "$@" \
-        "${_E2E_GITLAB_URL}/api/v4/${endpoint}"
+    briklab.http.get "${_E2E_GITLAB_URL}/api/v4/${endpoint}" \
+        -X PUT -H "PRIVATE-TOKEN: ${GITLAB_PAT}" "$@"
 }
 
 # DELETE request to GitLab API.
 # Args: $1 = endpoint
 e2e.gitlab.api_delete() {
     local endpoint="$1"
-    curl -sf --max-time 30 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        -X DELETE \
-        "${_E2E_GITLAB_URL}/api/v4/${endpoint}" 2>/dev/null || true
+    briklab.http.delete "${_E2E_GITLAB_URL}/api/v4/${endpoint}" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -102,9 +89,8 @@ e2e.gitlab.get_project_id() {
 e2e.gitlab.ensure_group() {
     local group_name="$1"
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+    http_code=$(briklab.http.code "${_E2E_GITLAB_URL}/api/v4/groups" \
         -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        "${_E2E_GITLAB_URL}/api/v4/groups" \
         -d "name=${group_name}&path=${group_name}&visibility=public")
 
     case "$http_code" in
@@ -137,9 +123,8 @@ e2e.gitlab.create_project() {
     fi
 
     local response http_code body
-    response=$(curl -s -w "\n%{http_code}" --max-time 30 \
+    response=$(briklab.http.request "${_E2E_GITLAB_URL}/api/v4/projects" \
         -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        "${_E2E_GITLAB_URL}/api/v4/projects" \
         -d "$data")
     http_code=$(echo "$response" | tail -1)
     body=$(echo "$response" | sed '$d')
@@ -388,9 +373,8 @@ e2e.gitlab.get_job_status() {
 # Output: log text on stdout
 e2e.gitlab.get_job_log() {
     local project_id="$1" job_id="$2"
-    curl -sf --max-time 60 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/trace" 2>/dev/null || true
+    briklab.http.get "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/trace" \
+        --max-time 60 -H "PRIVATE-TOKEN: ${GITLAB_PAT}" 2>/dev/null || true
 }
 
 # Download a single file from a job's artifact archive into <dest>.
@@ -399,10 +383,8 @@ e2e.gitlab.get_job_log() {
 # Returns: 0 on success (file downloaded), non-zero otherwise
 e2e.gitlab.download_artifact() {
     local project_id="$1" job_id="$2" artifact_path="$3" dest="$4"
-    curl -sfL --max-time 60 \
-        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        -o "$dest" \
-        "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/artifacts/${artifact_path}"
+    briklab.http.get "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/jobs/${job_id}/artifacts/${artifact_path}" \
+        --max-time 60 -L -H "PRIVATE-TOKEN: ${GITLAB_PAT}" -o "$dest"
 }
 
 # ---------------------------------------------------------------------------
@@ -416,22 +398,20 @@ e2e.gitlab.set_group_variable() {
 
     # Try update first, then create
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+    http_code=$(briklab.http.code "${_E2E_GITLAB_URL}/api/v4/groups/${group_id}/variables/${key}" \
         -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
         -X PUT \
         --data-urlencode "value=${value}" \
-        -d "masked=${masked}" \
-        "${_E2E_GITLAB_URL}/api/v4/groups/${group_id}/variables/${key}" 2>/dev/null)
+        -d "masked=${masked}" 2>/dev/null)
 
     if [[ "$http_code" == "200" ]]; then
         return 0
     fi
 
     # Variable does not exist, create it
-    curl -s -o /dev/null --max-time 30 \
+    briklab.http.code "${_E2E_GITLAB_URL}/api/v4/groups/${group_id}/variables" \
         -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
         -X POST \
         --data-urlencode "value=${value}" \
-        -d "key=${key}&masked=${masked}&protected=false" \
-        "${_E2E_GITLAB_URL}/api/v4/groups/${group_id}/variables" 2>/dev/null || true
+        -d "key=${key}&masked=${masked}&protected=false" >/dev/null 2>&1 || true
 }
