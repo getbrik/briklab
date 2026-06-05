@@ -1,24 +1,19 @@
 #!/usr/bin/env bash
 # Infrastructure refresh for briklab.
 #
-# Validates and refreshes all tokens, ensures port-forwards are active,
-# and verifies that all services are reachable. Designed to be run before
-# E2E tests without needing to recreate the briklab infrastructure.
+# Validates and refreshes all tokens, ensures port-forwards are active, and
+# propagates fresh tokens to the CI platforms -- without recreating the lab.
+# It is the platform-agnostic composition of the recovery layer: where
+# `preflight --fix` heals one platform's readiness, infra-refresh heals every
+# token + port-forward and then pushes them outward to GitLab/Jenkins.
 #
 # Usage:
 #   bash infra-refresh.sh                        # Run all checks
 #   source infra-refresh.sh && infra_refresh     # Use as a function
 #
-# What it does:
-#   1. Loads .env
-#   2. Checks Docker services (GitLab, Gitea, Jenkins, Nexus)
-#   3. Checks k3d cluster and ArgoCD port-forward
-#   4. Validates/refreshes GitLab PAT
-#   5. Validates/refreshes Gitea PAT
-#   6. Validates ArgoCD API token (regenerates if expired)
-#   7. Reloads .env (picks up any regenerated tokens)
-#   8. Propagates tokens to GitLab CI variables
-#   9. Restarts Jenkins if its env is stale
+# Layering: depends directly on recovery.sh (briklab.recover.*), which already
+# aggregates checks.sh predicates and the auth/* token helpers. No dependency
+# on the E2E layer.
 #
 # Exit code: 0 if all checks pass, 1 if any critical check fails.
 set -euo pipefail
@@ -27,19 +22,17 @@ set -euo pipefail
 [[ -n "${_BRIKLAB_INFRA_REFRESH_LOADED:-}" ]] && return 0
 _BRIKLAB_INFRA_REFRESH_LOADED=1
 
-# Resolve paths
 INFRA_REFRESH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$INFRA_REFRESH_DIR/../.." && pwd)"
 
-# shellcheck source=common.sh
-source "${INFRA_REFRESH_DIR}/common.sh"
-# shellcheck source=checks.sh
-source "${INFRA_REFRESH_DIR}/checks.sh"
-# shellcheck source=e2e/lib/auth.sh
-source "${INFRA_REFRESH_DIR}/e2e/lib/auth.sh"
+# recovery.sh transitively provides common.sh (log/env/http/wait), checks.sh
+# (briklab.check.*) and the auth/* token helpers (briklab.auth.* via
+# briklab.recover.*). Sourcing it here keeps infra-refresh in the orchestration
+# layer instead of reaching down through e2e/lib/auth.sh.
+# shellcheck source=recovery.sh
+source "${INFRA_REFRESH_DIR}/recovery.sh"
 
 # ---------------------------------------------------------------------------
-# 1. Docker services
+# Docker services
 # ---------------------------------------------------------------------------
 
 check_docker_services() {
@@ -59,7 +52,7 @@ check_docker_services() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. k3d cluster + ArgoCD port-forward
+# k3d cluster + ArgoCD port-forward
 # ---------------------------------------------------------------------------
 
 check_k3d_and_argocd() {
@@ -71,7 +64,6 @@ check_k3d_and_argocd() {
     fi
     log_ok "k3d cluster reachable"
 
-    # Check ArgoCD pods
     local ready
     ready=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server \
         --field-selector=status.phase=Running \
@@ -86,116 +78,7 @@ check_k3d_and_argocd() {
     fi
     log_ok "ArgoCD server pod ready"
 
-    # Ensure port-forward is active
-    briklab.auth.argocd_portfwd
-}
-
-# ---------------------------------------------------------------------------
-# 3. GitLab PAT
-# ---------------------------------------------------------------------------
-
-check_gitlab_pat() {
-    log_info "Checking GitLab PAT..."
-    briklab.auth.gitlab_pat
-}
-
-# ---------------------------------------------------------------------------
-# 4. Gitea PAT
-# ---------------------------------------------------------------------------
-
-check_gitea_pat() {
-    log_info "Checking Gitea PAT..."
-    briklab.auth.gitea_pat
-}
-
-# ---------------------------------------------------------------------------
-# 5. ArgoCD API token
-# ---------------------------------------------------------------------------
-
-check_argocd_token() {
-    log_info "Checking ArgoCD API token..."
-    briklab.auth.argocd_token
-}
-
-# ---------------------------------------------------------------------------
-# 6. Propagate tokens to CI platforms
-# ---------------------------------------------------------------------------
-
-propagate_to_gitlab() {
-    log_info "Propagating tokens to GitLab CI variables..."
-    local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-
-    local group_id
-    group_id=$(curl -sf --header "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-        "${gitlab_url}/api/v4/groups?search=brik" 2>/dev/null | jq -r '.[0].id // empty') || true
-
-    if [[ -z "$group_id" ]]; then
-        log_warn "GitLab group 'brik' not found -- skipping CI variable propagation"
-        return 0
-    fi
-
-    local -a vars_to_set=(
-        "ARGOCD_SERVER:host.docker.internal:${ARGOCD_PORT:-9080}:false"
-        "ARGOCD_AUTH_TOKEN:${ARGOCD_AUTH_TOKEN:-}:true"
-    )
-
-    local entry key val masked
-    for entry in "${vars_to_set[@]}"; do
-        key="${entry%%:*}"
-        val="${entry#*:}"; val="${val%:*}"
-        masked="${entry##*:}"
-        [[ -z "$val" ]] && continue
-
-        # Update or create
-        local code
-        code=$(curl -sf -o /dev/null -w "%{http_code}" --request PUT \
-            --header "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-            "${gitlab_url}/api/v4/groups/${group_id}/variables/${key}" \
-            --form "value=${val}" --form "masked=${masked}" 2>/dev/null || echo "000")
-
-        if [[ "$code" != "200" ]]; then
-            curl -sf --request POST \
-                --header "PRIVATE-TOKEN: ${GITLAB_PAT}" \
-                "${gitlab_url}/api/v4/groups/${group_id}/variables" \
-                --form "key=${key}" --form "value=${val}" --form "masked=${masked}" \
-                >/dev/null 2>&1 || true
-        fi
-    done
-
-    log_ok "GitLab CI variables updated"
-}
-
-propagate_to_jenkins() {
-    log_info "Checking Jenkins token propagation..."
-
-    local jenkins_url="http://${JENKINS_HOSTNAME:-jenkins.briklab.test}:${JENKINS_HTTP_PORT:-9090}"
-    if ! check_http "${jenkins_url}/login"; then
-        log_warn "Jenkins not reachable -- skipping"
-        return 0
-    fi
-
-    # Jenkins reads ARGOCD_AUTH_TOKEN from its container environment (docker-compose env).
-    # Compare the token inside the container with the current .env value.
-    local container_token
-    container_token=$(docker exec brik-jenkins printenv ARGOCD_AUTH_TOKEN 2>/dev/null || echo "")
-
-    if [[ -n "${ARGOCD_AUTH_TOKEN:-}" ]] && [[ "$container_token" == "$ARGOCD_AUTH_TOKEN" ]]; then
-        log_ok "Jenkins tokens match .env"
-        return 0
-    fi
-
-    log_warn "Jenkins tokens outdated -- restarting..."
-    # docker compose resolves image refs from versions.env; load it so the
-    # ${*_IMAGE} substitutions are not blank (which fails project validation).
-    load_versions
-    (cd "$PROJECT_ROOT" && docker compose up -d jenkins) 2>&1 | tail -3
-
-    # Wait for Jenkins to be ready
-    if briklab.wait.until 100 5 check_http "${jenkins_url}/login"; then
-        log_ok "Jenkins restarted with updated tokens"
-    else
-        log_warn "Jenkins slow to start -- it may need a few more seconds"
-    fi
+    briklab.recover.argocd_portfwd
 }
 
 # ---------------------------------------------------------------------------
@@ -208,7 +91,6 @@ infra_refresh() {
     echo -e "${BOLD}========================================${NC}"
     echo ""
 
-    # Load .env
     if [[ ! -f "$ENV_FILE" ]]; then
         log_error ".env not found at ${ENV_FILE}"
         return 1
@@ -225,10 +107,13 @@ infra_refresh() {
     check_k3d_and_argocd || errors=$((errors + 1))
     echo ""
 
-    # Tokens (may update .env)
-    check_gitlab_pat || errors=$((errors + 1))
-    check_gitea_pat || errors=$((errors + 1))
-    check_argocd_token || errors=$((errors + 1))
+    # Tokens (may update .env) -- reuse the recovery layer's idempotent heals.
+    log_info "Checking GitLab PAT..."
+    briklab.recover.gitlab_pat || errors=$((errors + 1))
+    log_info "Checking Gitea PAT..."
+    briklab.recover.gitea_pat || errors=$((errors + 1))
+    log_info "Checking ArgoCD API token..."
+    briklab.recover.argocd_token || errors=$((errors + 1))
     echo ""
 
     # Reload .env to pick up any regenerated tokens before propagation
@@ -237,8 +122,10 @@ infra_refresh() {
     echo ""
 
     # Propagate fresh tokens to CI platforms
-    propagate_to_gitlab || errors=$((errors + 1))
-    propagate_to_jenkins || errors=$((errors + 1))
+    log_info "Propagating tokens to GitLab CI variables..."
+    briklab.recover.gitlab_ci_vars || errors=$((errors + 1))
+    log_info "Checking Jenkins token propagation..."
+    briklab.recover.jenkins_token || errors=$((errors + 1))
     echo ""
 
     # Summary

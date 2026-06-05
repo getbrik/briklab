@@ -117,6 +117,83 @@ briklab.recover.argocd_app_op() {
     fi
 }
 
+# --- token propagation to CI platforms ---
+# These heals have no checks.sh predicate: they push a freshly-regenerated
+# token outward so the CI platform carries it. Run them after the *_pat /
+# argocd_token recoveries and a reload_env.
+
+# Propagate ARGOCD_SERVER / ARGOCD_AUTH_TOKEN to the 'brik' GitLab group's CI
+# variables (create or update). No-op when the group is absent.
+briklab.recover.gitlab_ci_vars() {
+    local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
+
+    local group_id
+    group_id=$(briklab.http.get "${gitlab_url}/api/v4/groups?search=brik" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" 2>/dev/null | jq -r '.[0].id // empty') || true
+
+    if [[ -z "$group_id" ]]; then
+        log_warn "GitLab group 'brik' not found -- skipping CI variable propagation"
+        return 0
+    fi
+
+    local -a vars_to_set=(
+        "ARGOCD_SERVER:host.docker.internal:${ARGOCD_PORT:-9080}:false"
+        "ARGOCD_AUTH_TOKEN:${ARGOCD_AUTH_TOKEN:-}:true"
+    )
+
+    local entry key val masked code
+    for entry in "${vars_to_set[@]}"; do
+        key="${entry%%:*}"
+        val="${entry#*:}"; val="${val%:*}"
+        masked="${entry##*:}"
+        [[ -z "$val" ]] && continue
+
+        code=$(briklab.http.code "${gitlab_url}/api/v4/groups/${group_id}/variables/${key}" \
+            -X PUT -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+            --form "value=${val}" --form "masked=${masked}")
+
+        if [[ "$code" != "200" ]]; then
+            briklab.http.code "${gitlab_url}/api/v4/groups/${group_id}/variables" \
+                -X POST -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+                --form "key=${key}" --form "value=${val}" --form "masked=${masked}" >/dev/null
+        fi
+    done
+
+    log_ok "GitLab CI variables updated"
+}
+
+# Restart Jenkins when the ARGOCD_AUTH_TOKEN baked into its container env no
+# longer matches .env (Jenkins reads it from the compose environment).
+briklab.recover.jenkins_token() {
+    local jenkins_url="http://${JENKINS_HOSTNAME:-jenkins.briklab.test}:${JENKINS_HTTP_PORT:-9090}"
+    if ! check_http "${jenkins_url}/login"; then
+        log_warn "Jenkins not reachable -- skipping"
+        return 0
+    fi
+
+    local container_token
+    container_token=$(docker exec brik-jenkins printenv ARGOCD_AUTH_TOKEN 2>/dev/null || echo "")
+
+    if [[ -n "${ARGOCD_AUTH_TOKEN:-}" ]] && [[ "$container_token" == "$ARGOCD_AUTH_TOKEN" ]]; then
+        log_ok "Jenkins tokens match .env"
+        return 0
+    fi
+
+    log_warn "Jenkins tokens outdated -- restarting..."
+    # docker compose resolves image refs from versions.env; load it so the
+    # ${*_IMAGE} substitutions are not blank (which fails project validation).
+    load_versions
+    local project_root
+    project_root="$(cd "${_RECOVERY_DIR}/../.." && pwd)"
+    (cd "$project_root" && docker compose up -d jenkins) 2>&1 | tail -3
+
+    if briklab.wait.until 100 5 check_http "${jenkins_url}/login"; then
+        log_ok "Jenkins restarted with updated tokens"
+    else
+        log_warn "Jenkins slow to start -- it may need a few more seconds"
+    fi
+}
+
 # --- orchestrator: heal everything a deploy/gitops run needs ---
 
 # Bring the k3d cluster + ArgoCD controller back to a deploy-ready state.
