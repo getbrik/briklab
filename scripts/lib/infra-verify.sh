@@ -95,9 +95,11 @@ briklab.verify.file_exists() {
 
 # --- Command checks ---
 
+# Args: $1 = description, then the command and its arguments to run.
 briklab.verify.cmd() {
-    local desc="$1" cmd="$2"
-    if eval "$cmd" &>/dev/null; then
+    local desc="$1"
+    shift
+    if "$@" &>/dev/null; then
         briklab.verify._ok "$desc"
         return 0
     fi

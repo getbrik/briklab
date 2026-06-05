@@ -28,7 +28,7 @@ cmd_setup() {
 
     # 2. Runner
     _run_setup "Runner" "runner.sh" "brik-runner" && {
-        briklab.verify.cmd "Runner config" "docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml" || ((errors++)) || true
+        briklab.verify.cmd "Runner config" docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml || ((errors++)) || true
     }
 
     # 3. Gitea
