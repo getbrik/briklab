@@ -17,20 +17,12 @@ NEXUS_NEW_PASSWORD="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
 # Wait for Nexus to be ready
 wait_for_nexus() {
     log_info "Waiting for Nexus (may take 2-3 minutes on first start)..."
-    local max_attempts=60
-    local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -sf -o /dev/null "${NEXUS_URL}/service/rest/v1/status"; then
-            log_ok "Nexus is ready"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        printf "."
-        sleep 5
-    done
-    echo ""
-    log_error "Nexus is not ready after $((max_attempts * 5))s"
-    exit 1
+    if briklab.wait.until 300 5 curl -sf -o /dev/null "${NEXUS_URL}/service/rest/v1/status"; then
+        log_ok "Nexus is ready"
+    else
+        log_error "Nexus is not ready after 300s"
+        exit 1
+    fi
 }
 
 # Read the initial admin password from the container

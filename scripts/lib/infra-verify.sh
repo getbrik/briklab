@@ -3,6 +3,9 @@
 # Source this file, then call verify_* functions.
 # Each function returns 0 on success, 1 on failure, and logs the result.
 
+[[ -n "${_BRIKLAB_INFRA_VERIFY_LOADED:-}" ]] && return 0
+_BRIKLAB_INFRA_VERIFY_LOADED=1
+
 # Single source of probe truth (pure predicates).
 # shellcheck source=checks.sh
 source "$(dirname "${BASH_SOURCE[0]}")/checks.sh"
@@ -30,12 +33,12 @@ _verify_fail() {
 
 verify_container_running() {
     local name="$1"
-    local status
-    status=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null || echo "missing")
-    if [[ "$status" == "running" ]]; then
+    if briklab.check.container_running "$name"; then
         _verify_ok "$name is running"
         return 0
     fi
+    local status
+    status=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null || echo "missing")
     _verify_fail "$name is not running (status: $status)"
     return 1
 }

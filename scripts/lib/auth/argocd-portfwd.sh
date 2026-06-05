@@ -17,9 +17,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 # Restarts it if not reachable.
 ensure_argocd_port_forward() {
     local port="${ARGOCD_PORT:-9080}"
-    local max_attempts=10
-    local wait_sec=3
-    local attempt=0
 
     # Already active? (shared probe with verify/preflight)
     if briklab.check.argocd_portfwd; then
@@ -29,23 +26,18 @@ ensure_argocd_port_forward() {
 
     log_warn "ArgoCD port-forward not active, (re)starting..."
 
-    # Kill stale port-forward
-    kill $(lsof -t -i:"${port}") 2>/dev/null || true
+    # Kill any stale kubectl port-forward holding this port.
+    pkill -f "port-forward.*${port}" 2>/dev/null || true
     sleep 1
 
     nohup kubectl port-forward svc/argocd-server -n argocd "${port}:443" &>/dev/null &
 
-    # Wait for port-forward to become ready
-    while [[ $attempt -lt $max_attempts ]]; do
-        sleep "$wait_sec"
-        attempt=$((attempt + 1))
-        if curl -sk -o /dev/null -w "%{http_code}" "https://localhost:${port}/api/version" 2>/dev/null | grep -q "200"; then
-            log_ok "ArgoCD port-forward ready on :${port} (attempt ${attempt}/${max_attempts})"
-            return 0
-        fi
-        log_info "Waiting for port-forward... (${attempt}/${max_attempts})"
-    done
+    # Wait for the port-forward to answer (same probe as checks/preflight).
+    if briklab.wait.until 30 3 briklab.check.argocd_portfwd; then
+        log_ok "ArgoCD port-forward ready on :${port}"
+        return 0
+    fi
 
-    log_error "Could not establish ArgoCD port-forward on :${port} after ${max_attempts} attempts"
+    log_error "Could not establish ArgoCD port-forward on :${port} after 30s"
     return 1
 }

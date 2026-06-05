@@ -13,20 +13,12 @@ JENKINS_URL="http://${JENKINS_HOSTNAME:-jenkins.briklab.test}:${JENKINS_HTTP_POR
 # Wait for Jenkins to be ready
 wait_for_jenkins() {
     log_info "Waiting for Jenkins..."
-    local max_attempts=30
-    local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -sf "${JENKINS_URL}/login" &>/dev/null; then
-            log_ok "Jenkins is ready"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        echo -n "."
-        sleep 5
-    done
-    echo ""
-    log_error "Jenkins is not ready after $((max_attempts * 5))s"
-    exit 1
+    if briklab.wait.until 150 5 curl -sf -o /dev/null "${JENKINS_URL}/login"; then
+        log_ok "Jenkins is ready"
+    else
+        log_error "Jenkins is not ready after 150s"
+        exit 1
+    fi
 }
 
 # Install plugins
