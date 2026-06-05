@@ -13,6 +13,7 @@ _BRIKLAB_CLI_SETUP_LOADED=1
 cmd_setup() {
     check_prereqs
     load_env
+    load_versions
     # shellcheck source=../infra-verify.sh
     source "${SCRIPT_DIR}/lib/infra-verify.sh"
 

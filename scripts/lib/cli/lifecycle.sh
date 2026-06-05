@@ -13,6 +13,7 @@ _BRIKLAB_CLI_LIFECYCLE_LOADED=1
 cmd_start() {
     check_prereqs
     load_env
+    load_versions
 
     # Pre-create bind-mount files/dirs so Docker doesn't create them as directories
     mkdir -p "${BRIKLAB_DIR}/data/ssh-target"
@@ -31,6 +32,7 @@ cmd_start() {
 
 cmd_stop() {
     load_env
+    load_versions
     log_info "Stopping all containers..."
     docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
     log_ok "Containers stopped"

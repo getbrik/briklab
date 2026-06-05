@@ -20,6 +20,7 @@ if [[ -z "${BRIKLAB_ROOT:-}" ]]; then
     BRIKLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 ENV_FILE="${BRIKLAB_ROOT}/.env"
+VERSIONS_ENV_FILE="${BRIKLAB_ROOT}/versions.env"
 
 # ---------------------------------------------------------------------------
 # Colors
@@ -68,6 +69,21 @@ reload_env() {
 
 # Alias for reload_env
 load_env() { reload_env; }
+
+# Load generated component versions (versions.env) into the shell environment.
+# Exported so docker compose substitution (${GITLAB_IMAGE}, ${K3S_IMAGE}, ...)
+# and the setup scripts resolve every version from the single source of truth.
+# versions.env is generated from versions.yml by scripts/generate-versions.sh.
+load_versions() {
+    if [[ -f "$VERSIONS_ENV_FILE" ]]; then
+        set -a
+        # shellcheck source=/dev/null
+        source "$VERSIONS_ENV_FILE"
+        set +a
+    else
+        log_warn "versions.env not found - run scripts/generate-versions.sh"
+    fi
+}
 
 # Check HTTP endpoint returns expected status code
 check_http() {

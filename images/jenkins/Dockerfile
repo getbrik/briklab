@@ -14,7 +14,9 @@
 # Anything else (node, maven, python, rust, dotnet, jv, gcc, libicu...)
 # is provided by the brik-runner images and must NOT be installed here.
 
-FROM jenkins/jenkins:2.541.3-lts-jdk21
+# Base image is pinned in versions.yml and passed as a build arg by docker compose.
+ARG JENKINS_BASE_IMAGE=jenkins/jenkins:2.541.3-lts-jdk21
+FROM ${JENKINS_BASE_IMAGE}
 
 USER root
 
