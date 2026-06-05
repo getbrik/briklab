@@ -15,6 +15,32 @@ _E2E_SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=assert.sh
 source "${_E2E_SCENARIO_DIR}/assert.sh"
 
+# ---------------------------------------------------------------------------
+# Scenario classification (single source of the deploy/gitops taxonomy, so the
+# CLI test command and the suites do not each hardcode the naming globs).
+# ---------------------------------------------------------------------------
+
+# True if the scenario exercises a real deployment (deploy / gitops / rollback).
+# The preflight then enforces --with-deploy (cluster + ArgoCD checks become
+# blocking) and the suite ensures the ArgoCD port-forward beforehand.
+# Args: $1 = scenario or project name.
+e2e.scenario.needs_deploy() {
+    case "$1" in
+        *deploy*|*gitops*|*rollback*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# True if the scenario drives a GitOps/ArgoCD sync that must be asserted after a
+# green run (a green pipeline alone does not prove the controller synced).
+# Args: $1 = scenario name.
+e2e.scenario.is_gitops() {
+    case "$1" in
+        *-deploy-gitops) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Download the notify-stage aggregate-report.json and run the standard v1
 # aggregate assertions on it. The download itself is platform-specific, so the
 # caller passes the download command plus its run-id arguments; this helper
