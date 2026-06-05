@@ -139,69 +139,11 @@ export ARGOCD_ADMIN_PASSWORD="$local_argocd_password"
 log_info "Creating ArgoCD service account 'brik' and generating API token..."
 briklab.auth.argocd_token
 
-# Create ArgoCD applications for E2E deploy scenarios
-log_info "Creating ArgoCD applications for E2E..."
-
-# Reload .env for Gitea password and fresh ArgoCD token
-reload_env
-
-local_gitea_password="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
-
-# brik-e2e-gitops: used by node-deploy-gitops E2E scenario
-local_gitops_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy-gitops.git"
-
-kubectl apply -f - <<ARGOAPP
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: brik-e2e-gitops
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: ${local_gitops_url}
-    targetRevision: main
-    path: k8s
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: brik-e2e-gitops
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-ARGOAPP
-log_ok "ArgoCD application 'brik-e2e-gitops' created"
-
-# brik-e2e-rollback: used by node-deploy-gitops-rollback E2E scenario
-local_rollback_url="http://brik:${local_gitea_password}@gitea.briklab.test:3000/brik/config-deploy-rollback.git"
-
-kubectl apply -f - <<ARGOAPP
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: brik-e2e-rollback
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: ${local_rollback_url}
-    targetRevision: main
-    path: k8s
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: brik-e2e-rollback
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-ARGOAPP
-log_ok "ArgoCD application 'brik-e2e-rollback' created"
-
 log_ok "ArgoCD installed"
+
+# Provision the ArgoCD Applications for E2E deploy scenarios. Kept in a separate
+# script (S5) so the apps can be re-applied without recreating the cluster.
+bash "${SCRIPT_DIR}/argocd-apps.sh"
 echo ""
 echo -e "${BLUE}ArgoCD access:${NC}"
 echo "  URL      : https://localhost:${ARGOCD_PORT}"
