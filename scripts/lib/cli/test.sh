@@ -12,6 +12,8 @@ _BRIKLAB_CLI_TEST_LOADED=1
 
 # shellcheck source=../preflight.sh
 source "${SCRIPT_DIR}/lib/preflight.sh"
+# shellcheck source=../e2e/lib/scenario.sh
+source "${SCRIPT_DIR}/lib/e2e/lib/scenario.sh"
 
 cmd_test() {
     check_prereqs
@@ -86,7 +88,7 @@ cmd_test() {
     # ArgoCD/cluster checks become blocking when a deploy/gitops scenario runs.
     if [[ -z "$no_preflight" ]]; then
         local preflight_args=("$platform")
-        if [[ "$action" == "all" || "$project" == *deploy* || "$project" == *gitops* || "$project" == *rollback* ]]; then
+        if [[ "$action" == "all" ]] || e2e.scenario.needs_deploy "$project"; then
             preflight_args+=(--with-deploy)
         fi
         [[ -z "$no_repair" ]] && preflight_args+=(--fix)

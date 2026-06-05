@@ -34,6 +34,8 @@ source "${SCRIPT_DIR}/lib/compose.sh"
 source "${SCRIPT_DIR}/lib/nexus.sh"
 # shellcheck source=lib/argocd.sh
 source "${SCRIPT_DIR}/lib/argocd.sh"
+# shellcheck source=lib/scenario.sh
+source "${SCRIPT_DIR}/lib/scenario.sh"
 reload_env
 briklab.auth.gitlab_pat
 
@@ -177,12 +179,10 @@ _suite_run_scenario() {
 
     # Per-scenario pre-cleanup: ensure the ArgoCD port-forward is up before a
     # gitops/rollback scenario (dead host-side port-forward causes false fails).
-    case "$name" in
-        *-deploy-gitops|*-deploy-rollback)
-            e2e.argocd.ensure_port_forward || \
-                log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
-            ;;
-    esac
+    if e2e.scenario.needs_deploy "$name"; then
+        e2e.argocd.ensure_port_forward || \
+            log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
+    fi
 
     # Multi-step rollback scenario: delegate to dedicated script
     if [[ "$name" == "node-deploy-rollback" ]]; then
@@ -235,7 +235,7 @@ _suite_run_scenario() {
     # a skipped or no-op gitops deploy would pass unnoticed (the coverage gap
     # that hid the --namespace bug). Assert the app actually reached Synced +
     # Healthy after the pipeline succeeds.
-    if [[ "$_test_rc" -eq 0 && "$name" == *-deploy-gitops ]]; then
+    if [[ "$_test_rc" -eq 0 ]] && e2e.scenario.is_gitops "$name"; then
         _suite_assert_gitops_sync "brik-e2e-gitops" || _test_rc=1
     fi
     return "$_test_rc"

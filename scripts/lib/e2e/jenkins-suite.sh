@@ -33,6 +33,8 @@ source "${SCRIPT_DIR}/lib/compose.sh"
 source "${SCRIPT_DIR}/lib/nexus.sh"
 # shellcheck source=lib/argocd.sh
 source "${SCRIPT_DIR}/lib/argocd.sh"
+# shellcheck source=lib/scenario.sh
+source "${SCRIPT_DIR}/lib/scenario.sh"
 reload_env
 
 # ---------------------------------------------------------------------------
@@ -159,12 +161,10 @@ _suite_run_scenario() {
 
     # Per-scenario pre-cleanup: ensure the ArgoCD port-forward is up before a
     # gitops/rollback scenario (dead host-side port-forward causes false fails).
-    case "$name" in
-        *-deploy-gitops|*-deploy-rollback)
-            e2e.argocd.ensure_port_forward || \
-                log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
-            ;;
-    esac
+    if e2e.scenario.needs_deploy "$name"; then
+        e2e.argocd.ensure_port_forward || \
+            log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
+    fi
 
     # Multi-step rollback scenario: delegate to dedicated script
     if [[ "$name" == "node-deploy-rollback" ]]; then
@@ -269,7 +269,7 @@ _suite_run_scenario() {
 
     # A green gitops build proves job status, not that ArgoCD synced. Assert it
     # (parity with the GitLab suite; shared helper in lib/argocd.sh).
-    if [[ "$_test_rc" -eq 0 && "$name" == *-deploy-gitops ]]; then
+    if [[ "$_test_rc" -eq 0 ]] && e2e.scenario.is_gitops "$name"; then
         e2e.argocd.assert_synced "brik-e2e-gitops" || _test_rc=1
     fi
     return "$_test_rc"
