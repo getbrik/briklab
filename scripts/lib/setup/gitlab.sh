@@ -167,6 +167,43 @@ _set_group_variable() {
     esac
 }
 
+# Set a file-type CI/CD variable on the 'brik' group from a file's content
+# (create or update). Used for SSH keys, whose newlines and special chars
+# cannot be masked or carried as an env_var.
+_set_group_file_variable() {
+    local key="$1"
+    local file="$2"
+    local pat="${GITLAB_PAT:-}"
+
+    local content
+    content=$(cat "$file")
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "PRIVATE-TOKEN: ${pat}" \
+        "${GITLAB_URL}/api/v4/groups/brik/variables" \
+        --data-urlencode "key=${key}" \
+        --data-urlencode "value=${content}" \
+        -d "protected=false&masked=false&variable_type=file")
+
+    case "$http_code" in
+        201) return 0 ;;
+        400|409)
+            curl -s -o /dev/null \
+                -X PUT \
+                -H "PRIVATE-TOKEN: ${pat}" \
+                "${GITLAB_URL}/api/v4/groups/brik/variables/${key}" \
+                --data-urlencode "value=${content}" \
+                -d "protected=false&masked=false&variable_type=file"
+            return 0
+            ;;
+        *)
+            log_warn "${key} creation returned HTTP ${http_code}"
+            return 1
+            ;;
+    esac
+}
+
 # Configure Nexus CI/CD variables on the 'brik' group
 setup_nexus_ci_variables() {
     log_info "Configuring Nexus CI/CD variables on 'brik' group..."
@@ -181,97 +218,72 @@ setup_nexus_ci_variables() {
     local auth_token_b64
     auth_token_b64=$(printf 'admin:%s' "$nexus_password" | base64)
 
-    local count=0
-    local total=14
+    # Simple env_var CI/CD variables, as "key|value|masked" rows. No value
+    # contains a "|" (the base64 alphabet excludes it), so the pipe is a safe
+    # field separator. The SSH deploy key (file type) is handled separately
+    # below; ArgoCD rows are appended conditionally.
+    local -a ci_vars=(
+        # Docker registry credentials (all 5 stacks)
+        "BRIK_PUBLISH_DOCKER_USER|admin|false"
+        "BRIK_PUBLISH_DOCKER_PASSWORD|${nexus_password}|true"
+        # npm (node-complete)
+        "BRIK_PUBLISH_NPM_TOKEN|${auth_token_b64}|true"
+        # PyPI (python-complete) - format admin:password for basic auth
+        "BRIK_PUBLISH_PYPI_TOKEN|admin:${nexus_password}|true"
+        # Maven (java-complete)
+        "BRIK_PUBLISH_MAVEN_USER|admin|false"
+        "BRIK_PUBLISH_MAVEN_PASSWORD|${nexus_password}|true"
+        # Cargo (rust-complete) - Basic auth token; masked=false because GitLab
+        # cannot mask values containing spaces ("Basic ...")
+        "BRIK_PUBLISH_CARGO_TOKEN|Basic ${auth_token_b64}|false"
+        # NuGet (dotnet-complete) - format admin:password for basic auth
+        "BRIK_PUBLISH_NUGET_TOKEN|admin:${nexus_password}|true"
+        # Brik registry credentials (deploy projects, Nexus Docker hosted registry)
+        "BRIK_REGISTRY_HOST|nexus.briklab.test:8082|false"
+        "BRIK_REGISTRY_USER|admin|false"
+        "BRIK_REGISTRY_PASSWORD|${nexus_password}|true"
+        # Nexus 3 UI URL (port 8081) -- distinct from the docker push endpoint
+        # (8082). Emitted as business.registry.ui_url so the HTML report links
+        # to the image browser page.
+        "BRIK_PACKAGE_REGISTRY_UI_URL|http://nexus.briklab.test:8081|false"
+        # SSH deploy: skip strict host key checking (local lab only)
+        "BRIK_SSH_STRICT_HOST_KEY|no|false"
+        # kubectl extra options (skip TLS validation for k3d self-signed certs)
+        "BRIK_KUBECTL_OPTS|--insecure-skip-tls-verify --validate=false|false"
+        # kubeconfig path (runner mounts it at /root/.kube/config; GitLab sets
+        # HOME to the build dir)
+        "KUBECONFIG|/root/.kube/config|false"
+        # DSI-owned org policy URL (chantier 20260508 P3). Pipelines resolve the
+        # file via the docker-compose mount on gitlab-runner; production swaps
+        # this for an https:// URL pointing at the DSI repo.
+        "BRIK_POLICY_URL|file:///etc/brik/policy/brik-policy.yml|false"
+    )
 
-    # Docker registry credentials (all 5 stacks)
-    _set_group_variable "BRIK_PUBLISH_DOCKER_USER" "admin" "false" && count=$((count + 1))
-    _set_group_variable "BRIK_PUBLISH_DOCKER_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
-
-    # npm (node-complete)
-    _set_group_variable "BRIK_PUBLISH_NPM_TOKEN" "$auth_token_b64" "true" && count=$((count + 1))
-
-    # PyPI (python-complete) - format admin:password for basic auth
-    _set_group_variable "BRIK_PUBLISH_PYPI_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
-
-    # Maven (java-complete)
-    _set_group_variable "BRIK_PUBLISH_MAVEN_USER" "admin" "false" && count=$((count + 1))
-    _set_group_variable "BRIK_PUBLISH_MAVEN_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
-
-    # Cargo (rust-complete) - Basic auth token for Nexus Cargo registry
-    # masked=false because GitLab cannot mask values containing spaces ("Basic ...")
-    _set_group_variable "BRIK_PUBLISH_CARGO_TOKEN" "Basic ${auth_token_b64}" "false" && count=$((count + 1))
-
-    # NuGet (dotnet-complete) - format admin:password for basic auth
-    _set_group_variable "BRIK_PUBLISH_NUGET_TOKEN" "admin:${nexus_password}" "true" && count=$((count + 1))
-
-    # Brik registry credentials (deploy projects, Nexus Docker hosted registry)
-    _set_group_variable "BRIK_REGISTRY_HOST" "nexus.briklab.test:8082" "false" && count=$((count + 1))
-    _set_group_variable "BRIK_REGISTRY_USER" "admin" "false" && count=$((count + 1))
-    _set_group_variable "BRIK_REGISTRY_PASSWORD" "$nexus_password" "true" && count=$((count + 1))
-
-    # Nexus 3 UI URL (port 8081) -- distinct from the docker push endpoint
-    # (port 8082). Picked up by lib/transverse/config.sh and emitted as
-    # business.registry.ui_url so the HTML report shows a clickable link
-    # to the image browser page.
-    _set_group_variable "BRIK_PACKAGE_REGISTRY_UI_URL" "http://nexus.briklab.test:8081" "false" && count=$((count + 1))
-
-    # SSH deploy: skip strict host key checking (local lab only)
-    _set_group_variable "BRIK_SSH_STRICT_HOST_KEY" "no" "false" && count=$((count + 1))
-
-    # SSH deploy key (for node-deploy-ssh E2E test)
-    local root_dir="${SCRIPT_DIR}/../../.."
-    local ssh_key_file="${root_dir}/data/ssh-target/deploy_key"
-    if [[ -f "$ssh_key_file" ]]; then
-        total=$((total + 1))
-        local ssh_key_content
-        ssh_key_content=$(cat "$ssh_key_file")
-        # SSH keys contain newlines and special chars: can't be masked, use file type
-        local http_code
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "PRIVATE-TOKEN: ${pat}" \
-            "${GITLAB_URL}/api/v4/groups/brik/variables" \
-            --data-urlencode "key=SSH_PRIVATE_KEY" \
-            --data-urlencode "value=${ssh_key_content}" \
-            -d "protected=false&masked=false&variable_type=file")
-        case "$http_code" in
-            201) count=$((count + 1)) ;;
-            400|409)
-                curl -s -o /dev/null \
-                    -X PUT \
-                    -H "PRIVATE-TOKEN: ${pat}" \
-                    "${GITLAB_URL}/api/v4/groups/brik/variables/SSH_PRIVATE_KEY" \
-                    --data-urlencode "value=${ssh_key_content}" \
-                    -d "protected=false&masked=false&variable_type=file"
-                count=$((count + 1))
-                ;;
-            *) log_warn "SSH_PRIVATE_KEY creation returned HTTP ${http_code}" ;;
-        esac
-    fi
-
-    # kubectl extra options (skip TLS validation for k3d self-signed certs)
-    _set_group_variable "BRIK_KUBECTL_OPTS" "--insecure-skip-tls-verify --validate=false" "false" && count=$((count + 1))
-
-    # kubeconfig path (runner mounts kubeconfig at /root/.kube/config but GitLab sets HOME to build dir)
-    _set_group_variable "KUBECONFIG" "/root/.kube/config" "false" && count=$((count + 1))
-
-    # ArgoCD (GitOps deploy) - runners reach ArgoCD via host.docker.internal
-    # Uses the non-expiring API token generated by k3d.sh setup (stored in .env)
+    # ArgoCD (GitOps deploy): runners reach ArgoCD via host.docker.internal,
+    # authenticating with the non-expiring API token generated by k3d.sh setup
+    # (stored in .env).
     if [[ -n "${ARGOCD_AUTH_TOKEN:-}" ]]; then
-        local argocd_server="host.docker.internal:${ARGOCD_PORT:-9080}"
-        total=$((total + 2))
-        _set_group_variable "ARGOCD_SERVER" "$argocd_server" "false" && count=$((count + 1))
-        _set_group_variable "ARGOCD_AUTH_TOKEN" "$ARGOCD_AUTH_TOKEN" "true" && count=$((count + 1))
+        ci_vars+=("ARGOCD_SERVER|host.docker.internal:${ARGOCD_PORT:-9080}|false")
+        ci_vars+=("ARGOCD_AUTH_TOKEN|${ARGOCD_AUTH_TOKEN}|true")
     else
         log_warn "ARGOCD_AUTH_TOKEN not found in .env -- run k3d setup first"
     fi
 
-    # DSI-owned org policy URL (chantier 20260508 P3). Pipelines resolve
-    # the file via the docker-compose mount on gitlab-runner; production
-    # deployments swap this for an https:// URL pointing at the DSI repo.
-    total=$((total + 1))
-    _set_group_variable "BRIK_POLICY_URL" "file:///etc/brik/policy/brik-policy.yml" "false" \
-        && count=$((count + 1))
+    local count=0
+    local total="${#ci_vars[@]}"
+    local row key value masked
+    for row in "${ci_vars[@]}"; do
+        IFS='|' read -r key value masked <<< "$row"
+        _set_group_variable "$key" "$value" "$masked" && count=$((count + 1))
+    done
+
+    # SSH deploy key (for node-deploy-ssh E2E test) - file type, only when the
+    # key has been generated.
+    local ssh_key_file="${SCRIPT_DIR}/../../../data/ssh-target/deploy_key"
+    if [[ -f "$ssh_key_file" ]]; then
+        total=$((total + 1))
+        _set_group_file_variable "SSH_PRIVATE_KEY" "$ssh_key_file" && count=$((count + 1))
+    fi
 
     if [[ $count -eq $total ]]; then
         log_ok "All ${total} CI/CD variables configured"
