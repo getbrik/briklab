@@ -23,7 +23,9 @@
 # Exit code: 0 if all checks pass, 1 if any critical check fails.
 set -euo pipefail
 
-_INFRA_REFRESH_LOADED="${_INFRA_REFRESH_LOADED:-}"
+# Guard against double-sourcing (harmless no-op when executed directly).
+[[ -n "${_BRIKLAB_INFRA_REFRESH_LOADED:-}" ]] && return 0
+_BRIKLAB_INFRA_REFRESH_LOADED=1
 
 # Resolve paths
 INFRA_REFRESH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,6 +33,8 @@ PROJECT_ROOT="$(cd "$INFRA_REFRESH_DIR/../.." && pwd)"
 
 # shellcheck source=common.sh
 source "${INFRA_REFRESH_DIR}/common.sh"
+# shellcheck source=checks.sh
+source "${INFRA_REFRESH_DIR}/checks.sh"
 # shellcheck source=e2e/lib/auth.sh
 source "${INFRA_REFRESH_DIR}/e2e/lib/auth.sh"
 
@@ -43,7 +47,7 @@ check_docker_services() {
     local failed=0
 
     for svc in brik-gitlab brik-gitea brik-jenkins brik-nexus; do
-        if docker inspect --format='{{.State.Running}}' "$svc" 2>/dev/null | grep -q "true"; then
+        if briklab.check.container_running "$svc"; then
             log_ok "$svc running"
         else
             log_warn "$svc not running"
@@ -187,15 +191,11 @@ propagate_to_jenkins() {
     (cd "$PROJECT_ROOT" && docker compose up -d jenkins) 2>&1 | tail -3
 
     # Wait for Jenkins to be ready
-    local i
-    for i in $(seq 1 20); do
-        if check_http "${jenkins_url}/login"; then
-            log_ok "Jenkins restarted with updated tokens"
-            return 0
-        fi
-        sleep 5
-    done
-    log_warn "Jenkins slow to start -- it may need a few more seconds"
+    if briklab.wait.until 100 5 check_http "${jenkins_url}/login"; then
+        log_ok "Jenkins restarted with updated tokens"
+    else
+        log_warn "Jenkins slow to start -- it may need a few more seconds"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -253,11 +253,8 @@ infra_refresh() {
     return $errors
 }
 
-# Run directly if not sourced
-if [[ "${_INFRA_REFRESH_LOADED}" != "1" ]]; then
-    _INFRA_REFRESH_LOADED=1
-    if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-        infra_refresh
-        exit $?
-    fi
+# Run directly if executed (not sourced).
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    infra_refresh
+    exit $?
 fi

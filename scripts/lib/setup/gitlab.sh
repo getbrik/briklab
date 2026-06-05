@@ -17,20 +17,12 @@ GITLAB_PASSWORD="${GITLAB_ROOT_PASSWORD:-Brik-Gtlb-2026}"
 # Wait for GitLab to be ready
 wait_for_gitlab() {
     log_info "Waiting for GitLab (may take a few minutes)..."
-    local max_attempts=60
-    local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -sf -o /dev/null "${GITLAB_URL}/users/sign_in"; then
-            log_ok "GitLab is ready"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        printf "."
-        sleep 5
-    done
-    echo ""
-    log_error "GitLab is not ready after $((max_attempts * 5))s"
-    exit 1
+    if briklab.wait.until 300 5 curl -sf -o /dev/null "${GITLAB_URL}/users/sign_in"; then
+        log_ok "GitLab is ready"
+    else
+        log_error "GitLab is not ready after 300s"
+        exit 1
+    fi
 }
 
 # Configure root password and disable forced password change on first login

@@ -70,34 +70,27 @@ run_initial_install() {
     fi
 }
 
+# Predicate for briklab.wait.until: ready (200) -> success; install page (404)
+# -> run the initial install as a side effect, then keep polling.
+_gitea_ready_or_install() {
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${GITEA_URL}/api/v1/version" 2>/dev/null || echo "000")
+    case "$http_code" in
+        200) return 0 ;;
+        404) run_initial_install; return 1 ;;
+        *)   return 1 ;;
+    esac
+}
+
 # Wait for Gitea to be ready
 wait_for_gitea() {
     log_info "Waiting for Gitea..."
-    local max_attempts=30
-    local attempt=0
-    while [[ $attempt -lt $max_attempts ]]; do
-        # Check if Gitea HTTP is reachable at all
-        local http_code
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${GITEA_URL}/api/v1/version" 2>/dev/null || echo "000")
-
-        if [[ "$http_code" == "200" ]]; then
-            log_ok "Gitea is ready"
-            return 0
-        fi
-
-        # If API returns 404, Gitea is on install page -- run initial install
-        if [[ "$http_code" == "404" ]]; then
-            run_initial_install
-            continue
-        fi
-
-        attempt=$((attempt + 1))
-        echo -n "."
-        sleep 5
-    done
-    echo ""
-    log_error "Gitea is not ready after $((max_attempts * 5))s"
-    exit 1
+    if briklab.wait.until 150 5 _gitea_ready_or_install; then
+        log_ok "Gitea is ready"
+    else
+        log_error "Gitea is not ready after 150s"
+        exit 1
+    fi
 }
 
 # Create admin user via Gitea CLI inside the container

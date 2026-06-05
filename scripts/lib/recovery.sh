@@ -36,18 +36,7 @@ source "${_RECOVERY_DIR}/auth/argocd-portfwd.sh"
 # shellcheck source=auth/argocd-token.sh
 source "${_RECOVERY_DIR}/auth/argocd-token.sh"
 
-# Poll a predicate until it passes or the budget runs out.
-# Args: timeout_s interval_s predicate_fn [args...]
-_recover_wait() {
-    local timeout="$1" interval="$2"; shift 2
-    local elapsed=0
-    while [[ $elapsed -lt $timeout ]]; do
-        if "$@"; then return 0; fi
-        sleep "$interval"
-        elapsed=$((elapsed + interval))
-    done
-    return 1
-}
+# Poll loops delegate to briklab.wait.until (transverse SoT, sourced via common.sh).
 
 # --- token / port-forward (thin wrappers over the existing ensure_*) ---
 
@@ -76,7 +65,7 @@ briklab.recover.k3d_nodes() {
         docker restart "$node" >/dev/null 2>&1 || log_warn "  docker restart ${node} failed"
     done
 
-    if _recover_wait 150 5 briklab.check.k3d_nodes_ready; then
+    if briklab.wait.until 150 5 briklab.check.k3d_nodes_ready; then
         log_ok "k3d nodes Ready after restart"
         return 0
     fi
@@ -106,7 +95,7 @@ briklab.recover.argocd_controller() {
         kubectl delete pod -n argocd "$pod" --force --grace-period=0 >/dev/null 2>&1 || true
     done
 
-    if _recover_wait 120 5 briklab.check.argocd_controller_ready; then
+    if briklab.wait.until 120 5 briklab.check.argocd_controller_ready; then
         log_ok "argocd-application-controller Running after recovery"
         return 0
     fi

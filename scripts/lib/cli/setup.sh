@@ -85,15 +85,10 @@ _run_setup() {
 # Wait for an HTTP endpoint to respond
 _wait_for_http() {
     local name="$1" url="$2" timeout="${3:-60}"
-    local elapsed=0
-    while [[ $elapsed -lt $timeout ]]; do
-        if curl -sf -o /dev/null "$url" 2>/dev/null; then
-            log_ok "${name} ready"
-            return 0
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
+    if briklab.wait.until "$timeout" 2 curl -sf -o /dev/null "$url"; then
+        log_ok "${name} ready"
+        return 0
+    fi
     log_warn "${name} not ready after ${timeout}s"
     return 1
 }
