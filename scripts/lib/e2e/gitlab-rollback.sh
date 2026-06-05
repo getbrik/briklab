@@ -57,25 +57,7 @@ _rollback_push_v020() {
     log_info "Pushing v0.2.0 to GitLab..."
 
     local tmp_dir
-    tmp_dir=$(mktemp -d)
-    cp -r "${TEMPLATE_DIR}"/. "${tmp_dir}/"
-    # tag.gpgsign=false / tag.forceSignAnnotated=false neutralise the
-    # operator's global git config: with tag.gpgsign=true in ~/.gitconfig,
-    # bare `git tag X` requires a message (annotated signed tag) and
-    # exits 128 silently under `set -euo pipefail`, aborting the entire
-    # rollback test without a verdict.
-    (
-        cd "$tmp_dir" || exit 1
-        rm -rf .git
-        echo '{"version": "0.2.0"}' > VERSION.json
-        git init -b main >/dev/null 2>&1
-        git add -A >/dev/null 2>&1
-        git commit -m "Initial commit" >/dev/null 2>&1
-        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.1.0 >/dev/null 2>&1
-        git add -A >/dev/null 2>&1
-        git commit --allow-empty -m "Bump to v0.2.0" >/dev/null 2>&1
-        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.2.0 >/dev/null 2>&1
-    )
+    tmp_dir=$(e2e.git.build_release_chain "$TEMPLATE_DIR")
 
     e2e.gitlab.api_delete "projects/${PROJECT_PATH}/protected_branches/main"
 

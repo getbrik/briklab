@@ -36,6 +36,18 @@ _e2e_jenkins_ensure_cookie_jar() {
     fi
 }
 
+# Predicate (silent): does the Jenkins job exist? For poll loops.
+_e2e_jenkins_job_exists() {
+    e2e.jenkins.api_get "job/${1}/api/json" &>/dev/null
+}
+
+# Wait until a Jenkins job exists (CasC / seed job may still be provisioning).
+# Returns 0 once the job is reachable, 1 on timeout.
+# Args: $1 = job name, $2 = timeout seconds (default 60).
+e2e.jenkins.wait_job_exists() {
+    briklab.wait.until "${2:-60}" 5 _e2e_jenkins_job_exists "$1"
+}
+
 # Resolve the Jenkins URL prefix for a job.
 # Flat pipelineJob: "job/<name>"
 # Multibranch (when $E2E_JENKINS_BRANCH is set): "job/<name>/job/<branch>"

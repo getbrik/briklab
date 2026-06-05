@@ -217,6 +217,35 @@ e2e.git.push_branch() {
     return "$push_result"
 }
 
+# Build a v0.1.0 -> v0.2.0 release chain in a fresh temp repo from a template.
+# Used by the rollback scenarios: an initial commit tagged v0.1.0, then an empty
+# "bump" commit tagged v0.2.0, with VERSION.json marking the head at 0.2.0.
+# tag.gpgsign=false / tag.forceSignAnnotated=false neutralise the operator's
+# global git config (see e2e.git.tag for the rationale). Echoes the temp dir on
+# stdout; the caller pushes it and is responsible for cleanup (rm -rf).
+# Args: $1 = template directory.
+e2e.git.build_release_chain() {
+    local template_dir="$1"
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    cp -r "${template_dir}"/. "${tmp_dir}/"
+    (
+        cd "$tmp_dir" || exit 1
+        rm -rf .git
+        echo '{"version": "0.2.0"}' > VERSION.json
+        git init -b main >/dev/null 2>&1
+        git add -A >/dev/null 2>&1
+        git commit -m "Initial commit" >/dev/null 2>&1
+        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.1.0 >/dev/null 2>&1
+        git add -A >/dev/null 2>&1
+        git commit --allow-empty -m "Bump to v0.2.0" >/dev/null 2>&1
+        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.2.0 >/dev/null 2>&1
+    )
+
+    echo "$tmp_dir"
+}
+
 # ---------------------------------------------------------------------------
 # Push-driven trigger
 # ---------------------------------------------------------------------------
