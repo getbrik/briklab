@@ -60,10 +60,9 @@ _e2e_jenkins_job_path() {
 e2e.jenkins.api_get() {
     local path="$1"
     _e2e_jenkins_ensure_cookie_jar
-    curl -sfg --max-time 30 \
-        -b "$_E2E_JENKINS_COOKIE_JAR" \
-        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
-        "${_E2E_JENKINS_URL}/${path}"
+    briklab.http.get "${_E2E_JENKINS_URL}/${path}" \
+        -g -b "$_E2E_JENKINS_COOKIE_JAR" \
+        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}"
 }
 
 # Get CRUMB for CSRF protection.
@@ -71,10 +70,10 @@ e2e.jenkins.api_get() {
 e2e.jenkins.get_crumb() {
     _e2e_jenkins_ensure_cookie_jar
     local crumb_json
-    crumb_json=$(curl -sf --max-time 10 \
+    crumb_json=$(briklab.http.get "${_E2E_JENKINS_URL}/crumbIssuer/api/json" \
+        --max-time 10 \
         -c "$_E2E_JENKINS_COOKIE_JAR" \
-        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
-        "${_E2E_JENKINS_URL}/crumbIssuer/api/json" 2>/dev/null || true)
+        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" 2>/dev/null || true)
 
     if [[ -n "$crumb_json" ]]; then
         local field value
@@ -160,12 +159,11 @@ GROOVY
 )
     groovy="${groovy//__JOB__/${job_full_name}}"
 
-    curl -s --max-time 30 -X POST \
+    briklab.http.request "${_E2E_JENKINS_URL}/scriptText" -X POST \
         -b "$_E2E_JENKINS_COOKIE_JAR" \
         -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
         ${crumb_args[@]+"${crumb_args[@]}"} \
-        --data-urlencode "script=${groovy}" \
-        "${_E2E_JENKINS_URL}/scriptText" 2>/dev/null
+        --data-urlencode "script=${groovy}" 2>/dev/null
 }
 
 # Trigger a build and return the build number.
@@ -243,12 +241,11 @@ e2e.jenkins.trigger_build() {
         crumb_args=(-H "$crumb")
     fi
 
-    curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST \
+    briklab.http.code "${_E2E_JENKINS_URL}/${job_path}/${endpoint}" -X POST \
         -b "$_E2E_JENKINS_COOKIE_JAR" \
         -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
         ${crumb_args[@]+"${crumb_args[@]}"} \
-        ${trigger_data[@]+"${trigger_data[@]}"} \
-        "${_E2E_JENKINS_URL}/${job_path}/${endpoint}" >/dev/null 2>&1
+        ${trigger_data[@]+"${trigger_data[@]}"} >/dev/null 2>&1
 
     # Wait for the build to start (up to 90s)
     local elapsed=0
@@ -403,9 +400,9 @@ e2e.jenkins.download_artifact() {
     local job_path
     job_path="$(_e2e_jenkins_job_path "$job_name")"
     _e2e_jenkins_ensure_cookie_jar
-    curl -sfgL --max-time 60 \
+    briklab.http.get "${_E2E_JENKINS_URL}/${job_path}/${build_number}/artifact/${artifact_path}" \
+        --max-time 60 -g -L \
         -b "$_E2E_JENKINS_COOKIE_JAR" \
         -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
-        -o "$dest" \
-        "${_E2E_JENKINS_URL}/${job_path}/${build_number}/artifact/${artifact_path}"
+        -o "$dest"
 }

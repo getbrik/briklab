@@ -39,3 +39,14 @@ briklab.http.code() {
     curl -s -o /dev/null -w '%{http_code}' \
         --max-time "${BRIKLAB_HTTP_MAX_TIME:-30}" "$@" "$url" 2>/dev/null || echo "000"
 }
+
+# REQUEST: response body followed by a final line carrying the HTTP status code
+# (always 3 digits, "000" on transport failure). Never returns nonzero -- the
+# status is conveyed in the output, for create-or-update flows that branch on it.
+# Split with:  code="${out##*$'\n'}"   body="${out%$'\n'*}"
+# (or the classic  tail -1 / sed '$d').
+briklab.http.request() {
+    local url="$1"; shift
+    curl -s -w '\n%{http_code}' \
+        --max-time "${BRIKLAB_HTTP_MAX_TIME:-30}" "$@" "$url" 2>/dev/null || printf '\n000'
+}
