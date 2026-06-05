@@ -181,6 +181,9 @@ propagate_to_jenkins() {
     fi
 
     log_warn "Jenkins tokens outdated -- restarting..."
+    # docker compose resolves image refs from versions.env; load it so the
+    # ${*_IMAGE} substitutions are not blank (which fails project validation).
+    load_versions
     (cd "$PROJECT_ROOT" && docker compose up -d jenkins) 2>&1 | tail -3
 
     # Wait for Jenkins to be ready

@@ -44,6 +44,7 @@ else
         --docker-network-mode "brik-net" \
         --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
         --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
+        --docker-volumes "${BRIKLAB_DIR}/policy:/etc/brik/policy:ro" \
         --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
         --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
         --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
