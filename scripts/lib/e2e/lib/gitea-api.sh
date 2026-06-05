@@ -5,7 +5,7 @@
 # Extracted from gitea-push.sh.
 #
 # Prerequisites:
-#   - GITEA_PAT must be set (via ensure_gitea_pat or .env)
+#   - GITEA_PAT must be set (via briklab.auth.gitea_pat or .env)
 #   - GITEA_HOSTNAME / GITEA_HTTP_PORT for non-default URLs
 #
 # Note: In briklab, 'brik' is a user, not an organization.

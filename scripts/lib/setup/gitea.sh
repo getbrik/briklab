@@ -124,7 +124,7 @@ create_admin_user() {
 # Delegates to the shared auth library.
 create_api_token() {
     log_info "Generating API token..."
-    ensure_gitea_pat "briklab"
+    briklab.auth.gitea_pat "briklab"
 }
 
 # Create a GitOps config-deploy repo on Gitea.

@@ -53,7 +53,7 @@ e2e.rollback.run() {
     assert.init
 
     # Ensure ArgoCD port-forward is active
-    ensure_argocd_port_forward
+    briklab.auth.argocd_portfwd
 
     # Reset source repo to v0.1.0 baseline
     e2e.reset.repo "$platform" "$project_name" "$template_dir"

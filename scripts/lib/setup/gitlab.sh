@@ -78,7 +78,7 @@ RUBY
 # Delegates to the shared auth library.
 create_pat() {
     log_info "Checking Personal Access Token..."
-    ensure_gitlab_pat
+    briklab.auth.gitlab_pat
 }
 
 # Create a test project

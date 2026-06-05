@@ -39,7 +39,7 @@ source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 source "${SCRIPT_DIR}/lib/nexus.sh"
 
 # Ensure PAT is valid (refresh if expired/missing)
-ensure_gitlab_pat
+briklab.auth.gitlab_pat
 
 GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 GITLAB_PAT="${GITLAB_PAT:-}"

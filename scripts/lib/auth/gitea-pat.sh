@@ -3,8 +3,8 @@
 #
 # Usage:
 #   source "path/to/auth/gitea-pat.sh"
-#   ensure_gitea_pat              # default token name: brik-briklab
-#   ensure_gitea_pat "my-token"   # custom token name
+#   briklab.auth.gitea_pat              # default token name: brik-briklab
+#   briklab.auth.gitea_pat "my-token"   # custom token name
 
 [[ -n "${_BRIKLAB_GITEA_PAT_LOADED:-}" ]] && return 0
 _BRIKLAB_GITEA_PAT_LOADED=1
@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 # Ensure a valid Gitea PAT exists.
 # If GITEA_PAT is valid, does nothing.
 # If invalid/missing, deletes stale token and creates a fresh one.
-ensure_gitea_pat() {
+briklab.auth.gitea_pat() {
     local token_name="${1:-brik-briklab}"
     local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
     local admin_user="${GITEA_ADMIN_USER:-brik}"

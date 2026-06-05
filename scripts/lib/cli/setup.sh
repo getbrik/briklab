@@ -22,36 +22,36 @@ cmd_setup() {
     # 1. GitLab
     _run_setup "GitLab" "gitlab.sh" "brik-gitlab" && {
         load_env
-        verify_gitlab_pat || ((errors++)) || true
-        verify_env_set "GITLAB_RUNNER_TOKEN" || ((errors++)) || true
+        briklab.verify.gitlab_pat || ((errors++)) || true
+        briklab.verify.env_set "GITLAB_RUNNER_TOKEN" || ((errors++)) || true
     }
 
     # 2. Runner
     _run_setup "Runner" "runner.sh" "brik-runner" && {
-        verify_cmd "Runner config" "docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml" || ((errors++)) || true
+        briklab.verify.cmd "Runner config" "docker exec brik-runner grep -q url /etc/gitlab-runner/config.toml" || ((errors++)) || true
     }
 
     # 3. Gitea
     _run_setup "Gitea" "gitea.sh" "brik-gitea" && {
         load_env
-        verify_gitea_pat || ((errors++)) || true
+        briklab.verify.gitea_pat || ((errors++)) || true
     }
 
     # 4. Jenkins
     _run_setup "Jenkins" "jenkins.sh" "brik-jenkins" && {
-        verify_http "Jenkins login" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" || ((errors++)) || true
+        briklab.verify.http "Jenkins login" "http://${JENKINS_HOSTNAME:-localhost}:${JENKINS_HTTP_PORT:-9090}/login" || ((errors++)) || true
     }
 
     # 5. Nexus
     _run_setup "Nexus" "nexus.sh" "brik-nexus" && {
         load_env
-        verify_nexus_auth || ((errors++)) || true
-        verify_env_set "NEXUS_NPM_TOKEN" || ((errors++)) || true
+        briklab.verify.nexus_auth || ((errors++)) || true
+        briklab.verify.env_set "NEXUS_NPM_TOKEN" || ((errors++)) || true
     }
 
     # 6. SSH target
     _run_setup "SSH target" "ssh-target.sh" "brik-ssh-target" && {
-        verify_ssh_connection || ((errors++)) || true
+        briklab.verify.ssh_connection || ((errors++)) || true
     }
 
     # 7. Restart Jenkins (to pick up Nexus env vars)

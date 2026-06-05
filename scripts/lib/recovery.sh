@@ -40,10 +40,10 @@ source "${_RECOVERY_DIR}/auth/argocd-token.sh"
 
 # --- token / port-forward (thin wrappers over the existing ensure_*) ---
 
-briklab.recover.gitlab_pat()      { ensure_gitlab_pat; }
-briklab.recover.gitea_pat()       { ensure_gitea_pat; }
-briklab.recover.argocd_portfwd()  { ensure_argocd_port_forward; }
-briklab.recover.argocd_token()    { ensure_argocd_token; }
+briklab.recover.gitlab_pat()      { briklab.auth.gitlab_pat; }
+briklab.recover.gitea_pat()       { briklab.auth.gitea_pat; }
+briklab.recover.argocd_portfwd()  { briklab.auth.argocd_portfwd; }
+briklab.recover.argocd_token()    { briklab.auth.argocd_token; }
 
 # --- k3d nodes ---
 

@@ -25,7 +25,7 @@ source "${SCRIPT_DIR}/lib/auth.sh"
 source "${SCRIPT_DIR}/lib/push.sh"
 reload_env
 
-ensure_gitlab_pat
+briklab.auth.gitlab_pat
 
 if [[ -z "${GITLAB_PAT:-}" ]]; then
     log_error "GITLAB_PAT is not set. Run briklab.sh setup first."

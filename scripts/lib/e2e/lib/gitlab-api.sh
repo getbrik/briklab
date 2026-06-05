@@ -5,7 +5,7 @@
 # Extracted from gitlab-test.sh and gitlab-push.sh.
 #
 # Prerequisites:
-#   - GITLAB_PAT must be set (via ensure_gitlab_pat or .env)
+#   - GITLAB_PAT must be set (via briklab.auth.gitlab_pat or .env)
 #   - GITLAB_HOSTNAME / GITLAB_HTTP_PORT for non-default URLs
 
 [[ -n "${_E2E_GITLAB_API_LOADED:-}" ]] && return 0

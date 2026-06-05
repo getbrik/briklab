@@ -107,18 +107,18 @@ kubectl wait --for=condition=ready --timeout=180s pod -l app.kubernetes.io/part-
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
 
 # Start and verify port-forward
-ensure_argocd_port_forward
+briklab.auth.argocd_portfwd
 
 # Retrieve admin password
 local_argocd_password=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
 
-# Save to .env and export for current shell (needed by ensure_argocd_token)
+# Save to .env and export for current shell (needed by briklab.auth.argocd_token)
 save_to_env "ARGOCD_ADMIN_PASSWORD" "$local_argocd_password"
 export ARGOCD_ADMIN_PASSWORD="$local_argocd_password"
 
 # Create ArgoCD service account and generate non-expiring API token
 log_info "Creating ArgoCD service account 'brik' and generating API token..."
-ensure_argocd_token
+briklab.auth.argocd_token
 
 # Create ArgoCD applications for E2E deploy scenarios
 log_info "Creating ArgoCD applications for E2E..."

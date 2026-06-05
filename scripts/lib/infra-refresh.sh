@@ -87,7 +87,7 @@ check_k3d_and_argocd() {
     log_ok "ArgoCD server pod ready"
 
     # Ensure port-forward is active
-    ensure_argocd_port_forward
+    briklab.auth.argocd_portfwd
 }
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ check_k3d_and_argocd() {
 
 check_gitlab_pat() {
     log_info "Checking GitLab PAT..."
-    ensure_gitlab_pat
+    briklab.auth.gitlab_pat
 }
 
 # ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ check_gitlab_pat() {
 
 check_gitea_pat() {
     log_info "Checking Gitea PAT..."
-    ensure_gitea_pat
+    briklab.auth.gitea_pat
 }
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ check_gitea_pat() {
 
 check_argocd_token() {
     log_info "Checking ArgoCD API token..."
-    ensure_argocd_token
+    briklab.auth.argocd_token
 }
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,8 @@
 # Uses the ArgoCD REST API via port-forward (localhost).
 #
 # Prerequisites:
-#   - ArgoCD port-forward must be active (ensure_argocd_port_forward)
-#   - ARGOCD_AUTH_TOKEN must be set (via ensure_argocd_token or .env)
+#   - ArgoCD port-forward must be active (briklab.auth.argocd_portfwd)
+#   - ARGOCD_AUTH_TOKEN must be set (via briklab.auth.argocd_token or .env)
 #   - ARGOCD_PORT must be set (default: 9080)
 
 [[ -n "${_E2E_ARGOCD_LOADED:-}" ]] && return 0
@@ -29,7 +29,7 @@ _E2E_ARGOCD_PORTFWD_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../auth" && pwd
 # ---------------------------------------------------------------------------
 
 # Ensure the ArgoCD port-forward is alive before an ArgoCD-dependent scenario.
-# Wraps the canonical ensure_argocd_port_forward helper from the auth layer.
+# Wraps the canonical briklab.auth.argocd_portfwd helper from the auth layer.
 # Non-fatal: returns 0 when kubectl is unavailable, no kubeconfig context is
 # configured, or the argocd namespace is absent, so non-ArgoCD setups are
 # unaffected.
@@ -53,7 +53,7 @@ e2e.argocd.ensure_port_forward() {
 
     # shellcheck source=/dev/null
     source "$_E2E_ARGOCD_PORTFWD_SRC"
-    ensure_argocd_port_forward
+    briklab.auth.argocd_portfwd
 }
 
 # GET request to ArgoCD API.
