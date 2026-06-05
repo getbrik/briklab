@@ -1,4 +1,6 @@
-FROM alpine:3.23
+# Base image is pinned in versions.yml and passed as a build arg by docker compose.
+ARG SSH_TARGET_BASE_IMAGE=alpine:3.23
+FROM ${SSH_TARGET_BASE_IMAGE}
 
 RUN apk add --no-cache openssh-server rsync bash \
     && adduser -D -s /bin/bash deploy \

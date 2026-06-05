@@ -2,7 +2,12 @@
 # GitLab CE + Runner + Gitea + Jenkins + Nexus + SSH target
 # K8s cluster is managed separately via k3d (see scripts/lib/setup/k3d.sh)
 #
+# Image versions and build args come from versions.env (generated from
+# versions.yml by scripts/generate-versions.sh). briklab.sh loads it into the
+# environment automatically; for a bare invocation, source it first:
+#
 # Usage:
+#   set -a; source versions.env; source .env; set +a
 #   docker compose up -d
 #   docker compose down
 
@@ -17,7 +22,7 @@ networks:
 services:
   # --- GitLab CE ---
   gitlab:
-    image: gitlab/gitlab-ce:18.10.1-ce.0
+    image: ${GITLAB_IMAGE}
     container_name: brik-gitlab
     hostname: ${GITLAB_HOSTNAME:-gitlab.briklab.test}
     restart: unless-stopped
@@ -58,7 +63,7 @@ services:
   # The runner itself is lightweight; CI jobs run as sibling containers.
   # Memory limit covers the runner process only, not the spawned job containers.
   gitlab-runner:
-    image: gitlab/gitlab-runner:alpine3.21-bleeding
+    image: ${GITLAB_RUNNER_IMAGE}
     container_name: brik-runner
     restart: unless-stopped
     depends_on:
@@ -84,7 +89,7 @@ services:
 
   # --- Gitea ---
   gitea:
-    image: gitea/gitea:1.26.2
+    image: ${GITEA_IMAGE}
     container_name: brik-gitea
     hostname: ${GITEA_HOSTNAME:-gitea.briklab.test}
     restart: unless-stopped
@@ -120,6 +125,9 @@ services:
     build:
       context: .
       dockerfile: images/jenkins/Dockerfile
+      args:
+        JENKINS_BASE_IMAGE: ${JENKINS_BASE_IMAGE}
+        YQ_VERSION: ${YQ_VERSION}
     container_name: brik-jenkins
     hostname: ${JENKINS_HOSTNAME:-jenkins.briklab.test}
     restart: unless-stopped
@@ -176,6 +184,8 @@ services:
     build:
       context: ./images/ssh-target
       dockerfile: Dockerfile
+      args:
+        SSH_TARGET_BASE_IMAGE: ${SSH_TARGET_BASE_IMAGE}
     container_name: brik-ssh-target
     hostname: ssh-target.briklab.test
     restart: unless-stopped
@@ -197,7 +207,7 @@ services:
 
   # --- Sonatype Nexus 3 CE ---
   nexus:
-    image: sonatype/nexus3:3.92.2-alpine
+    image: ${NEXUS_IMAGE}
     container_name: brik-nexus
     hostname: ${NEXUS_HOSTNAME:-nexus.briklab.test}
     restart: unless-stopped

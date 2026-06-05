@@ -11,6 +11,11 @@ source "${SCRIPT_DIR}/../auth/argocd-portfwd.sh"
 # shellcheck source=../auth/argocd-token.sh
 source "${SCRIPT_DIR}/../auth/argocd-token.sh"
 
+# Pinned component versions (k3s image, ArgoCD release) from versions.yml.
+load_versions
+K3S_IMAGE="${K3S_IMAGE:-rancher/k3s:v1.33.6-k3s1}"
+ARGOCD_VERSION="${ARGOCD_VERSION:-v3.3.7}"
+
 K3D_API_PORT="${K3D_API_PORT:-6443}"
 K3D_HTTP_PORT="${K3D_HTTP_PORT:-8080}"
 ARGOCD_PORT="${ARGOCD_PORT:-9080}"
@@ -50,6 +55,7 @@ YAML
 log_info "Creating k3d cluster '${CLUSTER_NAME}'..."
 
 k3d cluster create "$CLUSTER_NAME" \
+    --image "${K3S_IMAGE}" \
     --api-port "${K3D_API_PORT}" \
     --port "${K3D_HTTP_PORT}:80@loadbalancer" \
     --agents 1 \
@@ -87,7 +93,7 @@ done
 log_info "Installing ArgoCD..."
 
 kubectl create namespace argocd 2>/dev/null || true
-kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd --server-side -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
 
 # Wait for all ArgoCD deployments to be ready
 log_info "Waiting for ArgoCD (may take 1-2 min)..."
