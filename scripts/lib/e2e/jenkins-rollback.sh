@@ -52,20 +52,7 @@ fi
 log_ok "Jenkins is ready"
 
 log_info "Checking job '${JOB_NAME}'..."
-JOB_FOUND=false
-JOB_WAIT=0
-while [[ $JOB_WAIT -lt 60 ]]; do
-    if e2e.jenkins.api_get "job/${JOB_NAME}/api/json" &>/dev/null; then
-        JOB_FOUND=true
-        break
-    fi
-    printf "."
-    sleep 5
-    JOB_WAIT=$((JOB_WAIT + 5))
-done
-echo ""
-
-if [[ "$JOB_FOUND" != "true" ]]; then
+if ! e2e.jenkins.wait_job_exists "$JOB_NAME" 60; then
     log_error "Job '${JOB_NAME}' not found after 60s"
     exit 1
 fi
@@ -79,25 +66,7 @@ _rollback_push_v020() {
     log_info "Pushing v0.2.0 to Gitea..."
 
     local tmp_dir
-    tmp_dir=$(mktemp -d)
-    cp -r "${TEMPLATE_DIR}"/. "${tmp_dir}/"
-    # tag.gpgsign=false / tag.forceSignAnnotated=false neutralise the
-    # operator's global git config: with tag.gpgsign=true in ~/.gitconfig,
-    # bare `git tag X` requires a message (annotated signed tag) and
-    # exits 128 silently under `set -euo pipefail`, aborting the entire
-    # rollback test without a verdict.
-    (
-        cd "$tmp_dir" || exit 1
-        rm -rf .git
-        echo '{"version": "0.2.0"}' > VERSION.json
-        git init -b main >/dev/null 2>&1
-        git add -A >/dev/null 2>&1
-        git commit -m "Initial commit" >/dev/null 2>&1
-        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.1.0 >/dev/null 2>&1
-        git add -A >/dev/null 2>&1
-        git commit --allow-empty -m "Bump to v0.2.0" >/dev/null 2>&1
-        git -c tag.gpgsign=false -c tag.forceSignAnnotated=false tag v0.2.0 >/dev/null 2>&1
-    )
+    tmp_dir=$(e2e.git.build_release_chain "$TEMPLATE_DIR")
 
     if e2e.git.push "$tmp_dir" "${GITEA_URL}/brik/${JOB_NAME}.git" "$GITEA_USER" "$GITEA_PAT" "--force"; then
         log_ok "Pushed v0.2.0 to Gitea"

@@ -70,20 +70,7 @@ log_ok "Jenkins is ready"
 
 # 2. Verify job exists (poll in case CasC/Job DSL has not finished seeding)
 log_info "Checking job '${JOB_NAME}'..."
-JOB_FOUND=false
-JOB_WAIT=0
-while [[ $JOB_WAIT -lt 60 ]]; do
-    if e2e.jenkins.api_get "job/${JOB_NAME}/api/json" &>/dev/null; then
-        JOB_FOUND=true
-        break
-    fi
-    printf "."
-    sleep 5
-    JOB_WAIT=$((JOB_WAIT + 5))
-done
-echo ""
-
-if [[ "$JOB_FOUND" != "true" ]]; then
+if ! e2e.jenkins.wait_job_exists "$JOB_NAME" 60; then
     log_error "Job '${JOB_NAME}' not found after 60s. Check CasC or seed job."
     exit 1
 fi
