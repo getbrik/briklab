@@ -33,6 +33,8 @@ reload_env
 # Source E2E libraries
 # shellcheck source=lib/assert.sh
 source "${SCRIPT_DIR}/lib/assert.sh"
+# shellcheck source=lib/scenario.sh
+source "${SCRIPT_DIR}/lib/scenario.sh"
 # shellcheck source=lib/gitlab-api.sh
 source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 # shellcheck source=lib/nexus.sh
@@ -290,31 +292,8 @@ if [[ "$EXPECT_FAILURE" != "true" && "$SKIP_LOG_CHECK" != "true" \
         '[.[] | select(.name == "brik-notify" and .status == "success")][0].id // empty' 2>/dev/null || true)
     if [[ -n "$NOTIFY_JOB_ID" ]]; then
         log_info "Validating aggregate-report.json aggregate (notify job ${NOTIFY_JOB_ID})..."
-        AGG_TMP="$(mktemp -d)"
-        AGG_FILE="${AGG_TMP}/aggregate-report.json"
-        if e2e.gitlab.download_artifact "$PROJECT_ID" "$NOTIFY_JOB_ID" \
-                "brik-artifacts/aggregate-report.json" "$AGG_FILE" 2>/dev/null; then
-            assert.aggregate_v1 "$AGG_FILE" "gitlab"
-            # On tag pushes (v<N>...), assert the package image tag mirrors
-            # the release version. Catches the GitLab pipeline.env regression
-            # class (package falls back to short SHA when BRIK_APP_VERSION
-            # is dropped by reports.dotenv collisions).
-            if [[ "$TRIGGER_REF" =~ ^v[0-9] ]]; then
-                assert.image_tag "$AGG_FILE" "${TRIGGER_REF#v}"
-            fi
-            # When the scenario opts in, assert the promote stage actually ran
-            # and recorded a successful candidate->release retag in THIS
-            # pipeline's report. A green brik-promote job alone can be a
-            # plan-skip (balanced mode) and a Nexus tag check can pass on a
-            # stale image -- the report status is run-specific and is only
-            # "success" after the real docker push returns 0.
-            if [[ "${E2E_ASSERT_PROMOTE:-false}" == "true" ]]; then
-                assert.promote_succeeded "$AGG_FILE"
-            fi
-        else
-            log_warn "could not download aggregate-report.json from notify job (skipping aggregate assertions)"
-        fi
-        rm -rf "$AGG_TMP"
+        e2e.scenario.assert_aggregate "gitlab" "$TRIGGER_REF" "${E2E_ASSERT_PROMOTE:-false}" \
+            e2e.gitlab.download_artifact "$PROJECT_ID" "$NOTIFY_JOB_ID"
     else
         log_info "no successful brik-notify job found, skipping aggregate assertions"
     fi
