@@ -70,6 +70,18 @@ e2e.git.init_from_template() {
     echo "$tmp_dir"
 }
 
+# Create a throwaway GIT_ASKPASS helper script that echoes the given token,
+# so the token never appears in the process list. Echoes the script path;
+# the caller is responsible for removing it after the git operation.
+e2e.git._askpass_file() {
+    local token="$1"
+    local script
+    script=$(mktemp)
+    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$script"
+    chmod +x "$script"
+    echo "$script"
+}
+
 # Push a local repo to a remote URL using GIT_ASKPASS.
 # The PAT is never embedded in the process list.
 # Args: $1 = local repo dir, $2 = remote URL, $3 = username, $4 = token/PAT
@@ -82,9 +94,7 @@ e2e.git.push() {
     local flags="${5:-}"
 
     local askpass_script
-    askpass_script=$(mktemp)
-    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$askpass_script"
-    chmod +x "$askpass_script"
+    askpass_script=$(e2e.git._askpass_file "$token")
 
     local push_result=0
     (
@@ -151,9 +161,7 @@ e2e.git.push_tag() {
     local tag_name="$5"
 
     local askpass_script
-    askpass_script=$(mktemp)
-    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$askpass_script"
-    chmod +x "$askpass_script"
+    askpass_script=$(e2e.git._askpass_file "$token")
 
     local push_result=0
     (
@@ -186,9 +194,7 @@ e2e.git.push_branch() {
     local branch="$5"
 
     local askpass_script
-    askpass_script=$(mktemp)
-    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$askpass_script"
-    chmod +x "$askpass_script"
+    askpass_script=$(e2e.git._askpass_file "$token")
 
     local push_result=0
     (
@@ -252,9 +258,7 @@ e2e.git.trigger_via_push() {
     tmp_dir=$(mktemp -d)
 
     local askpass_script
-    askpass_script=$(mktemp)
-    printf "#!/bin/sh\\nprintf '%%s' '%s'\\n" "$token" > "$askpass_script"
-    chmod +x "$askpass_script"
+    askpass_script=$(e2e.git._askpass_file "$token")
 
     local result=0
     local sha=""
