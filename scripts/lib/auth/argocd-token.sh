@@ -3,7 +3,7 @@
 #
 # Usage:
 #   source "path/to/auth/argocd-token.sh"
-#   ensure_argocd_token
+#   briklab.auth.argocd_token
 
 [[ -n "${_BRIKLAB_ARGOCD_TOKEN_LOADED:-}" ]] && return 0
 _BRIKLAB_ARGOCD_TOKEN_LOADED=1
@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure the 'brik' account exists in ArgoCD configmaps.
 # Patches argocd-cm and argocd-rbac-cm, restarts if needed.
-_ensure_argocd_brik_account() {
+briklab.auth._argocd_brik_account() {
     local port="${ARGOCD_PORT:-9080}"
 
     kubectl patch configmap argocd-cm -n argocd --type merge \
@@ -63,14 +63,14 @@ POLICY
         log_info "Restarting ArgoCD server for account changes..."
         kubectl rollout restart deployment argocd-server -n argocd
         kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd
-        ensure_argocd_port_forward
+        briklab.auth.argocd_portfwd
     fi
 }
 
 # Ensure a valid ArgoCD API token exists for the 'brik' account.
 # If ARGOCD_AUTH_TOKEN is valid, does nothing.
 # If invalid/missing, creates the brik account if needed and generates a non-expiring token.
-ensure_argocd_token() {
+briklab.auth.argocd_token() {
     local port="${ARGOCD_PORT:-9080}"
 
     # Fast path: validate existing token (shared probe with verify/preflight)
@@ -91,7 +91,7 @@ ensure_argocd_token() {
     fi
 
     # Ensure the brik account exists
-    _ensure_argocd_brik_account
+    briklab.auth._argocd_brik_account
 
     # Get admin session token
     local admin_token

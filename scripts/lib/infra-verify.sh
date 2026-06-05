@@ -19,89 +19,89 @@ VERIFY_FAIL=0
 : "${GREEN:=\033[0;32m}"
 : "${NC:=\033[0m}"
 
-_verify_ok() {
+briklab.verify._ok() {
     echo -e "  ${GREEN}[OK]${NC}    $1"
     VERIFY_PASS=$((VERIFY_PASS + 1))
 }
 
-_verify_fail() {
+briklab.verify._fail() {
     echo -e "  ${RED}[FAIL]${NC}  $1"
     VERIFY_FAIL=$((VERIFY_FAIL + 1))
 }
 
 # --- Container checks ---
 
-verify_container_running() {
+briklab.verify.container_running() {
     local name="$1"
     if briklab.check.container_running "$name"; then
-        _verify_ok "$name is running"
+        briklab.verify._ok "$name is running"
         return 0
     fi
     local status
     status=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null || echo "missing")
-    _verify_fail "$name is not running (status: $status)"
+    briklab.verify._fail "$name is not running (status: $status)"
     return 1
 }
 
-verify_container_healthy() {
+briklab.verify.container_healthy() {
     local name="$1"
     local health
     health=$(docker inspect --format='{{.State.Health.Status}}' "$name" 2>/dev/null || echo "unknown")
     if [[ "$health" == "healthy" ]]; then
-        _verify_ok "$name is healthy"
+        briklab.verify._ok "$name is healthy"
         return 0
     fi
-    _verify_fail "$name is not healthy (health: $health)"
+    briklab.verify._fail "$name is not healthy (health: $health)"
     return 1
 }
 
 # --- HTTP checks ---
 
-verify_http() {
+briklab.verify.http() {
     local desc="$1" url="$2" expected="${3:-200}"
     local code
     code=$(curl -so /dev/null -w '%{http_code}' --max-time 10 "$url" 2>/dev/null || echo "000")
     if [[ "$code" == "$expected" ]]; then
-        _verify_ok "$desc (HTTP $code)"
+        briklab.verify._ok "$desc (HTTP $code)"
         return 0
     fi
-    _verify_fail "$desc (HTTP $code, expected $expected)"
+    briklab.verify._fail "$desc (HTTP $code, expected $expected)"
     return 1
 }
 
 # --- Environment checks ---
 
-verify_env_set() {
+briklab.verify.env_set() {
     local var_name="$1"
     if [[ -n "${!var_name:-}" ]]; then
-        _verify_ok "$var_name is set"
+        briklab.verify._ok "$var_name is set"
         return 0
     fi
-    _verify_fail "$var_name is empty or unset"
+    briklab.verify._fail "$var_name is empty or unset"
     return 1
 }
 
 # --- File checks ---
 
-verify_file_exists() {
+briklab.verify.file_exists() {
     local path="$1"
     if [[ -f "$path" ]]; then
-        _verify_ok "File exists: $path"
+        briklab.verify._ok "File exists: $path"
         return 0
     fi
-    _verify_fail "File missing: $path"
+    briklab.verify._fail "File missing: $path"
     return 1
 }
 
 # --- Command checks ---
 
-verify_cmd() {
+briklab.verify.cmd() {
     local desc="$1" cmd="$2"
     if eval "$cmd" &>/dev/null; then
-        _verify_ok "$desc"
+        briklab.verify._ok "$desc"
         return 0
     fi
-    _verify_fail "$desc"
+    briklab.verify._fail "$desc"
     return 1
 }
 
@@ -110,74 +110,74 @@ verify_cmd() {
 # Service-specific verifies are thin presentation wrappers over the pure
 # predicates in checks.sh -- the probe logic lives there once.
 
-verify_gitlab_pat() {
+briklab.verify.gitlab_pat() {
     if briklab.check.gitlab_pat; then
-        _verify_ok "GitLab PAT valid"
+        briklab.verify._ok "GitLab PAT valid"
         return 0
     fi
-    _verify_fail "GitLab PAT invalid"
+    briklab.verify._fail "GitLab PAT invalid"
     return 1
 }
 
-verify_gitea_pat() {
+briklab.verify.gitea_pat() {
     if briklab.check.gitea_pat; then
-        _verify_ok "Gitea PAT valid"
+        briklab.verify._ok "Gitea PAT valid"
         return 0
     fi
-    _verify_fail "Gitea PAT invalid"
+    briklab.verify._fail "Gitea PAT invalid"
     return 1
 }
 
-verify_nexus_auth() {
+briklab.verify.nexus_auth() {
     if briklab.check.nexus_auth; then
-        _verify_ok "Nexus admin auth"
+        briklab.verify._ok "Nexus admin auth"
         return 0
     fi
-    _verify_fail "Nexus admin auth failed"
+    briklab.verify._fail "Nexus admin auth failed"
     return 1
 }
 
-verify_ssh_connection() {
+briklab.verify.ssh_connection() {
     local port="${SSH_TARGET_PORT:-2223}"
     if briklab.check.ssh; then
-        _verify_ok "SSH connection to deploy@localhost:$port"
+        briklab.verify._ok "SSH connection to deploy@localhost:$port"
         return 0
     fi
-    _verify_fail "SSH connection to deploy@localhost:$port"
+    briklab.verify._fail "SSH connection to deploy@localhost:$port"
     return 1
 }
 
-verify_argocd_port_forward() {
+briklab.verify.argocd_portfwd() {
     if briklab.check.argocd_portfwd; then
-        _verify_ok "ArgoCD port-forward active on :${ARGOCD_PORT:-9080}"
+        briklab.verify._ok "ArgoCD port-forward active on :${ARGOCD_PORT:-9080}"
         return 0
     fi
-    _verify_fail "ArgoCD port-forward not reachable on :${ARGOCD_PORT:-9080}"
+    briklab.verify._fail "ArgoCD port-forward not reachable on :${ARGOCD_PORT:-9080}"
     return 1
 }
 
-verify_argocd_token() {
+briklab.verify.argocd_token() {
     if briklab.check.argocd_token; then
-        _verify_ok "ArgoCD API token valid"
+        briklab.verify._ok "ArgoCD API token valid"
         return 0
     fi
-    _verify_fail "ArgoCD API token invalid or unset"
+    briklab.verify._fail "ArgoCD API token invalid or unset"
     return 1
 }
 
-verify_k3d_cluster() {
+briklab.verify.k3d_cluster() {
     if ! command -v k3d &>/dev/null; then
-        _verify_fail "k3d not installed"
+        briklab.verify._fail "k3d not installed"
         return 1
     fi
     if ! k3d cluster list 2>/dev/null | grep -q brik; then
-        _verify_fail "k3d cluster 'brik' not found"
+        briklab.verify._fail "k3d cluster 'brik' not found"
         return 1
     fi
     if kubectl get nodes -o json 2>/dev/null | jq -e '.items[].status.conditions[] | select(.type=="Ready" and .status=="True")' &>/dev/null; then
-        _verify_ok "k3d cluster 'brik' ready"
+        briklab.verify._ok "k3d cluster 'brik' ready"
         return 0
     fi
-    _verify_fail "k3d cluster 'brik' nodes not ready"
+    briklab.verify._fail "k3d cluster 'brik' nodes not ready"
     return 1
 }

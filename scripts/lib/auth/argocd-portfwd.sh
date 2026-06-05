@@ -3,7 +3,7 @@
 #
 # Usage:
 #   source "path/to/auth/argocd-portfwd.sh"
-#   ensure_argocd_port_forward
+#   briklab.auth.argocd_portfwd
 
 [[ -n "${_BRIKLAB_ARGOCD_PORTFWD_LOADED:-}" ]] && return 0
 _BRIKLAB_ARGOCD_PORTFWD_LOADED=1
@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 
 # Ensure ArgoCD port-forward is active on the configured port.
 # Restarts it if not reachable.
-ensure_argocd_port_forward() {
+briklab.auth.argocd_portfwd() {
     local port="${ARGOCD_PORT:-9080}"
 
     # Already active? (shared probe with verify/preflight)

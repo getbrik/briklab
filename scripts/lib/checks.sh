@@ -3,7 +3,7 @@
 #
 # Each function is a PURE predicate: it returns 0 (true) or 1 (false) and prints
 # NOTHING. Presentation lives in the callers:
-#   - infra-verify.sh  wraps these with _verify_ok/_verify_fail (+ counters)
+#   - infra-verify.sh  wraps these with briklab.verify._ok/briklab.verify._fail (+ counters)
 #   - auth/*.sh        wraps these as the fast-path of the mutating ensure_*
 #   - preflight.sh     composes these into the read-only E2E gate
 #

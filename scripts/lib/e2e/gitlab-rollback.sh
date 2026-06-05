@@ -28,7 +28,7 @@ source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 # shellcheck source=lib/git.sh
 source "${SCRIPT_DIR}/lib/git.sh"
 reload_env
-ensure_gitlab_pat
+briklab.auth.gitlab_pat
 
 GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 TIMEOUT_SECONDS="${E2E_TIMEOUT:-300}"

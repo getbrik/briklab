@@ -5,8 +5,8 @@
 # source this single file:
 #   source "${SCRIPT_DIR}/lib/auth.sh"
 #
-# Provides: ensure_gitlab_pat, ensure_gitea_pat,
-#           ensure_argocd_port_forward, ensure_argocd_token
+# Provides: briklab.auth.gitlab_pat, briklab.auth.gitea_pat,
+#           briklab.auth.argocd_portfwd, briklab.auth.argocd_token
 
 [[ -n "${_E2E_AUTH_LOADED:-}" ]] && return 0
 _E2E_AUTH_LOADED=1

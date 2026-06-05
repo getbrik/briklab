@@ -3,7 +3,7 @@
 #
 # Usage:
 #   source "path/to/auth/gitlab-pat.sh"
-#   ensure_gitlab_pat
+#   briklab.auth.gitlab_pat
 
 [[ -n "${_BRIKLAB_GITLAB_PAT_LOADED:-}" ]] && return 0
 _BRIKLAB_GITLAB_PAT_LOADED=1
@@ -16,7 +16,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 # Ensure a valid GitLab PAT exists.
 # If GITLAB_PAT is valid, does nothing.
 # If invalid/missing, creates a fresh one via rails runner and updates .env.
-ensure_gitlab_pat() {
+briklab.auth.gitlab_pat() {
     # Fast path: validate existing PAT (shared probe with verify/preflight)
     if briklab.check.gitlab_pat; then
         log_ok "GitLab PAT valid"

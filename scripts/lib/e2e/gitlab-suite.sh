@@ -35,7 +35,7 @@ source "${SCRIPT_DIR}/lib/nexus.sh"
 # shellcheck source=lib/argocd.sh
 source "${SCRIPT_DIR}/lib/argocd.sh"
 reload_env
-ensure_gitlab_pat
+briklab.auth.gitlab_pat
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
