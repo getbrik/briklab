@@ -115,10 +115,14 @@ services:
         ipv4_address: 172.20.0.20
     mem_limit: 512m
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_HTTP_PORT:-3000}/api/v1/version"]
+      # /api/healthz is the liveness endpoint: 200 as soon as the web server is
+      # up, before the install wizard runs. /api/v1/version returns 404 pre-install
+      # on gitea 1.26+, which would deadlock the depends_on: service_healthy gate.
+      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_HTTP_PORT:-3000}/api/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # --- Jenkins ---
   jenkins:
