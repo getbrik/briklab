@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
-# Briklab shared library - colors, logging, env helpers.
-# Source this file from any briklab script instead of duplicating these functions.
+# Briklab shared library - BACKWARD-COMPAT FACADE.
+#
+# The transverse helpers now live as focused notion modules under lib/transverse/:
+#   log.sh   briklab.log.{info,ok,warn,error}   (+ colors)
+#   env.sh   briklab.env.{save,reload,load_versions}
+#   http.sh  briklab.http.{get,post_json,delete,code}
+#   wait.sh  briklab.wait.until
+#
+# This file sources them and re-exposes the legacy names (log_*, save_to_env,
+# reload_env, load_env, load_versions, check_http) so existing callers keep
+# working unchanged. New code should call the briklab.* functions directly.
 #
 # Usage:
-#   source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+#   source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 #
 # BRIKLAB_ROOT can be set before sourcing to override auto-detection.
 # Does NOT set shell options (set -euo pipefail) - callers control their own.
@@ -12,83 +21,50 @@
 _BRIKLAB_COMMON_LOADED=1
 
 # ---------------------------------------------------------------------------
-# Root paths
+# Root paths (transverse/env.sh respects these if already set).
 # ---------------------------------------------------------------------------
 
 if [[ -z "${BRIKLAB_ROOT:-}" ]]; then
     # Auto-detect: this file lives at scripts/lib/common.sh
     BRIKLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
+# Consumed cross-file by transverse/env.sh and by callers (briklab.sh), hence
+# flagged unused here.
+# shellcheck disable=SC2034
 ENV_FILE="${BRIKLAB_ROOT}/.env"
+# shellcheck disable=SC2034
 VERSIONS_ENV_FILE="${BRIKLAB_ROOT}/versions.env"
 
 # ---------------------------------------------------------------------------
-# Colors
+# Transverse notion modules
 # ---------------------------------------------------------------------------
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-BOLD='\033[1m'
-NC='\033[0m'
+_BRIKLAB_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=transverse/log.sh
+source "${_BRIKLAB_LIB_DIR}/transverse/log.sh"
+# shellcheck source=transverse/env.sh
+source "${_BRIKLAB_LIB_DIR}/transverse/env.sh"
+# shellcheck source=transverse/http.sh
+source "${_BRIKLAB_LIB_DIR}/transverse/http.sh"
+# shellcheck source=transverse/wait.sh
+source "${_BRIKLAB_LIB_DIR}/transverse/wait.sh"
 
 # ---------------------------------------------------------------------------
-# Logging
+# Legacy aliases (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
-log_info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+log_info()  { briklab.log.info  "$@"; }
+log_ok()    { briklab.log.ok    "$@"; }
+log_warn()  { briklab.log.warn  "$@"; }
+log_error() { briklab.log.error "$@"; }
 
-# ---------------------------------------------------------------------------
-# Environment helpers
-# ---------------------------------------------------------------------------
+save_to_env()   { briklab.env.save "$@"; }
+reload_env()    { briklab.env.reload "$@"; }
+load_env()      { briklab.env.reload "$@"; }
+load_versions() { briklab.env.load_versions "$@"; }
 
-# Save or update a key=value pair in .env
-save_to_env() {
-    local key="$1" value="$2"
-    [[ ! -f "$ENV_FILE" ]] && return
-    if grep -q "^${key}=" "$ENV_FILE"; then
-        sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
-    else
-        echo "${key}=${value}" >> "$ENV_FILE"
-    fi
-}
-
-# Reload .env into current shell (exports all variables)
-reload_env() {
-    if [[ -f "$ENV_FILE" ]]; then
-        set -a
-        # shellcheck source=/dev/null
-        source "$ENV_FILE"
-        set +a
-    fi
-}
-
-# Alias for reload_env
-load_env() { reload_env; }
-
-# Load generated component versions (versions.env) into the shell environment.
-# Exported so docker compose substitution (${GITLAB_IMAGE}, ${K3S_IMAGE}, ...)
-# and the setup scripts resolve every version from the single source of truth.
-# versions.env is generated from versions.yml by scripts/generate-versions.sh.
-load_versions() {
-    if [[ -f "$VERSIONS_ENV_FILE" ]]; then
-        set -a
-        # shellcheck source=/dev/null
-        source "$VERSIONS_ENV_FILE"
-        set +a
-    else
-        log_warn "versions.env not found - run scripts/generate-versions.sh"
-    fi
-}
-
-# Check HTTP endpoint returns expected status code
+# Check an HTTP endpoint returns the expected status code (default 200).
 check_http() {
     local url="$1" expected="${2:-200}"
-    local code
-    code=$(curl -sf -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
-    [[ "$code" == "$expected" ]]
+    [[ "$(briklab.http.code "$url")" == "$expected" ]]
 }
