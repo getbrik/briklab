@@ -48,6 +48,28 @@ e2e.jenkins.wait_job_exists() {
     briklab.wait.until "${2:-60}" 5 _e2e_jenkins_job_exists "$1"
 }
 
+# Trigger a Multibranch Pipeline scan ("Scan Now") so Jenkins indexes commits,
+# branches and tags pushed since the last scan, then auto-builds new or changed
+# branches. Required because the lab has no PeriodicFolderTrigger and a freshly
+# recreated Gitea repo has no webhook to notify Jenkins (the gitea-plugin only
+# manages hooks at the org level, and `brik` is a user, so no per-repo hook is
+# created). Returns 0 if Jenkins accepted the scan (HTTP 200/201/302).
+# Args: $1 = multibranch job name.
+e2e.jenkins.scan_multibranch() {
+    local job_name="$1"
+    _e2e_jenkins_ensure_cookie_jar
+    local crumb crumb_args=()
+    crumb=$(e2e.jenkins.get_crumb)
+    [[ -n "$crumb" ]] && crumb_args=(-H "$crumb")
+    local out code
+    out=$(briklab.http.request "${_E2E_JENKINS_URL}/job/${job_name}/build" -X POST \
+        -b "$_E2E_JENKINS_COOKIE_JAR" \
+        -u "${_E2E_JENKINS_USER}:${_E2E_JENKINS_PASSWORD}" \
+        ${crumb_args[@]+"${crumb_args[@]}"})
+    code="${out##*$'\n'}"
+    [[ "$code" =~ ^(200|201|302)$ ]]
+}
+
 # Resolve the Jenkins URL prefix for a job.
 # Flat pipelineJob: "job/<name>"
 # Multibranch (when $E2E_JENKINS_BRANCH is set): "job/<name>/job/<branch>"

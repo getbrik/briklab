@@ -434,6 +434,7 @@ briklab/
 | ArgoCD doesn't pick up new commits | Default polling interval ~3 minutes | Call `?refresh=hard` before sync |
 | GitLab can't mask variables with spaces | GitLab restriction on masked variable format | Avoid spaces in masked CI variable values |
 | `brik-deploy` fails: `token signature is invalid` | ArgoCD key rotated on lab reset; CI variable holds a stale token (`test` self-heal refreshes only `.env`, not CI) | Run `./scripts/briklab.sh infra-refresh` to propagate a fresh `ARGOCD_AUTH_TOKEN` to GitLab CI |
+| Jenkins push scenario: `No build found for SHA` | Multibranch job not indexed after a lab reset (no webhook for user-owned repos, no periodic scan) | The Jenkins suite scans after each push; see [e2e-known-issues.md](e2e-known-issues.md) |
 
 ---
 

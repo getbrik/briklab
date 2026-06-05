@@ -118,6 +118,15 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     PUSH_SHA=$(e2e.git.trigger_via_push "gitea" "$JOB_NAME" "$TRIGGER_REF")
     log_ok "Push SHA: ${PUSH_SHA}"
 
+    # The lab has no PeriodicFolderTrigger and a freshly recreated Gitea repo has
+    # no webhook to notify Jenkins (the gitea-plugin manages hooks at org level;
+    # `brik` is a user, so no per-repo hook is created). Without a trigger the push
+    # is never indexed. Kick an explicit scan: it indexes the new commit/branch/tag
+    # and auto-builds new or changed branches. Tags still need the explicit /build
+    # below; the scan only makes the tag sub-job appear so that step can run.
+    log_info "Scanning Multibranch to index the push..."
+    e2e.jenkins.scan_multibranch "$JOB_NAME" || log_warn "Multibranch scan not accepted (continuing)"
+
     # Multibranch + giteaTagDiscovery() indexes new tags but does not
     # auto-trigger a build for them (only new branch commits trigger
     # automatically). Wait for the tag sub-job to appear, then issue an
