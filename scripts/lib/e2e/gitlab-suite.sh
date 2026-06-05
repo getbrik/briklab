@@ -74,7 +74,7 @@ SCENARIOS=(
     # is why the former tag-based row never tested gitops. brik-release is absent
     # (no tag); package is opted in explicitly so the published image exists for
     # the ArgoCD sync. The post-pipeline ArgoCD assertion lives in
-    # _suite_run_scenario (see _suite_assert_gitops_sync).
+    # _suite_run_scenario (see e2e.scenario.gitops_postcheck).
     "node-deploy-gitops|node-deploy-gitops|branch:main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true,BRIK_WITH_PACKAGE=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     # Gap-coverage scenarios (kept after the consolidation because brik/spec
@@ -235,20 +235,10 @@ _suite_run_scenario() {
     # a skipped or no-op gitops deploy would pass unnoticed (the coverage gap
     # that hid the --namespace bug). Assert the app actually reached Synced +
     # Healthy after the pipeline succeeds.
-    if [[ "$_test_rc" -eq 0 ]] && e2e.scenario.is_gitops "$name"; then
-        _suite_assert_gitops_sync "brik-e2e-gitops" || _test_rc=1
+    if [[ "$_test_rc" -eq 0 ]]; then
+        e2e.scenario.gitops_postcheck "$name" "brik-e2e-gitops" || _test_rc=1
     fi
     return "$_test_rc"
-}
-
-# Assert that the ArgoCD app driven by a *-deploy-gitops scenario actually
-# synced the rendered manifests. A green pipeline alone does not prove the
-# gitops path ran. Args: $1 = ArgoCD app name. Returns: 0 if Synced+Healthy.
-_suite_assert_gitops_sync() {
-    # Thin wrapper over the shared assertion (lib/argocd.sh), kept so the
-    # dispatch reads naturally; the Jenkins suite calls e2e.argocd.assert_synced
-    # directly.
-    e2e.argocd.assert_synced "$1"
 }
 
 _suite_push_projects() {

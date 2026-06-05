@@ -41,6 +41,16 @@ e2e.scenario.is_gitops() {
     esac
 }
 
+# Post-run gitops check: for a *-deploy-gitops scenario, assert the ArgoCD app
+# actually reached Synced + Healthy. A green pipeline alone does not prove the
+# gitops path ran (the coverage gap that hid the --namespace bug). No-op (0) for
+# non-gitops scenarios. Args: $1 = scenario name, $2 = ArgoCD app name.
+e2e.scenario.gitops_postcheck() {
+    local name="$1" app="$2"
+    e2e.scenario.is_gitops "$name" || return 0
+    e2e.argocd.assert_synced "$app"
+}
+
 # Download the notify-stage aggregate-report.json and run the standard v1
 # aggregate assertions on it. The download itself is platform-specific, so the
 # caller passes the download command plus its run-id arguments; this helper

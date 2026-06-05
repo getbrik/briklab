@@ -269,8 +269,8 @@ _suite_run_scenario() {
 
     # A green gitops build proves job status, not that ArgoCD synced. Assert it
     # (parity with the GitLab suite; shared helper in lib/argocd.sh).
-    if [[ "$_test_rc" -eq 0 ]] && e2e.scenario.is_gitops "$name"; then
-        e2e.argocd.assert_synced "brik-e2e-gitops" || _test_rc=1
+    if [[ "$_test_rc" -eq 0 ]]; then
+        e2e.scenario.gitops_postcheck "$name" "brik-e2e-gitops" || _test_rc=1
     fi
     return "$_test_rc"
 }
