@@ -20,37 +20,15 @@ BRIKLAB_ROOT="$BRIKLAB_DIR" source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/runner-images.sh
 source "${SCRIPT_DIR}/lib/runner-images.sh"
 
-# Check prerequisites
-check_prereqs() {
-    local missing=()
-    for cmd in docker jq; do
-        if ! command -v "$cmd" &>/dev/null; then
-            missing+=("$cmd")
-        fi
-    done
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        log_error "Missing prerequisites: ${missing[*]}"
-        log_info "Install with: brew install ${missing[*]}"
-        exit 1
-    fi
-    if ! docker info &>/dev/null; then
-        log_error "Docker is not running"
-        exit 1
-    fi
-}
-
-# Load .env if present (overrides common.sh load_env with a warning)
-load_env() {
-    if [[ -f "$ENV_FILE" ]]; then
-        reload_env
-    else
-        log_warn ".env not found - using default values"
-        log_info "Copy .env.example to .env: cp .env.example .env"
-    fi
-}
+# Dispatcher bootstrap helpers (check_prereqs + rich load_env), shared with
+# scripts/infra.sh. Sourced AFTER common.sh so its load_env overrides the alias.
+# shellcheck source=lib/cli/prereqs.sh
+source "${SCRIPT_DIR}/lib/cli/prereqs.sh"
 
 # CLI command modules. Sourced AFTER the shared helpers above so their cmd_*
 # functions resolve check_prereqs/load_env/log_*/SCRIPT_DIR/... at call time.
+# lifecycle.sh stays sourced for cmd_status/cmd_logs; the create/start/stop/
+# clean/k3d lifecycle is dispatched by scripts/infra.sh (make init/start/...).
 # shellcheck source=lib/cli/lifecycle.sh
 source "${SCRIPT_DIR}/lib/cli/lifecycle.sh"
 # shellcheck source=lib/cli/setup.sh
@@ -90,18 +68,11 @@ Briklab - Local CI/CD test infrastructure for Brik
 
 Usage: ./scripts/briklab.sh <command> [options]
 
-Getting started:
-  First time? Run 'init'. It does everything automatically:
-  starts all containers, configures services, sets up k3d, and runs smoke tests.
-
-  Already initialized? Use 'start' to restart the containers.
-
-Lifecycle:
-  init               First launch (start + setup + k3d + smoke-test)
-  start              Start all containers
-  stop               Stop all containers
-  restart            Stop + start
-  clean              Delete all data and volumes (irreversible)
+Infra lifecycle lives in the Makefile (or ./scripts/infra.sh <command>):
+  make init                  First launch (start + setup + k3d + smoke-test)
+  make start | stop | restart | clean        Container lifecycle
+  make k3d-start | k3d-stop                   k3d cluster + ArgoCD
+  make versions                              Regenerate version artifacts
 
 Configuration:
   setup              Re-run GitLab/Runner/Gitea/Jenkins/Nexus/SSH configuration
@@ -150,37 +121,30 @@ Monitoring:
   status             Show container health and access URLs
   logs <service>     Tail logs (gitlab, runner, gitea, jenkins, nexus, ssh-target)
 
-Kubernetes (optional):
-  k3d-start          Create k3d cluster + install ArgoCD
-  k3d-stop           Destroy the k3d cluster
-
 Typical workflow:
-  ./scripts/briklab.sh init                  # First time setup (~5 min)
+  make init                                  # First time setup (~5 min)
   ./scripts/briklab.sh test --gitlab         # Run GitLab E2E test
   ./scripts/briklab.sh test --jenkins        # Run Jenkins E2E test
-  ./scripts/briklab.sh stop                  # Done for the day
-  ./scripts/briklab.sh start                 # Next day, just start
+  make stop                                  # Done for the day
+  make start                                 # Next day, just start
 EOF
 }
 
 # === DISPATCH ===
 
 case "${1:-help}" in
-    init)        cmd_init ;;
-    start)       cmd_start ;;
-    stop)        cmd_stop ;;
-    restart)     cmd_restart ;;
     status)      cmd_status ;;
     logs)        cmd_logs "${2:-}" ;;
     setup)       cmd_setup ;;
     test)        cmd_test "${@:2}" ;;
     reset)       cmd_reset "${@:2}" ;;
     preflight)   cmd_preflight "${@:2}" ;;
-    k3d-start)   cmd_k3d_start ;;
-    k3d-stop)    cmd_k3d_stop ;;
-    clean)       cmd_clean "${@:2}" ;;
     smoke-test)  cmd_smoke_test ;;
     infra-refresh) bash "${SCRIPT_DIR}/lib/infra-refresh.sh" ;;
+    init|start|stop|restart|clean|k3d-start|k3d-stop|versions)
+        log_error "'${1}' is an infra command -- use: make ${1}  (or ./scripts/infra.sh ${1})"
+        exit 1
+        ;;
     help|--help|-h) cmd_help ;;
     *)
         log_error "Unknown command: ${1}"

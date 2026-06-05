@@ -1,7 +1,7 @@
 # Briklab -- SINGLE SOURCE OF TRUTH for all component versions.
 #
-# Edit this file, then run:  scripts/generate-versions.sh
-# CI guard:                  scripts/generate-versions.sh --check
+# Edit this file, then run:  make versions
+# CI guard:                  make versions-check
 #
 # Generated artifacts (DO NOT EDIT BY HAND -- they are overwritten):
 #   - versions.env                  image tags + build args, loaded by docker compose
