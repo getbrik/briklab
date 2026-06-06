@@ -99,3 +99,27 @@ e2e.gitea.get_repo_commits() {
     fi
     e2e.gitea.api_get "$endpoint"
 }
+
+# ---------------------------------------------------------------------------
+# Pull requests (Gitea's name for a change request)
+# ---------------------------------------------------------------------------
+
+# Open a pull request from an existing head branch into a base branch.
+# The head branch must already be pushed (e.g. via e2e.git.push_branch).
+# Args: $1 = owner, $2 = repo, $3 = head branch, $4 = base branch,
+#       $5 = title (optional)
+# Output: PR number (index) on stdout; empty on failure.
+#
+# Gitea endpoint: POST /repos/{owner}/{repo}/pulls -- the JSON uses `head`
+# and `base` (branch names), mirroring GitHub. This is the git-host-specific
+# half; the orchestrator-facing contract (a change-request number) is uniform
+# across hosts -- see e2e.scm.create_change_request.
+e2e.gitea.create_pull_request() {
+    local owner="$1" repo="$2" head="$3" base="${4:-main}"
+    local title="${5:-E2E MR ${head}}"
+    local body resp
+    body="$(jq -n --arg head "$head" --arg base "$base" --arg title "$title" \
+        '{head: $head, base: $base, title: $title}')"
+    resp="$(e2e.gitea.api_post "repos/${owner}/${repo}/pulls" "$body")"
+    printf '%s' "$resp" | jq -r '.number // empty' 2>/dev/null || true
+}

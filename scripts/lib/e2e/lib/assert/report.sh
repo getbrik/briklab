@@ -154,6 +154,29 @@ assert.image_tag() {
     fi
 }
 
+# assert.pipeline_source <aggregate_json_path> <expected_source>
+# Reads .pipeline.pipeline_source from the aggregate report and compares it to
+# the expected trigger source ("merge_request_event" for an MR/PR build,
+# "push" for branch/tag pushes). This is the cross-platform, cross-git-host
+# trigger-parity proof: brik records the SAME canonical source token whether
+# the run was driven by GitLab CI (CI_PIPELINE_SOURCE) or Jenkins (CHANGE_ID),
+# and regardless of whether the repo is backed by GitLab or Gitea. Reading it
+# from the report (not job colors) keeps the assertion on business outcome.
+assert.pipeline_source() {
+    local file="$1" expected="$2"
+    if [[ ! -f "$file" ]]; then
+        assert._fail "Pipeline source is '${expected}'" "aggregate file missing: ${file}"
+        return
+    fi
+    local actual
+    actual=$(jq -r '.pipeline.pipeline_source // "<absent>"' "$file" 2>/dev/null || echo "<jq-error>")
+    if [[ "$actual" == "$expected" ]]; then
+        assert._pass "Pipeline source is '${expected}'"
+    else
+        assert._fail "Pipeline source is '${expected}'" "got '${actual}'"
+    fi
+}
+
 # assert.promote_succeeded <aggregate_file>
 # Verify the promote stage actually ran and recorded a successful
 # candidate->release retag in THIS pipeline's report. Run-specific and

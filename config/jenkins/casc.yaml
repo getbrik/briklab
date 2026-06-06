@@ -216,6 +216,12 @@ jobs:
                 traits {
                   giteaBranchDiscovery { strategyId(3) }
                   giteaTagDiscovery()
+                  // Origin pull/merge requests. strategyId(2) = build the PR
+                  // source branch HEAD (not a merge commit), mirroring GitLab's
+                  // default merge_request_event pipeline which runs on the MR
+                  // source ref. CHANGE_ID is set on these builds, so
+                  // jenkins-wrapper.sh surfaces BRIK_PIPELINE_SOURCE=merge_request_event.
+                  giteaPullRequestDiscovery { strategyId(2) }
                 }
               }
             }

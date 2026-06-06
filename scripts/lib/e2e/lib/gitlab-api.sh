@@ -84,6 +84,26 @@ e2e.gitlab.get_project_id() {
         jq -r '.id // empty' 2>/dev/null
 }
 
+# Open a merge request from an existing source branch into a target branch.
+# The source branch must already be pushed (e.g. via e2e.git.push_branch).
+# Args: $1 = project ID, $2 = source branch, $3 = target branch,
+#       $4 = title (optional)
+# Output: MR iid on stdout; empty on failure.
+#
+# GitLab endpoint: POST /projects/:id/merge_requests -- the JSON uses
+# `source_branch`/`target_branch` and the change-request number is `iid`
+# (project-scoped), unlike Gitea's `head`/`base`/`number`. This is the
+# git-host-specific half; e2e.scm.create_change_request hides the difference.
+e2e.gitlab.create_merge_request() {
+    local project_id="$1" source_branch="$2" target_branch="${3:-main}"
+    local title="${4:-E2E MR ${source_branch}}"
+    local body resp
+    body="$(jq -n --arg src "$source_branch" --arg tgt "$target_branch" --arg title "$title" \
+        '{source_branch: $src, target_branch: $tgt, title: $title}')"
+    resp="$(e2e.gitlab.api_post_json "projects/${project_id}/merge_requests" "$body")"
+    printf '%s' "$resp" | jq -r '.iid // empty' 2>/dev/null || true
+}
+
 # Create a GitLab group (idempotent).
 # Args: $1 = group name
 e2e.gitlab.ensure_group() {
