@@ -116,10 +116,21 @@ e2e.gitea.get_repo_commits() {
 # across hosts -- see e2e.scm.create_change_request.
 e2e.gitea.create_pull_request() {
     local owner="$1" repo="$2" head="$3" base="${4:-main}"
-    local title="${5:-E2E MR ${head}}"
-    local body resp
+    local title="${5:-E2E PR ${head}}"
+    local body resp number
     body="$(jq -n --arg head "$head" --arg base "$base" --arg title "$title" \
         '{head: $head, base: $base, title: $title}')"
     resp="$(e2e.gitea.api_post "repos/${owner}/${repo}/pulls" "$body")"
-    printf '%s' "$resp" | jq -r '.number // empty' 2>/dev/null || true
+    number="$(printf '%s' "$resp" | jq -r '.number // empty' 2>/dev/null || true)"
+
+    # Idempotent re-runs: Gitea rejects a second PR for the same head->base
+    # with 409 (an open PR already exists), returning no number. Fall back to
+    # looking the open PR up by head ref so a repeated scenario run reuses it
+    # instead of failing on "Failed to open pull request".
+    if [[ -z "$number" ]]; then
+        number="$(e2e.gitea.api_get "repos/${owner}/${repo}/pulls?state=open" | \
+            jq -r --arg head "$head" \
+            'map(select(.head.ref == $head)) | .[0].number // empty' 2>/dev/null || true)"
+    fi
+    printf '%s' "$number"
 }

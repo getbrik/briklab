@@ -394,6 +394,47 @@ e2e.jenkins.wait_build_by_sha() {
     echo "$build_number"
 }
 
+# Wait for the first build of a (multibranch) sub-job to appear, then wait for
+# completion. Used by MR/PR trigger mode: giteaPullRequestDiscovery indexes a
+# pull request as a PR-<n> sub-job and auto-builds it, but the build runs on the
+# PR source HEAD whose SHA is not the pushed commit's parent-resolved SHA that
+# wait_build_by_sha matches against -- so we wait for the sub-job's first build
+# by number instead. Relies on E2E_JENKINS_BRANCH pointing at the sub-job
+# (e.g. PR-7), which _e2e_jenkins_job_path resolves into the URL prefix.
+# Args: $1 = job name, $2 = discovery timeout (default 180),
+#        $3 = build completion timeout (default 300)
+# Output: build number on stdout
+e2e.jenkins.wait_first_build() {
+    local job_name="$1" discover_timeout="${2:-180}" completion_timeout="${3:-300}"
+    local poll_interval=5 elapsed=0 build_number=""
+    local job_path
+    job_path="$(_e2e_jenkins_job_path "$job_name")"
+
+    # Phase 1: wait for the sub-job to be indexed and to have a build queued.
+    while [[ $elapsed -lt $discover_timeout ]]; do
+        build_number=$(e2e.jenkins.api_get "${job_path}/api/json?tree=builds[number]" 2>/dev/null | \
+            jq -r '[.builds[]?.number] | min // empty' 2>/dev/null || true)
+        if [[ -n "$build_number" ]]; then
+            break
+        fi
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+
+    if [[ -z "$build_number" ]]; then
+        echo "" >&2
+        log_error "No build appeared for ${job_path} after ${discover_timeout}s" >&2
+        return 1
+    fi
+
+    log_info "Build #${build_number} found for ${job_path}" >&2
+
+    # Phase 2: wait for completion (result printed to stderr; stdout is the number).
+    e2e.jenkins.wait_build "$job_name" "$build_number" "$completion_timeout" >/dev/null
+    echo "$build_number"
+}
+
 # Get the result of a completed build.
 # Args: $1 = job name, $2 = build number
 # Output: result string on stdout (SUCCESS, FAILURE, UNSTABLE, ABORTED, etc.)

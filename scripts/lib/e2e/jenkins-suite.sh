@@ -88,6 +88,13 @@ SCENARIOS=(
     # sets trigger_mode=push); the tag variant pushes v0.2.0 (release context).
     "workflow-trunk-main|node-workflow-trunk|node-workflow-trunk|600|false"
     "workflow-trunk-tag|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-main"
+    # Pull-request trigger parity (Jenkins+Gitea native combo). Pushes a source
+    # branch and opens a Gitea pull request; giteaPullRequestDiscovery indexes it
+    # as a PR-<n> sub-job and auto-builds it, with CHANGE_ID set -- so brik
+    # records pipeline_source=merge_request_event. _suite_run_scenario sets
+    # trigger_mode=mr and E2E_EXPECT_PIPELINE_SOURCE=merge_request_event.
+    # Sequenced after workflow-trunk-tag (shared multibranch job).
+    "workflow-trunk-mr|node-workflow-trunk|node-workflow-trunk|600|false||workflow-trunk-tag"
     # The stub-image variant is no longer a dedicated row: run any scenario
     # with `briklab.sh test --jenkins --stub` to pin every stage to the single
     # brik-runner-stub image (BRIK_RUNNER_CLASSES_FILE injected by
@@ -172,11 +179,24 @@ _suite_run_scenario() {
         return $?
     fi
 
-    # Auto-detect push mode for workflow scenarios
+    # Auto-detect push mode for workflow scenarios; *-mr opens a real pull
+    # request instead (must win over workflow-* -- workflow-trunk-mr matches both).
     local trigger_mode="${E2E_TRIGGER_MODE:-api}"
     if [[ "$name" == workflow-* ]]; then
         trigger_mode="push"
     fi
+    if [[ "$name" == *-mr ]]; then
+        trigger_mode="mr"
+    fi
+
+    # Expected trigger source brik must record in the aggregate report, for
+    # cross-host trigger parity. Set only for real git-event scenarios; API
+    # scenarios leave it empty so scenario.sh's opt-in assertion stays off.
+    local expect_source=""
+    case "$name" in
+        *-mr)                                   expect_source="merge_request_event" ;;
+        workflow-trunk-main|workflow-trunk-tag) expect_source="push" ;;
+    esac
 
     # Mirror GitLab's tag-trigger semantics on Jenkins. The gitlab-suite
     # counterpart of these scenarios triggers on ref v0.1.0 (or v0.2.0
@@ -232,7 +252,10 @@ _suite_run_scenario() {
     local branch=""
     local discover_timeout=""
     if [[ "$job" == "node-workflow-trunk" ]]; then
-        branch="main"
+        # In mr mode jenkins-test.sh sets E2E_JENKINS_BRANCH=PR-<n> itself, so
+        # leave branch empty here; only bump the discovery window (PR index +
+        # sub-job creation + first build can exceed the default).
+        [[ "$trigger_mode" != "mr" ]] && branch="main"
         discover_timeout="300"
     fi
 
@@ -263,6 +286,7 @@ _suite_run_scenario() {
     E2E_TRIGGER_REF="$trigger_ref" \
     E2E_JENKINS_BRANCH="$branch" \
     E2E_JENKINS_DISCOVER_TIMEOUT="$discover_timeout" \
+    E2E_EXPECT_PIPELINE_SOURCE="$expect_source" \
     E2E_ASSERT_PROMOTE="$([[ "$name" == "node-plan-tag" ]] && echo true || echo false)" \
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
         bash "${SCRIPT_DIR}/jenkins-test.sh" && _test_rc=0 || _test_rc=$?

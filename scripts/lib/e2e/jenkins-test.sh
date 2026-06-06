@@ -167,6 +167,44 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
         BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/${BUILD_NUMBER}"
     fi
     FINAL_RESULT=$(e2e.jenkins.get_build_result "$JOB_NAME" "$BUILD_NUMBER")
+elif [[ "$TRIGGER_MODE" == "mr" ]]; then
+    # Pull-request trigger (Jenkins+Gitea native combo). Push a source branch,
+    # open a Gitea pull request via the host-agnostic SCM abstraction, then let
+    # giteaPullRequestDiscovery index it as a PR-<n> sub-job and auto-build it.
+    # CHANGE_ID is set on that build, so jenkins-wrapper.sh surfaces
+    # BRIK_PIPELINE_SOURCE=merge_request_event -- the Jenkins half of the
+    # cross-host trigger parity (the GitLab half opens a merge request).
+    # shellcheck source=lib/git.sh
+    source "${SCRIPT_DIR}/lib/git.sh"
+    # shellcheck source=lib/scm.sh
+    source "${SCRIPT_DIR}/lib/scm.sh"
+
+    MR_SOURCE_BRANCH="${E2E_MR_SOURCE_BRANCH:-e2e/mr}"
+
+    log_info "Pushing PR source branch '${MR_SOURCE_BRANCH}'..."
+    PUSH_SHA=$(e2e.git.trigger_via_push "gitea" "$JOB_NAME" "branch:${MR_SOURCE_BRANCH}")
+    log_ok "Push SHA: ${PUSH_SHA}"
+
+    log_info "Opening pull request ${MR_SOURCE_BRANCH} -> main..."
+    PR_NUMBER=$(e2e.scm.create_change_request "gitea" "brik/${JOB_NAME}" \
+        "$MR_SOURCE_BRANCH" "main" "E2E PR ${MR_SOURCE_BRANCH}")
+    if [[ -z "$PR_NUMBER" ]]; then
+        log_error "Failed to open pull request"
+        exit 1
+    fi
+    log_ok "Pull request #${PR_NUMBER} opened"
+
+    # giteaPullRequestDiscovery indexes the PR under job/<job>/job/PR-<n>/.
+    # Routing every wait/log/artifact helper there relies on E2E_JENKINS_BRANCH.
+    export E2E_JENKINS_BRANCH="PR-${PR_NUMBER}"
+
+    log_info "Scanning Multibranch to index PR-${PR_NUMBER}..."
+    e2e.jenkins.scan_multibranch "$JOB_NAME" || log_warn "Multibranch scan not accepted (continuing)"
+
+    log_info "Waiting for PR-${PR_NUMBER} build..."
+    BUILD_NUMBER=$(e2e.jenkins.wait_first_build "$JOB_NAME" "${E2E_JENKINS_DISCOVER_TIMEOUT:-180}" "$TIMEOUT_SECONDS")
+    BUILD_URL="${JENKINS_URL}/job/${JOB_NAME}/job/${E2E_JENKINS_BRANCH}/${BUILD_NUMBER}"
+    FINAL_RESULT=$(e2e.jenkins.get_build_result "$JOB_NAME" "$BUILD_NUMBER")
 else
     # API trigger (default, unchanged)
     log_info "Triggering build..."
