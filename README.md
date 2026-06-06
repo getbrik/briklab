@@ -414,7 +414,7 @@ Auth libraries are reusable -- each validates and caches credentials, and can be
 
 ## Transparency Notice
 
-We use AI-assisted development ([Claude Code](https://claude.ai/code) + [Everything Claude Code](https://github.com/aspect-build/everything-claude-code)) to accelerate implementation:
+We use AI-assisted development ([Claude Code](https://claude.ai/code) + [ECC](https://github.com/affaan-m/ECC)) to accelerate implementation:
 
 - Every contribution (human or AI-generated) follows the same quality gates: code review, test coverage, E2E testing, and CI checks.
 - AI-generated code is not perfect. Regular refactoring passes address its shortcomings, and the overall productivity gains are significant.
