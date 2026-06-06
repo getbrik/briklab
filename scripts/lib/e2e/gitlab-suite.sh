@@ -96,6 +96,16 @@ SCENARIOS=(
     "node-full-cve|node-full-cve|v0.1.0|brik-init,brik-release,brik-build,brik-lint,brik-sast||600|brik-scan|BRIK_WITH_DEPLOY=true||GHSA|brik-init,brik-release,brik-build,brik-lint,brik-sast"
     "workflow-trunk-main|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-deploy,brik-notify||600"
     "workflow-trunk-tag|node-workflow-trunk|v0.2.0|brik-init,brik-release,brik-build,brik-test,brik-package,brik-deploy,brik-notify||600|||workflow-trunk-main"
+    # Merge-request trigger parity (GitLab+GitLab-CI native combo). Pushes a
+    # source branch and opens an MR; the workflow: filter allows
+    # merge_request_event, so a pipeline runs with CI_PIPELINE_SOURCE=
+    # merge_request_event. _suite_run_scenario sets trigger_mode=mr and
+    # E2E_EXPECT_PIPELINE_SOURCE=merge_request_event, so the run also asserts
+    # brik recorded pipeline.pipeline_source. The MR source branch != main, so
+    # the trunk staging env (when branch==main) and the tag production env are
+    # both skipped -- brik-deploy is not expected, hence it is absent from the
+    # required jobs. Sequenced after workflow-trunk-tag (shared group G).
+    "workflow-trunk-mr|node-workflow-trunk|main|brik-init,brik-build,brik-test,brik-notify||600|||workflow-trunk-tag"
 )
 
 # ---------------------------------------------------------------------------
@@ -206,6 +216,21 @@ _suite_run_scenario() {
     if [[ "$name" == workflow-* || "$ref" == branch:* || "$ref" == docs-only ]]; then
         trigger_mode="push"
     fi
+    # *-mr scenarios open a real merge request instead of pushing a ref. Must
+    # win over the workflow-* push default above (workflow-trunk-mr matches both).
+    if [[ "$name" == *-mr ]]; then
+        trigger_mode="mr"
+    fi
+
+    # Expected trigger source brik must record in the aggregate report, for
+    # cross-host trigger parity. Only set for scenarios that exercise a real
+    # git event (push or MR); API-triggered scenarios leave it empty so the
+    # opt-in assertion in scenario.sh stays off (source would be "api").
+    local expect_source=""
+    case "$name" in
+        *-mr)                                   expect_source="merge_request_event" ;;
+        workflow-trunk-main|workflow-trunk-tag) expect_source="push" ;;
+    esac
 
     # A docs-only commit reduces the dynamic child to brik-notify alone;
     # the child aggregate-report carries zero stages (parent skip
@@ -227,6 +252,7 @@ _suite_run_scenario() {
     E2E_EXPECTED_ERROR_PATTERN="${error_pattern//\~/$'|'}" \
     E2E_EXPECT_SUCCESS_JOBS="${success_jobs:-}" \
     E2E_SKIP_AGGREGATE="$skip_aggregate" \
+    E2E_EXPECT_PIPELINE_SOURCE="$expect_source" \
     E2E_ASSERT_PROMOTE="$([[ "$name" == "node-plan-tag" ]] && echo true || echo false)" \
         bash "${SCRIPT_DIR}/gitlab-test.sh" && _test_rc=0 || _test_rc=$?
 

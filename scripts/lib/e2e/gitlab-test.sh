@@ -136,6 +136,37 @@ if [[ "$TRIGGER_MODE" == "push" ]]; then
     PIPELINE_RESULT=$(e2e.gitlab.wait_pipeline_by_sha "$PROJECT_ID" "$PUSH_SHA" 60 "$TIMEOUT_SECONDS" "$REF_FILTER")
     PIPELINE_ID=$(echo "$PIPELINE_RESULT" | cut -d' ' -f1)
     FINAL_STATUS=$(echo "$PIPELINE_RESULT" | cut -d' ' -f2)
+elif [[ "$TRIGGER_MODE" == "mr" ]]; then
+    # Merge-request trigger (GitLab+GitLab-CI native combo). Push a source
+    # branch, open an MR via the host-agnostic SCM abstraction, then wait for
+    # the MR pipeline (CI_PIPELINE_SOURCE=merge_request_event). This is the
+    # GitLab half of cross-host trigger parity: the Jenkins half opens a Gitea
+    # pull request. brik records pipeline_source=merge_request_event either way.
+    # shellcheck source=lib/git.sh
+    source "${SCRIPT_DIR}/lib/git.sh"
+    # shellcheck source=lib/scm.sh
+    source "${SCRIPT_DIR}/lib/scm.sh"
+
+    PROJECT_SHORT="${PROJECT_NAME#brik/}"
+    MR_SOURCE_BRANCH="${E2E_MR_SOURCE_BRANCH:-e2e/mr}"
+
+    log_info "Pushing MR source branch '${MR_SOURCE_BRANCH}'..."
+    PUSH_SHA=$(e2e.git.trigger_via_push "gitlab" "$PROJECT_SHORT" "branch:${MR_SOURCE_BRANCH}")
+    log_ok "Push SHA: ${PUSH_SHA}"
+
+    log_info "Opening merge request ${MR_SOURCE_BRANCH} -> main..."
+    MR_IID=$(e2e.scm.create_change_request "gitlab" "brik/${PROJECT_SHORT}" \
+        "$MR_SOURCE_BRANCH" "main" "E2E MR ${MR_SOURCE_BRANCH}")
+    if [[ -z "$MR_IID" ]]; then
+        log_error "Failed to open merge request"
+        exit 1
+    fi
+    log_ok "Merge request !${MR_IID} opened"
+
+    log_info "Waiting for MR pipeline (source=merge_request_event)..."
+    PIPELINE_RESULT=$(e2e.gitlab.wait_mr_pipeline "$PROJECT_ID" "$MR_IID" 90 "$TIMEOUT_SECONDS")
+    PIPELINE_ID=$(echo "$PIPELINE_RESULT" | cut -d' ' -f1)
+    FINAL_STATUS=$(echo "$PIPELINE_RESULT" | cut -d' ' -f2)
 else
     # API trigger (default, unchanged)
     log_info "Triggering pipeline on ref '${TRIGGER_REF}'..."

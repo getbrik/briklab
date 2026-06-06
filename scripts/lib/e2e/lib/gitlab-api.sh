@@ -101,7 +101,17 @@ e2e.gitlab.create_merge_request() {
     body="$(jq -n --arg src "$source_branch" --arg tgt "$target_branch" --arg title "$title" \
         '{source_branch: $src, target_branch: $tgt, title: $title}')"
     resp="$(e2e.gitlab.api_post_json "projects/${project_id}/merge_requests" "$body")"
-    printf '%s' "$resp" | jq -r '.iid // empty' 2>/dev/null || true
+    local iid
+    iid="$(printf '%s' "$resp" | jq -r '.iid // empty' 2>/dev/null || true)"
+
+    # Idempotent re-runs: GitLab returns 409 when an open MR already exists for
+    # this source branch. Fall back to looking it up so a repeated scenario run
+    # reuses the open MR instead of failing.
+    if [[ -z "$iid" ]]; then
+        iid="$(e2e.gitlab.api_get "projects/${project_id}/merge_requests?state=opened&source_branch=${source_branch}" | \
+            jq -r '.[0].iid // empty' 2>/dev/null || true)"
+    fi
+    printf '%s' "$iid"
 }
 
 # Create a GitLab group (idempotent).
@@ -296,6 +306,54 @@ e2e.gitlab.wait_pipeline_by_sha() {
     log_info "Pipeline #${pipeline_id} found for SHA ${sha:0:8}" >&2
 
     # Phase 2: wait for pipeline completion
+    local status
+    status=$(e2e.gitlab.wait_pipeline "$project_id" "$pipeline_id" "$completion_timeout")
+
+    echo "${pipeline_id} ${status}"
+}
+
+# Wait for the pipeline of a merge request to appear, then wait for completion.
+# A merge_request_event pipeline is created asynchronously after the MR opens,
+# so poll the MR's own pipeline list rather than filtering global pipelines by
+# SHA (the MR pipeline may run on a detached merge ref whose SHA differs from
+# the pushed source commit). Mirrors wait_pipeline_by_sha's "discover then wait"
+# shape and stdout contract.
+# Args: $1 = project ID, $2 = MR iid, $3 = discovery timeout (default 90),
+#        $4 = pipeline completion timeout (default 300)
+# Output: "pipeline_id status" on stdout
+e2e.gitlab.wait_mr_pipeline() {
+    local project_id="$1" mr_iid="$2"
+    local discover_timeout="${3:-90}"
+    local completion_timeout="${4:-300}"
+    local poll_interval=5
+    local elapsed=0
+    local pipeline_id=""
+
+    # Phase 1: discover the MR pipeline. GitLab lists the MR's pipelines newest
+    # first; take the most recent so a re-run picks the latest attempt.
+    while [[ $elapsed -lt $discover_timeout ]]; do
+        pipeline_id=$(e2e.gitlab.api_get "projects/${project_id}/merge_requests/${mr_iid}/pipelines" | \
+            jq -r '.[0].id // empty' 2>/dev/null || true)
+
+        if [[ -n "$pipeline_id" ]]; then
+            break
+        fi
+
+        printf "." >&2
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+
+    if [[ -z "$pipeline_id" ]]; then
+        echo "" >&2
+        log_error "No pipeline found for MR !${mr_iid} after ${discover_timeout}s" >&2
+        return 1
+    fi
+
+    # log to stderr: stdout carries the "pipeline_id status" return value.
+    log_info "MR !${mr_iid} pipeline #${pipeline_id} found" >&2
+
+    # Phase 2: wait for completion.
     local status
     status=$(e2e.gitlab.wait_pipeline "$project_id" "$pipeline_id" "$completion_timeout")
 
