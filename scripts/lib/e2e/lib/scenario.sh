@@ -85,6 +85,14 @@ e2e.scenario.assert_aggregate() {
         if [[ "$assert_promote" == "true" ]]; then
             assert.promote_succeeded "$agg_file"
         fi
+        # Opt-in: assert the trigger source brik recorded matches what the
+        # scenario expected (merge_request_event for MR/PR scenarios, push for
+        # push/tag scenarios that exercise real git pushes). Cross-platform,
+        # cross-git-host trigger parity -- see assert.pipeline_source. Kept
+        # opt-in so API-triggered scenarios (source=api) stay unaffected.
+        if [[ -n "${E2E_EXPECT_PIPELINE_SOURCE:-}" ]]; then
+            assert.pipeline_source "$agg_file" "$E2E_EXPECT_PIPELINE_SOURCE"
+        fi
     else
         log_warn "could not download aggregate-report.json (skipping aggregate assertions)"
     fi
