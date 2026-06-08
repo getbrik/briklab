@@ -45,7 +45,7 @@ SCENARIOS=(
     # Per-stage, per-stack, planner and findings behavior is covered by the
     # brik repo's contract, unit and integration suites. The Jenkins suite
     # keeps end-to-end scenarios for orchestrator parity with GitLab. The
-    # Jenkins adapter (brikPipeline.groovy) runs each stage in an isolated
+    # Jenkins adapter (brikIntegrate.groovy) runs each stage in an isolated
     # docker.image().inside() container on the same Alpine brik-runner images
     # as GitLab, so the deploy / promote / gitops / CVE-gating paths must be
     # exercised here too -- that is where the v0.6.x execution-model bugs
@@ -82,7 +82,7 @@ SCENARIOS=(
     # dedicated CasC pipelineJob (node-full-cve).
     "node-full-cve|node-full-cve|node-full-cve|600|true|BRIK_WITH_DEPLOY=true||GHSA"
     # Trunk-based triggering parity. The GitLab counterpart asserts the
-    # pipeline.yml `workflow:` rules (GitLab-specific); the Jenkins equivalent
+    # brik-integrate.yml `workflow:` rules (GitLab-specific); the Jenkins equivalent
     # is the Multibranch scan firing a build on the default branch and on a tag
     # -- same intent (trunk-based), different mechanism. Push-driven (dispatch
     # sets trigger_mode=push); the tag variant pushes v0.2.0 (release context).
@@ -203,7 +203,7 @@ _suite_run_scenario() {
     # for workflow-trunk-tag), which gives the pipeline CI_COMMIT_TAG and
     # routes brik into release context. Jenkins pipelineJobs always build
     # the configured branch, so we signal the tag explicitly via the
-    # BRIK_TAG build parameter declared in brikPipeline.groovy. Without
+    # BRIK_TAG build parameter declared in brikIntegrate.groovy. Without
     # this, *-full / *-complete / node-deploy* scenarios would skip the
     # release stage and tag images with the short SHA instead of the
     # release tag -- breaking parity with GitLab.

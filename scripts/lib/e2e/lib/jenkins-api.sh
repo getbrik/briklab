@@ -164,7 +164,7 @@ def expected = [
     new BooleanParameterDefinition('BRIK_DRY_RUN', false, 'Skip destructive deploy actions.'),
     new StringParameterDefinition('BRIK_TAG', '', 'Release tag (e.g. v0.1.0). Empty for snapshot.'),
     new BooleanParameterDefinition('BRIK_WITH_DEPLOY', false, 'Opt into the deploy stage. Skipped by default.'),
-    new BooleanParameterDefinition('BRIK_WITH_PACKAGE', false, 'Opt into the package stage. Skipped by default. brikPipeline maps this to brik plan --with-package.'),
+    new BooleanParameterDefinition('BRIK_WITH_PACKAGE', false, 'Opt into the package stage. Skipped by default. brikIntegrate maps this to brik plan --with-package.'),
     new StringParameterDefinition('BRIK_RUNNER_CLASSES_FILE', '', 'Runner-class image registry override (absolute, or relative to the brik library root).')
 ]
 
