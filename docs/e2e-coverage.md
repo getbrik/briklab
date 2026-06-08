@@ -142,11 +142,14 @@ assertion. Findings:
   (candidate chantier).
 - **node-complete -- "real Nexus publish" verified via report, not a Nexus query.** The
   publish does happen, but the only assertion is `assert.image_tag` reading the
-  aggregate-report `.business.image.tag`. The ready-made `assert.nexus_docker_exists`
-  (queries `/v2/<path>/tags/list`) is defined but **called by no scenario**.
-  **Recommendation:** wire `assert.nexus_docker_exists "brik/node-complete"` (+ the
-  release tag) post-pipeline so the publish is verified against Nexus, not only brik's
-  own report. Lower severity (behaviour occurs; only the verification is report-based).
+  aggregate-report `.business.image.tag`. A Nexus-side query helper
+  (`assert.nexus_docker_exists` / `e2e.nexus.docker_*tags`) used to exist but was
+  removed: no scenario called it, and it hit the Docker v2 API
+  (`/v2/<path>/tags/list`) **without authentication** -- Nexus answers 401, so it
+  silently reported "absent" for images that were present. **Recommendation:** if
+  Nexus-side verification is wanted, re-add a helper that authenticates against the v2
+  API (`-u admin:$NEXUS_ADMIN_PASSWORD`) and wire it post-pipeline. Lower severity
+  (behaviour occurs; only the verification is report-based).
 
 Robust pattern (to replicate): assert the *effect* in the source of truth -- e.g.
 node-deploy-gitops asserts the ArgoCD app is Synced+Healthy; node-full-cve uses
