@@ -278,7 +278,7 @@ jobs:
   # CI = multibranch (brikIntegrate via Jenkinsfile); CD = parameterized
   # pipelineJob (brikDeploy via Jenkinsfile.deploy). A CD run never touches the
   # CI job's history/artifacts.
-  - script: >
+  - script: |
       multibranchPipelineJob('node-deploy-channel') {
         branchSources {
           branchSource {
@@ -305,7 +305,7 @@ jobs:
           discardOldItems { numToKeep(5) }
         }
       }
-  - script: >
+  - script: |
       pipelineJob('node-deploy-channel-deploy') {
         parameters {
           stringParam('BRIK_DEPLOY_VERSION', '', 'Artifact version to deploy (e.g. v0.1.0). Required.')

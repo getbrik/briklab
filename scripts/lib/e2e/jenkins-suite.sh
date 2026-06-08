@@ -71,6 +71,7 @@ SCENARIOS=(
     # brik-e2e-rollback ArgoCD app). depends_on node-deploy-gitops mirrors the
     # GitLab suite (ordering parity on the shared k8s/argocd infra).
     "node-deploy-rollback|node-deploy-gitops-rollback|node-deploy-gitops-rollback|900|false||node-deploy-gitops"
+    "node-deploy-channel|node-deploy-channel|node-deploy-channel|900|false"
     # Live promote coverage (#27). Tagged build (BRIK_TAG=v0.1.0 via dispatch)
     # runs release + package + a real candidate->release docker retag. The
     # brik.yml is in `safe` planner mode so promote is not impact-skipped.
@@ -171,6 +172,14 @@ _suite_run_scenario() {
     if e2e.scenario.needs_deploy "$name"; then
         e2e.argocd.ensure_port_forward || \
             log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
+    fi
+
+    # CD channel keystone: delegate to the dedicated Jenkins CD script
+    # (verify the CI artifact, deploy that version via the brikDeploy job,
+    # assert the ArgoCD app on a digest-pinned image).
+    if [[ "$name" == "node-deploy-channel" ]]; then
+        E2E_JENKINS_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/jenkins-cd-channel.sh"
+        return $?
     fi
 
     # Multi-step rollback scenario: delegate to dedicated script
