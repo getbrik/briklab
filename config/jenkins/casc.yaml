@@ -274,3 +274,55 @@ jobs:
           }
         }
       }
+  # node-deploy-channel is a CI+CD project: two jobs over one repo (design S7.2).
+  # CI = multibranch (brikIntegrate via Jenkinsfile); CD = parameterized
+  # pipelineJob (brikDeploy via Jenkinsfile.deploy). A CD run never touches the
+  # CI job's history/artifacts.
+  - script: >
+      multibranchPipelineJob('node-deploy-channel') {
+        branchSources {
+          branchSource {
+            source {
+              giteaSCMSource {
+                id('gitea-node-deploy-channel')
+                serverUrl('http://gitea.briklab.test:3000')
+                repoOwner('brik')
+                repository('node-deploy-channel')
+                credentialsId('gitea-admin-pat')
+                traits {
+                  giteaBranchDiscovery { strategyId(3) }
+                  giteaTagDiscovery()
+                  giteaPullRequestDiscovery { strategyId(2) }
+                }
+              }
+            }
+          }
+        }
+        factory {
+          workflowBranchProjectFactory { scriptPath('Jenkinsfile') }
+        }
+        orphanedItemStrategy {
+          discardOldItems { numToKeep(5) }
+        }
+      }
+  - script: >
+      pipelineJob('node-deploy-channel-deploy') {
+        parameters {
+          stringParam('BRIK_DEPLOY_VERSION', '', 'Artifact version to deploy (e.g. v0.1.0). Required.')
+          stringParam('BRIK_DEPLOY_ENVIRONMENT', '', 'Target environment key from deploy.environments (e.g. staging). Required.')
+          booleanParam('BRIK_DRY_RUN', false, 'Skip destructive deploy actions; print what would run instead.')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitea.briklab.test:3000/brik/node-deploy-channel.git')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile.deploy')
+          }
+        }
+      }

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-deploy-channel
+  labels:
+    app: node-deploy-channel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-deploy-channel
+  template:
+    metadata:
+      labels:
+        app: node-deploy-channel
+    spec:
+      containers:
+        - name: app
+          # Base ref; the CD flow rewrites this to the digest-pinned ref
+          # (nexus.briklab.test:8082/brik/node-deploy-channel@sha256:...) at deploy time.
+          image: nexus.briklab.test:8082/brik/node-deploy-channel:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
