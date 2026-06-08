@@ -92,7 +92,7 @@ unclassified:
         # NB: do not add `cachingConfiguration` here. Disabling the cache
         # (refreshTimeMinutes=0) made the plugin switch from the
         # `@libs/<SHA>/` workspace layout to `@libs/<lib_name>/`, which
-        # breaks brikPipeline's BRIK_HOME resolution (it expects the
+        # breaks brikIntegrate's BRIK_HOME resolution (it expects the
         # SHA-keyed dir produced by the cached path). Cache invalidation
         # is handled instead by briklab's push flow:
         # see scripts/lib/e2e/lib/push.sh::e2e.push.brik_repos which
@@ -112,7 +112,7 @@ tool:
 # Each pipelineJob below declares BRIK_DRY_RUN and BRIK_TAG via the Job DSL
 # `parameters {}` block so they exist in the Jenkins UI from the moment the
 # job is created. This mirrors the `properties([parameters([...])])` block
-# in shared-libs/jenkins/vars/brikPipeline.groovy, which is the source of
+# in shared-libs/jenkins/vars/brikIntegrate.groovy, which is the source of
 # truth and re-applies the same params on each build (idempotent update).
 # Without this duplication the first build of a freshly-created job has no
 # "Build with Parameters" button -- a long-standing Jenkins limitation:
