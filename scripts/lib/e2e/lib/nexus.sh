@@ -51,7 +51,8 @@ _e2e_nexus_api_delete() {
 e2e.nexus.docker_image_exists() {
     local image_path="$1"
     local result
-    result=$(briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" --max-time 15 2>/dev/null) || return 1
+    result=$(briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" \
+        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" --max-time 15 2>/dev/null) || return 1
 
     local tag_count
     tag_count=$(echo "$result" | jq -r '.tags | length // 0' 2>/dev/null || echo "0")
@@ -63,7 +64,8 @@ e2e.nexus.docker_image_exists() {
 # Output: JSON array of tags on stdout
 e2e.nexus.docker_get_tags() {
     local image_path="$1"
-    briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" --max-time 15 2>/dev/null | \
+    briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" \
+        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" --max-time 15 2>/dev/null | \
         jq -r '.tags // []' 2>/dev/null
 }
 
