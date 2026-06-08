@@ -1,0 +1,53 @@
+version: 1
+project:
+  name: node-deploy-channel
+  stack: node
+  stack_version: "22"
+release:
+  strategy: semver
+  tag_prefix: v
+test:
+  framework: npm
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-deploy-channel
+    dockerfile: Dockerfile
+publish:
+  docker:
+    registry: nexus.briklab.test:8082
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
+
+# CD flow -- named artifact channels (P0). The release channel registry must
+# match package.docker.image so a `brik run` publishes the version this
+# environment later resolves to a digest.
+artifacts:
+  channels:
+    release:
+      registry: nexus.briklab.test:8082/brik/node-deploy-channel
+
+# Explicit environments (no workflow preset): the CD flow targets one env per
+# `brik deploy --environment`. staging and dev share the same channel to prove
+# the same digest deploys N times across environments.
+deploy:
+  environments:
+    staging:
+      target: gitops
+      accepts_channel: release
+      gates:
+        require_digest: true
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-cd.git
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e-cd
+    dev:
+      target: gitops
+      accepts_channel: release
+      gates:
+        require_digest: true
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e-cd-dev
