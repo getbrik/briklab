@@ -165,6 +165,8 @@ create_admin_user
 create_api_token
 create_config_deploy_repo "config-deploy-gitops" "GitOps config repo for E2E gitops deploy tests"
 create_config_deploy_repo "config-deploy-rollback" "GitOps config repo for E2E rollback deploy tests"
+create_config_deploy_repo "config-deploy-cd" "GitOps config repo for E2E CD channel deploy (staging)"
+create_config_deploy_repo "config-deploy-cd-dev" "GitOps config repo for E2E CD channel deploy (dev)"
 
 log_ok "Gitea configuration complete"
 echo ""

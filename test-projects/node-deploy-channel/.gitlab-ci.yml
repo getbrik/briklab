@@ -6,6 +6,10 @@
 #   - BRIK_DEPLOY_VERSION set   -> brik-deploy.yml    (CD: Run pipeline / API)
 # include:rules only sees pre-pipeline variables, and BRIK_DEPLOY_VERSION arrives
 # as a trigger variable, so the discriminator is visible at include time.
+# The =~ /.+/ form (matches a defined, non-empty value) is robust to an
+# *undefined* BRIK_DEPLOY_VERSION on a CI trigger -- `== ""` does not match an
+# unset variable in include:rules, which would leave no template included and
+# GitLab would reject the pipeline ("review the workflow:rules configuration").
 variables:
   BRIK_LIB_REF: "v0.1.0"
   BRIK_GITLAB_TEMPLATES_REF: "v0.1.0"
@@ -15,9 +19,9 @@ include:
     ref: v0.1.0
     file: '/templates/brik-integrate.yml'
     rules:
-      - if: '$BRIK_DEPLOY_VERSION == ""'
+      - if: '$BRIK_DEPLOY_VERSION !~ /.+/'
   - project: 'brik/gitlab-templates'
     ref: v0.1.0
     file: '/templates/brik-deploy.yml'
     rules:
-      - if: '$BRIK_DEPLOY_VERSION != "" && $BRIK_DEPLOY_ENVIRONMENT != ""'
+      - if: '$BRIK_DEPLOY_VERSION =~ /.+/ && $BRIK_DEPLOY_ENVIRONMENT =~ /.+/'

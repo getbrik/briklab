@@ -77,6 +77,7 @@ SCENARIOS=(
     # _suite_run_scenario (see e2e.scenario.gitops_postcheck).
     "node-deploy-gitops|node-deploy-gitops|branch:main|brik-init,brik-build,brik-lint,brik-sast,brik-scan,brik-test,brik-package,brik-deploy,brik-notify||900||BRIK_WITH_DEPLOY=true,BRIK_WITH_PACKAGE=true"
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
+    "node-deploy-channel|node-deploy-channel|v0.1.0|||900|||"
     # Gap-coverage scenarios (kept after the consolidation because brik/spec
     # cannot prove the live orchestrator behaviour) -- see docs/e2e-coverage.md:
     #   - node-plan-tag: tagged commit runs the planner inline AND exercises a
@@ -137,7 +138,7 @@ _suite_get_group() {
     IFS='|' read -r name _ <<< "$1"
     case "$name" in
         *-cve)               echo "D" ;;   # scan/CVE gating
-        *-deploy-gitops|*-deploy-rollback) echo "F" ;;
+        *-deploy-gitops|*-deploy-rollback|node-deploy-channel) echo "F" ;;
         workflow-*)          echo "G" ;;
         node-plan-*)         echo "I" ;;
         *-full)              echo "B" ;;
@@ -192,6 +193,13 @@ _suite_run_scenario() {
     if e2e.scenario.needs_deploy "$name"; then
         e2e.argocd.ensure_port_forward || \
             log_warn "ArgoCD port-forward could not be established -- gitops scenario may fail"
+    fi
+
+    # CD channel keystone: delegate to the dedicated CI -> CD script (seed an
+    # image via integrate, then deploy that version via brik deploy).
+    if [[ "$name" == "node-deploy-channel" ]]; then
+        E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/gitlab-cd-channel.sh"
+        return $?
     fi
 
     # Multi-step rollback scenario: delegate to dedicated script
