@@ -204,26 +204,6 @@ assert.promote_succeeded() {
 # Artifact assertions (Nexus -- delegated to nexus.sh)
 # ---------------------------------------------------------------------------
 
-# assert.nexus_docker_exists <image_path>
-assert.nexus_docker_exists() {
-    local image_path="$1"
-    if e2e.nexus.docker_image_exists "$image_path"; then
-        assert._pass "Nexus Docker image exists: ${image_path}"
-    else
-        assert._fail "Nexus Docker image exists: ${image_path}" "not found"
-    fi
-}
-
-# assert.nexus_docker_tagged <image_path> <tag>
-assert.nexus_docker_tagged() {
-    local image_path="$1" tag="$2"
-    if e2e.nexus.docker_tag_exists "$image_path" "$tag"; then
-        assert._pass "Nexus Docker tag exists: ${image_path}:${tag}"
-    else
-        assert._fail "Nexus Docker tag exists: ${image_path}:${tag}" "tag not found"
-    fi
-}
-
 # assert.nexus_npm_published <package_name>
 assert.nexus_npm_published() {
     local package_name="$1"

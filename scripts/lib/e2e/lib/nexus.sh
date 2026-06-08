@@ -42,44 +42,6 @@ _e2e_nexus_api_delete() {
 }
 
 # ---------------------------------------------------------------------------
-# Docker registry queries (via Docker Registry HTTP API V2 on port 8082)
-# ---------------------------------------------------------------------------
-
-# Check if a Docker image exists in Nexus.
-# Args: $1 = image path (e.g. "brik/node-full")
-# Returns: 0 if exists, 1 otherwise
-e2e.nexus.docker_image_exists() {
-    local image_path="$1"
-    local result
-    result=$(briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" \
-        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" --max-time 15 2>/dev/null) || return 1
-
-    local tag_count
-    tag_count=$(echo "$result" | jq -r '.tags | length // 0' 2>/dev/null || echo "0")
-    [[ "$tag_count" -gt 0 ]]
-}
-
-# Get all tags for a Docker image.
-# Args: $1 = image path
-# Output: JSON array of tags on stdout
-e2e.nexus.docker_get_tags() {
-    local image_path="$1"
-    briklab.http.get "${_E2E_NEXUS_DOCKER_URL}/v2/${image_path}/tags/list" \
-        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" --max-time 15 2>/dev/null | \
-        jq -r '.tags // []' 2>/dev/null
-}
-
-# Check if a specific Docker tag exists.
-# Args: $1 = image path, $2 = tag
-# Returns: 0 if exists, 1 otherwise
-e2e.nexus.docker_tag_exists() {
-    local image_path="$1" tag="$2"
-    local tags
-    tags=$(e2e.nexus.docker_get_tags "$image_path")
-    echo "$tags" | jq -e --arg tag "$tag" 'index($tag) != null' &>/dev/null
-}
-
-# ---------------------------------------------------------------------------
 # Package registry queries (via Nexus REST API)
 # ---------------------------------------------------------------------------
 
