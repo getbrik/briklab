@@ -8,7 +8,7 @@
 #
 # Prerequisites:
 #   - k3d cluster 'brik' running with ArgoCD installed (k3d.sh)
-#   - Gitea running with config-deploy-gitops / config-deploy-rollback repos
+#   - Gitea running with config-deploy-gitops / config-deploy-rollback / config-deploy-cd repos
 #   - GITEA_ADMIN_PASSWORD in .env
 set -euo pipefail
 
@@ -61,5 +61,7 @@ log_info "Creating ArgoCD applications for E2E..."
 # brik-e2e-rollback: used by the node-deploy-gitops-rollback E2E scenario.
 _provision_argocd_app "brik-e2e-gitops"   "brik-e2e-gitops"   "config-deploy-gitops"
 _provision_argocd_app "brik-e2e-rollback" "brik-e2e-rollback" "config-deploy-rollback"
+_provision_argocd_app "brik-e2e-cd"     "brik-e2e-cd"     "config-deploy-cd"
+_provision_argocd_app "brik-e2e-cd-dev" "brik-e2e-cd-dev" "config-deploy-cd-dev"
 
 log_ok "ArgoCD applications provisioned"

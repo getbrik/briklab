@@ -104,7 +104,7 @@ kubectl cluster-info
 kubectl get nodes
 
 # Create namespaces used by E2E deploy tests
-for ns in brik-e2e-k8s brik-e2e-gitops brik-e2e-helm brik-e2e-rollback brik-e2e-workflow; do
+for ns in brik-e2e-k8s brik-e2e-gitops brik-e2e-helm brik-e2e-rollback brik-e2e-workflow brik-e2e-cd brik-e2e-cd-dev; do
     kubectl create namespace "$ns" 2>/dev/null || true
 done
 
