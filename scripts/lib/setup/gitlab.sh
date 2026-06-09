@@ -285,11 +285,48 @@ setup_nexus_ci_variables() {
         _set_group_file_variable "SSH_PRIVATE_KEY" "$ssh_key_file" && count=$((count + 1))
     fi
 
+    # Cosign signing material for the node-deploy-signed scenario. The air-gapped
+    # lab has no Fulcio/Rekor, so signing uses a local key. cosign verify needs
+    # the PUBLIC key while sign needs the PRIVATE key, and GitLab CE cannot hold
+    # the same variable key under two environment scopes, so both PEMs are
+    # published as env_var values and BRIK_COSIGN_KEY selects which one applies:
+    # the default (env://COSIGN_PRIVATE_KEY) makes CI sign; the CD trigger passes
+    # BRIK_COSIGN_KEY=env://COSIGN_PUBLIC_KEY so the deploy verifies.
+    setup_cosign_signing_vars
+
     if [[ $count -eq $total ]]; then
         log_ok "All ${total} CI/CD variables configured"
     else
         log_warn "${count}/${total} Nexus CI/CD variables configured"
     fi
+}
+
+# Generate a local cosign key pair (once) and publish the signing material as
+# group CI/CD variables. Idempotent: the key pair is reused across runs so the
+# public key pinned in the lab stays stable.
+setup_cosign_signing_vars() {
+    local pat="${GITLAB_PAT:-}"
+    [[ -z "$pat" ]] && { log_warn "GITLAB_PAT not set - cosign variables not configured"; return 0; }
+    if ! command -v cosign >/dev/null 2>&1; then
+        log_warn "cosign not on PATH - skipping signing variables (node-deploy-signed will not sign)"
+        return 0
+    fi
+
+    local key_dir="${SCRIPT_DIR}/../../../data/cosign"
+    mkdir -p "$key_dir"
+    if [[ ! -f "${key_dir}/cosign.key" || ! -f "${key_dir}/cosign.pub" ]]; then
+        log_info "Generating cosign key pair (empty password, local lab)..."
+        ( cd "$key_dir" && COSIGN_PASSWORD="" cosign generate-key-pair >/dev/null 2>&1 ) || {
+            log_warn "cosign key generation failed - signing variables not configured"
+            return 0
+        }
+    fi
+
+    _set_group_variable "COSIGN_PRIVATE_KEY" "$(cat "${key_dir}/cosign.key")" "false"
+    _set_group_variable "COSIGN_PUBLIC_KEY"  "$(cat "${key_dir}/cosign.pub")" "false"
+    _set_group_variable "COSIGN_PASSWORD"    ""                                "false"
+    _set_group_variable "BRIK_COSIGN_KEY"    "env://COSIGN_PRIVATE_KEY"        "false"
+    log_ok "Cosign signing variables configured (CI signs with the private key)"
 }
 
 # Get the runner registration token
