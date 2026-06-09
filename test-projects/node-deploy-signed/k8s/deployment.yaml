@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-deploy-signed
+  labels:
+    app: node-deploy-signed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-deploy-signed
+  template:
+    metadata:
+      labels:
+        app: node-deploy-signed
+    spec:
+      containers:
+        - name: app
+          # Base ref; the CD flow rewrites this to the digest-pinned ref
+          # (nexus.briklab.test:8082/brik/node-deploy-signed@sha256:...) at deploy time.
+          image: nexus.briklab.test:8082/brik/node-deploy-signed:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

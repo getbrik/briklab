@@ -1,0 +1,52 @@
+version: 1
+project:
+  name: node-deploy-signed
+  stack: node
+  stack_version: "22"
+release:
+  strategy: semver
+  tag_prefix: v
+test:
+  framework: npm
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-deploy-signed
+    dockerfile: Dockerfile
+publish:
+  docker:
+    registry: nexus.briklab.test:8082
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
+
+# CD flow -- named artifact channels (P0). The release channel registry must
+# match package.docker.image so a `brik run` publishes the version this
+# environment later resolves to a digest.
+artifacts:
+  channels:
+    release:
+      registry: nexus.briklab.test:8082/brik/node-deploy-signed
+  # BuildEvidence store. After the container scan signs the published digest,
+  # CI records evidence/<version>/sha256-<digest>.json here and signs the
+  # commit. The signer key reaches the scanner job through BRIK_COSIGN_KEY
+  # (local key in this air-gapped lab); a real target would use keyless.
+  evidence:
+    repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/evidence-signed.git
+    branch: main
+    sign: true
+
+# One environment is enough to prove the provenance gate: the CD flow resolves
+# the version to a digest, verifies the signed attestation on that digest
+# (require_provenance), and refuses to deploy an unsigned/invalid one.
+deploy:
+  environments:
+    staging:
+      target: gitops
+      accepts_channel: release
+      gates:
+        require_digest: true
+        require_provenance: true
+      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-signed.git
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e-signed
