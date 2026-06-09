@@ -6,3 +6,6 @@
 # local-lab fixtures published in the README, not real secrets. Setup scripts
 # and the rest of the repo are still scanned.
 ^test-projects/
+# README documents lab service URLs (e.g. the GitLab SSH endpoint) that the scan
+# reads as unverified URIs; they are published access docs, not secrets.
+^README\.md$
