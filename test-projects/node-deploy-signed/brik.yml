@@ -32,7 +32,10 @@ artifacts:
   evidence:
     repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/evidence-signed.git
     branch: main
-    sign: true
+    # Unsigned evidence commits: the lab scanner image has no gpg. Integrity
+    # comes from the cosign attestations on the digest plus the append-only git
+    # history; signed commits (gpg/SSH key infra) are a journal concern (P2/P3).
+    sign: false
 
 # One environment is enough to prove the provenance gate: the CD flow resolves
 # the version to a digest, verifies the signed attestation on that digest
