@@ -326,6 +326,10 @@ setup_cosign_signing_vars() {
     _set_group_variable "COSIGN_PUBLIC_KEY"  "$(cat "${key_dir}/cosign.pub")" "false"
     _set_group_variable "COSIGN_PASSWORD"    ""                                "false"
     _set_group_variable "BRIK_COSIGN_KEY"    "env://COSIGN_PRIVATE_KEY"        "false"
+    # The lab Nexus serves the Docker registry over plain HTTP; let cosign reach
+    # it (attaching a referrer is a registry write, authenticated with the
+    # existing BRIK_REGISTRY_USER/PASSWORD).
+    _set_group_variable "BRIK_COSIGN_ALLOW_HTTP" "true"                         "false"
     log_ok "Cosign signing variables configured (CI signs with the private key)"
 }
 
