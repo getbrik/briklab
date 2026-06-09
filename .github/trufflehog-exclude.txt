@@ -1,0 +1,9 @@
+# Paths excluded from the trufflehog secret scan (--exclude-paths).
+# One path regex per line.
+#
+# test-projects/ holds E2E fixtures whose brik.yml embeds the lab's documented
+# Gitea credentials in GitOps/evidence repo URLs (e.g.
+# http://brik:Brik-Gitea-2026@gitea.briklab.test/...). These are local-lab
+# fixtures published in the README, not real secrets. Setup scripts and the rest
+# of the repo are still scanned.
+^test-projects/
