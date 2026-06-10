@@ -303,23 +303,16 @@ setup_nexus_ci_variables() {
     fi
 }
 
-# Publish the cosign signing material as group CI/CD variables. The key pair
-# is generated (once) by infra-referential.sh, whose Signing endpoint
-# references env://COSIGN_PRIVATE_KEY for sign and trust/cosign.pub for
-# verify; only the secret material travels as variables.
+# Publish the cosign passphrase as a group CI/CD variable. The key pair is
+# generated (once) by infra-referential.sh and ships as trust material of
+# the mounted referential (file://trust/cosign.key + cosign.pub); only the
+# decryption passphrase travels as a variable.
 setup_cosign_signing_vars() {
     local pat="${GITLAB_PAT:-}"
     [[ -z "$pat" ]] && { log_warn "GITLAB_PAT not set - cosign variables not configured"; return 0; }
 
-    local key_dir="${SCRIPT_DIR}/../../../data/cosign"
-    if [[ ! -f "${key_dir}/cosign.key" || ! -f "${key_dir}/cosign.pub" ]]; then
-        log_warn "no cosign key pair under data/cosign - run the infra-referential setup first"
-        return 0
-    fi
-
-    _set_group_variable "COSIGN_PRIVATE_KEY" "$(cat "${key_dir}/cosign.key")" "false"
-    _set_group_variable "COSIGN_PASSWORD"    ""                                "false"
-    log_ok "Cosign signing variables configured (CI signs with the private key)"
+    _set_group_variable "COSIGN_PASSWORD" "" "false"
+    log_ok "Cosign signing variable configured (empty passphrase, local lab)"
 }
 
 # Get the runner registration token

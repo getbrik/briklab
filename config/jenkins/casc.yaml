@@ -54,6 +54,10 @@ jenkins:
           # evidence store.
           - key: BRIK_GIT_TOKEN
             value: "${GITEA_PAT}"
+          # Decrypts the referential's cosign signing key
+          # (trust/cosign.key, empty passphrase in the lab).
+          - key: COSIGN_PASSWORD
+            value: ""
   securityRealm:
     local:
       allowsSignup: false

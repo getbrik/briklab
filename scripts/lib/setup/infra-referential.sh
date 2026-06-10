@@ -64,6 +64,13 @@ fi
 if [[ -f "${COSIGN_DIR}/cosign.pub" ]]; then
     cp "${COSIGN_DIR}/cosign.pub" "${INFRA_DIR}/trust/cosign.pub"
 fi
+# The signing key travels as referential trust material (P-lab posture:
+# file keys, empty passphrase). Both orchestrators and the local mode read
+# the same mounted file; only COSIGN_PASSWORD travels as a variable.
+if [[ -f "${COSIGN_DIR}/cosign.key" ]]; then
+    cp "${COSIGN_DIR}/cosign.key" "${INFRA_DIR}/trust/cosign.key"
+    chmod 600 "${INFRA_DIR}/trust/cosign.key"
+fi
 
 # --- root manifest ---------------------------------------------------------
 
@@ -100,15 +107,15 @@ tls:
   trust: insecure
 YAML
 
-# Air-gapped lab: no Fulcio/Rekor, attestation uses a local key pair. The
-# private key reaches jobs as a secret variable (cosign resolves env://
-# natively); verification only needs the public key shipped in trust/.
+# Air-gapped lab: no Fulcio/Rekor, attestation uses a local key pair shipped
+# as trust material of the mounted instance (P-lab posture); COSIGN_PASSWORD
+# decrypts it. Verification only needs the public key.
 cat > "${INFRA_DIR}/endpoints/signing.yml" <<'YAML'
 apiVersion: brik.dev/referential/v1
 kind: Signing
 name: signing
 backend: key
-key: env://COSIGN_PRIVATE_KEY
+key: file://trust/cosign.key
 verification_key: file://trust/cosign.pub
 transparency: none
 YAML
