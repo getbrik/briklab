@@ -27,6 +27,8 @@ source "${SCRIPT_DIR}/lib/auth.sh"
 source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 # shellcheck source=lib/cd-channel.sh
 source "${SCRIPT_DIR}/lib/cd-channel.sh"
+# shellcheck source=lib/reset.sh
+source "${SCRIPT_DIR}/lib/reset.sh"
 reload_env
 briklab.auth.gitlab_pat
 
@@ -48,6 +50,12 @@ log_ok "Project ID: ${PROJECT_ID}"
 
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
+
+# The evidence store is append-only: re-running the scenario on the same
+# (version, digest) would collide with the previous run's event. Force-push
+# a clean baseline so the scenario is idempotent (same mechanism as the
+# gitops config repos).
+e2e.reset.gitops_config_repo "gitea" "evidence-signed"
 
 # CI seed: no CD inputs -> brik-integrate.yml. Package publishes to the release
 # channel; container-scan signs the digest and records BuildEvidence.

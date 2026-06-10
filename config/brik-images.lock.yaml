@@ -3,7 +3,7 @@
 # Digest-pinned so a clean rebuild pulls the exact images the E2E suite was validated against.
 # Format: <ref>:<tag>@<digest>. The pull helper fetches the digest and tags it <ref>:<tag> locally.
 images:
-  - ghcr.io/getbrik/brik-runner-base:latest@sha256:3ace1142a46814fe446ea39fd6ccf55150be7f0e25a94a2978ca59b53208deca
+  - ghcr.io/getbrik/brik-runner-base:latest@sha256:8f10758303246c2dc8cb69b838d25463f09306f3199e18d8004286d5006d42c9
   - ghcr.io/getbrik/brik-runner-node:22@sha256:474d6d7e3133a482a35014c0dfe974edce147c7d10aeb0648a8e52246dff5408
   - ghcr.io/getbrik/brik-runner-node:24@sha256:b43d5362fbd373868f11d107194b3197ceb864056e7ade8d5588694b4d90b861
   - ghcr.io/getbrik/brik-runner-python:3.13@sha256:c9a3da24a0bf43465f9df3ca5f04aac9bdf1264b54f5ddbc5b6a5ab1b4f2547f
@@ -14,5 +14,5 @@ images:
   - ghcr.io/getbrik/brik-runner-dotnet:9.0@sha256:42c463ef20b02f91c9d9bc47a1d5136fee8b623d958dfdab546b06aa9d473305
   - ghcr.io/getbrik/brik-runner-dotnet:10.0@sha256:a4cba8ce859a358a12242ea06c989eb7baf4a9b243ce4f39e377c238bf2bf20a
   - ghcr.io/getbrik/brik-runner-analysis:latest@sha256:8d066965df1cdc01ab55204f1f84a5c3721a524f78d94a77a7eb950b8bbd6745
-  - ghcr.io/getbrik/brik-runner-scanner:latest@sha256:8c613b0c4f7c3a7abe2ec4b21abcc8e185186f8231187e735372be9d8cfbafa4
+  - ghcr.io/getbrik/brik-runner-scanner:latest@sha256:d1fde251c1c0c89726054b9c23ac26428fcecd3caa92a2b4496a8b1dde8e9d63
   - ghcr.io/getbrik/brik-runner-deploy:latest@sha256:f6ea36bcbf81b7bcd6646f95af1ac9fd3ed86dece7babc21fb3ef0ccef996d5a
