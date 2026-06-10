@@ -26,16 +26,13 @@ artifacts:
     release:
       registry: nexus.briklab.test:8082/brik/node-deploy-signed
   # BuildEvidence store. After the container scan signs the published digest,
-  # CI records evidence/<version>/sha256-<digest>.json here and signs the
-  # commit. The signer key reaches the scanner job through BRIK_COSIGN_KEY
-  # (local key in this air-gapped lab); a real target would use keyless.
+  # CI records evidence/<version>/sha256-<digest>.json here and ssh-signs the
+  # commit with the referential's evidence-signing key; verification uses
+  # trust/allowed_signers from the same referential.
   evidence:
     repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/evidence-signed.git
     branch: main
-    # Unsigned evidence commits: the lab scanner image has no gpg. Integrity
-    # comes from the cosign attestations on the digest plus the append-only git
-    # history; signed commits (gpg/SSH key infra) are a journal concern (P2/P3).
-    sign: false
+    sign: true
 
 # One environment is enough to prove the provenance gate: the CD flow resolves
 # the version to a digest, verifies the signed attestation on that digest

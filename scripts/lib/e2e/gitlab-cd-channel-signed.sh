@@ -8,8 +8,8 @@
 # ArgoCD app.
 #
 # Key handling (air-gapped local key, see scripts/lib/setup/gitlab.sh):
-#   CI signs with the private key (group var BRIK_COSIGN_KEY=env://COSIGN_PRIVATE_KEY).
-#   The CD trigger overrides BRIK_COSIGN_KEY=env://COSIGN_PUBLIC_KEY so the
+#   CI signs with the private key (referential Signing endpoint,
+#   env://COSIGN_PRIVATE_KEY); the CD verify uses trust/cosign.pub so the
 #   deploy verifies with the public key (GitLab CE cannot scope one var key per
 #   environment, so the trigger variable does the switch).
 #
@@ -38,10 +38,6 @@ DEPLOY_VERSION="0.1.0"
 ENVIRONMENT="staging"
 APP="brik-e2e-signed"
 
-# The CD job verifies with the public key; the default group var holds the
-# private key (CI signs).
-VERIFY_KEY_OVERRIDE="BRIK_COSIGN_KEY=env://COSIGN_PUBLIC_KEY"
-
 log_info "Looking up project ${PROJECT_NAME}..."
 PROJECT_ID="$(e2e.gitlab.get_project_id "$PROJECT_PATH")"
 if [[ -z "$PROJECT_ID" ]]; then
@@ -69,12 +65,13 @@ _cd_channel_seed_ci() {
     [[ "$st" == "success" ]] || { log_error "CI seed status: ${st}"; return 1; }
 }
 
-# CD: both CD inputs set -> brik-deploy.yml. The verify-key override makes the
-# provenance gate check the signature on the resolved digest before deploying.
+# CD: both CD inputs set -> brik-deploy.yml. The provenance gate verifies the
+# signature on the resolved digest with the referential's verification key
+# (trust/cosign.pub) before deploying.
 _cd_channel_deploy() {
     local version="$1" environment="$2" id
     id="$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "main" \
-        "BRIK_DEPLOY_VERSION=${version},BRIK_DEPLOY_ENVIRONMENT=${environment},${VERIFY_KEY_OVERRIDE}")"
+        "BRIK_DEPLOY_VERSION=${version},BRIK_DEPLOY_ENVIRONMENT=${environment}")"
     if [[ -z "$id" ]]; then
         log_error "failed to trigger the CD pipeline"
         return 1

@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# Generate the P-lab infrastructure referential instance consumed by brik.
+#
+# Brik requires a referential (BRIK_INFRA_DIR) at init: endpoints declare
+# WHERE the lab services live and with which transport posture, credentials
+# reference secrets by env:// or file://, bindings wire one to the other per
+# environment. This replaces the former ad-hoc BRIK_* infrastructure
+# variables (BRIK_COSIGN_*, BRIK_SSH_STRICT_HOST_KEY, BRIK_KUBECTL_OPTS,
+# BRIK_POLICY_URL, ARGOCD_SERVER/ARGOCD_INSECURE).
+#
+# The instance is distributed to CI jobs as a read-only mount at
+# /etc/brik/infra: the GitLab runner declares it in its docker volumes,
+# Jenkins forwards its own compose mount to stage containers.
+#
+# Key material under trust/ is generated once and reused across runs so the
+# principals pinned in allowed_signers and the cosign public key stay stable.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${SCRIPT_DIR}/../../.."
+INFRA_DIR="${ROOT_DIR}/data/infra"
+COSIGN_DIR="${ROOT_DIR}/data/cosign"
+
+# shellcheck source=../common.sh
+source "${SCRIPT_DIR}/../common.sh"
+reload_env
+
+NEXUS_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}"
+GITEA_HOST="${GITEA_HOSTNAME:-gitea.briklab.test}"
+GITEA_PORT="${GITEA_HTTP_PORT:-3000}"
+ARGOCD_HOSTPORT="host.docker.internal:${ARGOCD_PORT:-9080}"
+
+mkdir -p "${INFRA_DIR}/endpoints" "${INFRA_DIR}/credentials" \
+         "${INFRA_DIR}/bindings" "${INFRA_DIR}/policies" "${INFRA_DIR}/trust"
+
+# --- trust material (generated once, reused) -------------------------------
+
+# Evidence commit signing: brik signs BuildEvidence commits with this ssh key
+# (credential 'evidence-signing') and verifies them against allowed_signers.
+# The principal is the brik-ci robot identity state_repo.commit uses.
+if [[ ! -f "${INFRA_DIR}/trust/evidence_signing_key" ]]; then
+    log_info "Generating the evidence-signing ssh key pair..."
+    ssh-keygen -t ed25519 -N "" -q -C "brik-ci@noreply" \
+        -f "${INFRA_DIR}/trust/evidence_signing_key"
+fi
+# Principals are verified in the 'git' namespace (commits AND tags); a
+# 'git-commit' namespace entry fails with "key is not permitted".
+printf 'brik-ci@noreply namespaces="git" %s\n' \
+    "$(cat "${INFRA_DIR}/trust/evidence_signing_key.pub")" \
+    > "${INFRA_DIR}/trust/allowed_signers"
+
+# Cosign key pair: shared with the CI variables setup (the private key is
+# published as a secret variable, never written into the referential).
+if [[ ! -f "${COSIGN_DIR}/cosign.key" || ! -f "${COSIGN_DIR}/cosign.pub" ]]; then
+    if command -v cosign >/dev/null 2>&1; then
+        log_info "Generating the cosign key pair (empty password, local lab)..."
+        mkdir -p "${COSIGN_DIR}"
+        ( cd "${COSIGN_DIR}" && COSIGN_PASSWORD="" cosign generate-key-pair >/dev/null 2>&1 ) \
+            || log_warn "cosign key generation failed - signing scenarios will not sign"
+    else
+        log_warn "cosign not on PATH - signing scenarios will not sign"
+    fi
+fi
+if [[ -f "${COSIGN_DIR}/cosign.pub" ]]; then
+    cp "${COSIGN_DIR}/cosign.pub" "${INFRA_DIR}/trust/cosign.pub"
+fi
+
+# --- root manifest ---------------------------------------------------------
+
+cat > "${INFRA_DIR}/referential.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Referential
+profile: p-lab
+description: Briklab posture - plain-HTTP services, self-signed TLS and file/env keys. Legal but noisy; never a production reference.
+YAML
+
+# --- endpoints --------------------------------------------------------------
+
+# The lab Nexus serves one Docker hosted registry over plain HTTP; candidate
+# and release channels share it. The declared http:// scheme is what lets
+# digest resolution and cosign reach it (no insecure escape-hatch variable).
+cat > "${INFRA_DIR}/endpoints/registry-candidate.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: Registry
+name: registry-candidate
+url: http://${NEXUS_HOST}:8082
+tls:
+  trust: insecure
+zone: candidate
+YAML
+
+cat > "${INFRA_DIR}/endpoints/git-host.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: GitHost
+name: git-host
+product: gitea
+api_url: http://${GITEA_HOST}:${GITEA_PORT}
+git_url: http://${GITEA_HOST}:${GITEA_PORT}
+tls:
+  trust: insecure
+YAML
+
+# Air-gapped lab: no Fulcio/Rekor, attestation uses a local key pair. The
+# private key reaches jobs as a secret variable (cosign resolves env://
+# natively); verification only needs the public key shipped in trust/.
+cat > "${INFRA_DIR}/endpoints/signing.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Signing
+name: signing
+backend: key
+key: env://COSIGN_PRIVATE_KEY
+verification_key: file://trust/cosign.pub
+transparency: none
+YAML
+
+# ArgoCD is reached from job containers through the host port-forward; the
+# certificate is self-signed, hence trust: insecure (maps to --insecure).
+cat > "${INFRA_DIR}/endpoints/argocd.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: ArgoCD
+name: argocd
+url: https://${ARGOCD_HOSTPORT}
+tls:
+  trust: insecure
+YAML
+
+# SSH deploy target: lab containers are rebuilt at will, so host keys are
+# not pinned. The explicit opt-out replaces BRIK_SSH_STRICT_HOST_KEY=no.
+cat > "${INFRA_DIR}/endpoints/ssh-target.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: SshTarget
+name: ssh-target
+hosts:
+  - ssh-target.briklab.test
+strict_host_key: false
+YAML
+
+# --- credentials ------------------------------------------------------------
+
+cat > "${INFRA_DIR}/credentials/registry-push.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Credential
+name: registry-push
+method: basic
+username: env://BRIK_REGISTRY_USER
+password: env://BRIK_REGISTRY_PASSWORD
+YAML
+
+cat > "${INFRA_DIR}/credentials/git-api.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Credential
+name: git-api
+method: token
+token: env://BRIK_GIT_TOKEN
+YAML
+
+cat > "${INFRA_DIR}/credentials/evidence-signing.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Credential
+name: evidence-signing
+method: ssh-key
+private_key: file://trust/evidence_signing_key
+YAML
+
+# --- bindings ---------------------------------------------------------------
+
+# One binding per deploy environment name the test projects use. The
+# branch-protection check resolves the GitHost credential through the
+# binding of the environment being deployed.
+write_binding() {
+    cat > "${INFRA_DIR}/bindings/$1.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: Binding
+name: $1
+endpoints:
+  registry-candidate: registry-push
+  git-host: git-api
+capabilities:
+  artifact-attestation: cosign-key
+  evidence-commit-signing: ssh-signing
+YAML
+}
+write_binding staging
+write_binding production
+
+# --- policies ----------------------------------------------------------------
+
+# DSI-owned org policy: jobs resolve the file through the compose mount.
+# Replaces the BRIK_POLICY_URL variable.
+cat > "${INFRA_DIR}/policies/org.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Policy
+name: org
+url: file:///etc/brik/policy/brik-policy.yml
+YAML
+
+log_ok "P-lab referential generated in ${INFRA_DIR}"

@@ -34,28 +34,26 @@ jenkins:
           # image browser page.
           - key: BRIK_PACKAGE_REGISTRY_UI_URL
             value: "http://nexus.briklab.test:8081"
-          - key: BRIK_SSH_STRICT_HOST_KEY
-            value: "no"
           # Path to the SSH private key for node-deploy-ssh E2E test.
           # The host file is mounted by docker-compose at this path; the
           # deploy stage container inherits the mount via --volumes-from.
           # transverse.ssh.setup_agent loads the key file into ssh-agent.
           - key: SSH_PRIVATE_KEY
             value: "/opt/brik/ssh/deploy_key"
-          - key: BRIK_KUBECTL_OPTS
-            value: "--insecure-skip-tls-verify --validate=false"
-          - key: ARGOCD_SERVER
-            value: "host.docker.internal:${ARGOCD_PORT}"
           - key: ARGOCD_AUTH_TOKEN
             value: "${ARGOCD_AUTH_TOKEN}"
-          - key: ARGOCD_INSECURE
-            value: "true"
-          # DSI-owned org policy URL (chantier 20260508 P3). Jenkins jobs
-          # resolve the file via the docker-compose mount at /etc/brik/policy/.
-          # Production deployments swap this for an https:// URL pointing
-          # at the DSI repo; the brik runtime uses curl which supports both.
-          - key: BRIK_POLICY_URL
-            value: "file:///etc/brik/policy/brik-policy.yml"
+          # Infrastructure referential (P-lab instance, compose mount).
+          # Endpoints, transport posture, org policy and the ssh host-key
+          # stance all come from it (replaces BRIK_SSH_STRICT_HOST_KEY,
+          # BRIK_KUBECTL_OPTS, ARGOCD_SERVER/ARGOCD_INSECURE and
+          # BRIK_POLICY_URL).
+          - key: BRIK_INFRA_DIR
+            value: "/etc/brik/infra"
+          # Gitea API token backing the referential's git-api credential
+          # (env://BRIK_GIT_TOKEN): branch-protection checks on the
+          # evidence store.
+          - key: BRIK_GIT_TOKEN
+            value: "${GITEA_PAT}"
   securityRealm:
     local:
       allowsSignup: false
