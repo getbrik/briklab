@@ -122,8 +122,9 @@ briklab.recover.argocd_app_op() {
 # token outward so the CI platform carries it. Run them after the *_pat /
 # argocd_token recoveries and a reload_env.
 
-# Propagate ARGOCD_SERVER / ARGOCD_AUTH_TOKEN to the 'brik' GitLab group's CI
-# variables (create or update). No-op when the group is absent.
+# Propagate ARGOCD_AUTH_TOKEN to the 'brik' GitLab group's CI variables
+# (create or update); the server address comes from the referential's ArgoCD
+# endpoint. No-op when the group is absent.
 briklab.recover.gitlab_ci_vars() {
     local gitlab_url="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
 
@@ -137,7 +138,6 @@ briklab.recover.gitlab_ci_vars() {
     fi
 
     local -a vars_to_set=(
-        "ARGOCD_SERVER:host.docker.internal:${ARGOCD_PORT:-9080}:false"
         "ARGOCD_AUTH_TOKEN:${ARGOCD_AUTH_TOKEN:-}:true"
     )
 

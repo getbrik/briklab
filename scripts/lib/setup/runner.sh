@@ -45,6 +45,7 @@ else
         --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
         --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
         --docker-volumes "${BRIKLAB_DIR}/policy:/etc/brik/policy:ro" \
+        --docker-volumes "${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro" \
         --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
         --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
         --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
@@ -101,6 +102,16 @@ if docker exec brik-runner grep -q 'memory = ' /etc/gitlab-runner/config.toml 2>
 else
     docker exec brik-runner sed -i \
         "/shm_size = 0/a\\    memory = \"${RUNNER_JOB_MEMORY}\"" \
+        /etc/gitlab-runner/config.toml
+fi
+
+# Mount the infrastructure referential into job containers (self-heal for a
+# runner registered before the referential existed; registration above
+# already declares it for fresh installs).
+log_info "Ensuring the referential volume on job containers..."
+if ! docker exec brik-runner grep -q "/etc/brik/infra" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s|\"${BRIKLAB_DIR}/policy:/etc/brik/policy:ro\"|\"${BRIKLAB_DIR}/policy:/etc/brik/policy:ro\", \"${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro\"|" \
         /etc/gitlab-runner/config.toml
 fi
 

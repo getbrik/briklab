@@ -19,6 +19,11 @@ cmd_setup() {
 
     local errors=0
 
+    # 0. Infrastructure referential (no container needed: generates the
+    # P-lab instance under data/infra/, mounted read-only into CI jobs).
+    log_info "Configuring Infra referential..."
+    bash "${LIB_SETUP}/infra-referential.sh" || ((errors++)) || true
+
     # 1. GitLab
     _run_setup "GitLab" "gitlab.sh" "brik-gitlab" && {
         load_env
