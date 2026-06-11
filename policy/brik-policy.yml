@@ -28,6 +28,13 @@
 # quality.findings.policy. Allowed values: pragmatic | strict | permissive.
 # preset: pragmatic
 
+# State-repo branch-protection posture at deploy (lab hardening tier 1).
+# The lab's state repos carry real Gitea branch protection (the E2E reset
+# re-poses the rule around its baseline force-push), so an unprotected or
+# unprovable branch refuses the deploy, as in the enterprise posture.
+# Allowed values: required | warn | off. Absent means warn.
+state_repo_protection: required
+
 allow:
   cve: []
 
