@@ -57,6 +57,31 @@ e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
 # gitops config repos).
 e2e.reset.gitops_config_repo "gitea" "evidence-signed"
 
+# _assert_protection_trace - fail unless the CD deploy trace shows the
+# state-repo branch-protection check concluding 'is protected'. The lab
+# policy sets state_repo_protection: required, so this guard proves the
+# gate ran and was satisfied rather than skipped or soft-warned.
+_assert_protection_trace() {
+    local pipeline_id="$1"
+    local jobs job_id trace
+    jobs="$(e2e.gitlab.get_jobs "$PROJECT_ID" "$pipeline_id")"
+    job_id="$(echo "$jobs" | jq -r '[.[] | select(.name == "brik-cd-deploy")][0].id // empty')"
+    if [[ -z "$job_id" ]]; then
+        log_error "job brik-cd-deploy not found in pipeline #${pipeline_id}"
+        return 1
+    fi
+    trace="$(e2e.gitlab.get_job_log "$PROJECT_ID" "$job_id")"
+    if ! grep -q "is protected" <<< "$trace"; then
+        log_error "brik-cd-deploy trace does not show the branch-protection check concluding 'is protected'"
+        return 1
+    fi
+    if grep -q "could not be verified" <<< "$trace"; then
+        log_error "brik-cd-deploy trace shows a soft-warned protection check despite the required policy"
+        return 1
+    fi
+    log_ok "brik-cd-deploy: state-repo branch protection proven (required policy)"
+}
+
 # CI seed: no CD inputs -> brik-integrate.yml. Package publishes to the release
 # channel; container-scan signs the digest and records BuildEvidence.
 _cd_channel_seed_ci() {
@@ -89,6 +114,7 @@ _cd_channel_deploy() {
     st="$(e2e.gitlab.wait_pipeline "$PROJECT_ID" "$id" "$TIMEOUT_SECONDS")" || true
     echo ""
     [[ "$st" == "success" ]] || { log_error "CD status: ${st}"; return 1; }
+    _assert_protection_trace "$id"
 }
 
 e2e.cd_channel.run "gitlab" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"
