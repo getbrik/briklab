@@ -118,6 +118,7 @@ docs). The 3 KEEP-pending projects were retained and now back a live scenario.
 | node-plan-tag | GitLab | Tagged commit runs planner inline + asserts brik-promote -- gap 1 |
 | node-full-cve | GitLab | CVE must fail brik-scan (live scan gating) -- gap 2 |
 | workflow-trunk-{main,tag} | GitLab | `workflow:` filter: default branch + tag each create a pipeline -- gap 4 |
+| cd-promote | GitLab | Channel-model promotion (P2-A): tagged run copies candidate -> release WITH its signed referrers (`oras cp -r`) and verifies them on the destination; second phase proves the immutability refusal on a divergent release digest. Host-side registry asserts (digest equality + referrer index), not job colors. |
 | any scenario `--stub` | GitLab + Jenkins | Full workflow on the single stub image (replaces the old node-full-stub row) |
 
 ## Test validity audit (2026-06-04)

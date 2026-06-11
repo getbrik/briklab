@@ -79,6 +79,9 @@ SCENARIOS=(
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     "node-deploy-channel|node-deploy-channel|v0.1.0|||900|||"
     "node-deploy-signed|node-deploy-signed|v0.1.0|||900|||"
+    # Channel-model promotion (P2-A): two tagged pipelines (positive copy with
+    # referrers + negative immutability refusal), hence the doubled timeout.
+    "cd-promote|node-promote-channel|v0.1.0|||1800|||"
     # Gap-coverage scenarios (kept after the consolidation because brik/spec
     # cannot prove the live orchestrator behaviour) -- see docs/e2e-coverage.md:
     #   - node-plan-tag: tagged commit runs the planner inline AND exercises a
@@ -141,7 +144,7 @@ _suite_get_group() {
         *-cve)               echo "D" ;;   # scan/CVE gating
         *-deploy-gitops|*-deploy-rollback|node-deploy-channel|node-deploy-signed) echo "F" ;;
         workflow-*)          echo "G" ;;
-        node-plan-*)         echo "I" ;;
+        node-plan-*|cd-promote) echo "I" ;;
         *-full)              echo "B" ;;
         *)                   echo "" ;;
     esac
@@ -207,6 +210,14 @@ _suite_run_scenario() {
     # the deploy verifies the attestation (require_provenance gate).
     if [[ "$name" == "node-deploy-signed" ]]; then
         E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/gitlab-cd-channel-signed.sh"
+        return $?
+    fi
+
+    # Channel promotion (P2-A): dedicated two-phase script (positive promote
+    # with referrers, then negative immutability refusal). The timeout column
+    # covers both pipelines; each individual wait gets half of it.
+    if [[ "$name" == "cd-promote" ]]; then
+        E2E_TIMEOUT="$(( ${timeout:-1800} / 2 ))" bash "${SCRIPT_DIR}/gitlab-cd-promote.sh"
         return $?
     fi
 
