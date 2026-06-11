@@ -34,9 +34,11 @@ artifacts:
     branch: main
     sign: true
 
-# One environment is enough to prove the provenance gate: the CD flow resolves
-# the version to a digest, verifies the signed attestation on that digest
-# (require_provenance), and refuses to deploy an unsigned/invalid one.
+# One environment is enough to prove the artifact gates: the CD flow resolves
+# the version to a digest, verifies the signed attestations and the builder/
+# source expectations on that digest (require_attestation), then requires the
+# digest-bound authorization grant in the promotion journal
+# (requires_eligibility) -- brik authorize writes it between CI and CD.
 deploy:
   environments:
     staging:
@@ -44,7 +46,10 @@ deploy:
       accepts_channel: release
       gates:
         require_digest: true
-        require_provenance: true
+        require_attestation: true
+        expected_builder: "^http://gitlab\\.briklab\\.test:8929/-/brik/"
+        expected_source: "gitlab\\.briklab\\.test:8929/brik/node-deploy-signed$"
+        requires_eligibility: [artifact_authorized_for]
       repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-signed.git
       path: k8s
       source: k8s
