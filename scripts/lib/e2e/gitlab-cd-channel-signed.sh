@@ -3,7 +3,7 @@
 #
 # Same CI -> CD shape as gitlab-cd-channel.sh, but the project signs the
 # published digest (cosign attestation + BuildEvidence in the evidence-signed
-# state-repo) and the staging environment gates on require_provenance, so the
+# state-repo) and the staging environment gates on require_attestation, so the
 # deploy verifies the signature before deploying. Deploys to the brik-e2e-signed
 # ArgoCD app.
 #
@@ -82,6 +82,64 @@ _assert_protection_trace() {
     log_ok "brik-cd-deploy: state-repo branch protection proven (required policy)"
 }
 
+# _trigger_cd_expect_failure - trigger a CD pipeline that MUST fail, and the
+# brik-cd-deploy trace MUST carry <pattern> (true-positive: the right gate
+# refused, not an unrelated crash).
+_trigger_cd_expect_failure() {
+    local version="$1" environment="$2" pattern="$3" id st
+    id="$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "main" \
+        "BRIK_DEPLOY_VERSION=${version},BRIK_DEPLOY_ENVIRONMENT=${environment}")"
+    if [[ -z "$id" ]]; then
+        log_error "failed to trigger the CD pipeline"
+        return 1
+    fi
+    log_ok "CD pipeline #${id} triggered (expected to be refused)"
+    st="$(e2e.gitlab.wait_pipeline "$PROJECT_ID" "$id" "$TIMEOUT_SECONDS")" || true
+    echo ""
+    if [[ "$st" != "failed" ]]; then
+        log_error "CD status: ${st} (expected failed -- the gate must refuse)"
+        return 1
+    fi
+    local jobs job_id trace
+    jobs="$(e2e.gitlab.get_jobs "$PROJECT_ID" "$id")"
+    job_id="$(echo "$jobs" | jq -r '[.[] | select(.name == "brik-cd-deploy")][0].id // empty')"
+    if [[ -z "$job_id" ]]; then
+        log_error "job brik-cd-deploy not found in pipeline #${id}"
+        return 1
+    fi
+    trace="$(e2e.gitlab.get_job_log "$PROJECT_ID" "$job_id")"
+    if ! grep -q "$pattern" <<< "$trace"; then
+        log_error "brik-cd-deploy trace does not show '${pattern}' -- wrong refusal"
+        return 1
+    fi
+    log_ok "deploy refused with '${pattern}'"
+}
+
+# _cd_channel_pre_deploy - the eligibility dance: the CD deploy MUST be
+# refused while the journal carries no grant, then brik authorize (run from
+# the host against the same lab referential) grants the digest for staging.
+_cd_channel_pre_deploy() {
+    local version="$1" environment="$2"
+
+    log_info "--- Eligibility: CD must be refused before brik authorize ---"
+    _trigger_cd_expect_failure "$version" "$environment" "refusing to deploy" || return 1
+
+    log_info "--- Eligibility: brik authorize ${version} --for ${environment} ---"
+    local brik_bin="${BRIKLAB_ROOT}/../brik/bin/brik"
+    local project_dir="${BRIKLAB_ROOT}/test-projects/node-deploy-signed"
+    local log_dir
+    log_dir="$(mktemp -d)"
+    if ! BRIK_INFRA_DIR="${BRIKLAB_ROOT}/data/infra" BRIK_LOG_DIR="$log_dir" \
+            "$brik_bin" authorize --version "$version" --for "$environment" \
+            --workspace "$project_dir"; then
+        rm -rf "$log_dir"
+        log_error "brik authorize failed"
+        return 1
+    fi
+    rm -rf "$log_dir"
+    log_ok "authorization granted (artifact_authorized_for in the journal)"
+}
+
 # CI seed: no CD inputs -> brik-integrate.yml. Package publishes to the release
 # channel; container-scan signs the digest and records BuildEvidence.
 _cd_channel_seed_ci() {
@@ -118,3 +176,28 @@ _cd_channel_deploy() {
 }
 
 e2e.cd_channel.run "gitlab" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"
+
+# --- Negative: an unattested digest must be refused (require_attestation) ---
+# Seed a bare artifact (no attestations, no referrers) in the channel under a
+# version of its own, then ask CD to deploy it: the attestation gate must
+# refuse before any eligibility or injection step.
+log_info "--- Attestation: an unattested digest must be refused ---"
+if ! command -v oras >/dev/null 2>&1; then
+    log_error "oras is required on the host to seed the unattested artifact"
+    exit 1
+fi
+UNATTESTED_VERSION="0.9.9"
+JUNK_DIR="$(mktemp -d)"
+trap 'rm -rf "$JUNK_DIR"' EXIT
+printf 'unattested content\n' > "${JUNK_DIR}/junk.txt"
+NEXUS_DOCKER_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
+if ! (cd "$JUNK_DIR" && oras push --plain-http \
+        -u admin -p "${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}" \
+        "${NEXUS_DOCKER_HOST}/brik/node-deploy-signed:${UNATTESTED_VERSION}" \
+        junk.txt:text/plain >/dev/null 2>&1); then
+    log_error "failed to seed the unattested artifact in the channel"
+    exit 1
+fi
+log_ok "channel now holds an unattested digest at ${UNATTESTED_VERSION}"
+_trigger_cd_expect_failure "$UNATTESTED_VERSION" "$ENVIRONMENT" "did not verify" || exit 1
+log_ok "=== ATTESTATION + ELIGIBILITY GATES PROVEN ==="

@@ -12,6 +12,11 @@
 #                                       artifact; return 0 on success
 #   _cd_channel_deploy <ver> <env>   -> trigger the CD flow for (version,
 #                                       environment); return 0 on success
+# and may define:
+#   _cd_channel_pre_deploy <ver> <env> -> runs between the CI seed and the CD
+#                                       deploy (eligibility scenarios: prove
+#                                       the refusal, then grant via
+#                                       brik authorize); return 0 on success
 #
 # Then call:
 #   e2e.cd_channel.run <platform> <argocd_app> <environment> <version> <timeout>
@@ -46,6 +51,14 @@ e2e.cd_channel.run() {
         return 1
     fi
     log_ok "artifact published to the release channel"
+
+    # --- Optional: between seed and deploy (eligibility dance) -------------
+    if declare -f _cd_channel_pre_deploy >/dev/null 2>&1; then
+        if ! _cd_channel_pre_deploy "$version" "$environment"; then
+            log_error "pre-deploy phase failed"
+            return 1
+        fi
+    fi
 
     # --- Step 2: CD deploys that version (digest-pinned) -------------------
     log_info "--- Step 2: CD deploy ${version} -> ${environment} ---"

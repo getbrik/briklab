@@ -3,7 +3,7 @@
 # gitlab-cd-channel-signed.sh on the same project, but every pipeline runs
 # against the infra-kms referential instance: the Signing endpoint declares
 # backend kms (cosign openbao://brik-signing), so the CI signature and the
-# CD require_provenance verification both go through the lab OpenBAO
+# CD require_attestation verification both go through the lab OpenBAO
 # Transit engine instead of a file key. The signing key never enters the
 # job environment.
 #
@@ -100,7 +100,7 @@ _cd_channel_seed_ci() {
     _assert_kms_trace "$id" "brik-container-scan" "attesting"
 }
 
-# CD: both CD inputs set -> brik-deploy.yml. require_provenance verifies the
+# CD: both CD inputs set -> brik-deploy.yml. require_attestation verifies the
 # attestation on the resolved digest through the same openbao:// reference.
 _cd_channel_deploy() {
     local version="$1" environment="$2" id
@@ -116,6 +116,28 @@ _cd_channel_deploy() {
     echo ""
     [[ "$st" == "success" ]] || { log_error "CD status: ${st}"; return 1; }
     _assert_kms_trace "$id" "brik-cd-deploy" "verifying"
+}
+
+# Eligibility: the kms seed produced a fresh digest, so the journal must be
+# granted again before the CD deploy (the grant is digest-bound). The host
+# authorize goes through the main P-lab instance: the journal and its ssh
+# signing are backend-agnostic, only the artifact signing differs in kms.
+_cd_channel_pre_deploy() {
+    local version="$1" environment="$2"
+    log_info "--- Eligibility: brik authorize ${version} --for ${environment} (kms digest) ---"
+    local brik_bin="${BRIKLAB_ROOT}/../brik/bin/brik"
+    local project_dir="${BRIKLAB_ROOT}/test-projects/node-deploy-signed"
+    local log_dir
+    log_dir="$(mktemp -d)"
+    if ! BRIK_INFRA_DIR="${BRIKLAB_ROOT}/data/infra" BRIK_LOG_DIR="$log_dir" \
+            "$brik_bin" authorize --version "$version" --for "$environment" \
+            --workspace "$project_dir"; then
+        rm -rf "$log_dir"
+        log_error "brik authorize failed"
+        return 1
+    fi
+    rm -rf "$log_dir"
+    log_ok "authorization granted (artifact_authorized_for in the journal)"
 }
 
 e2e.cd_channel.run "gitlab" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"

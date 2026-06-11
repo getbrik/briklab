@@ -212,7 +212,7 @@ _suite_run_scenario() {
     fi
 
     # Signed CD keystone: same seed -> deploy shape, but CI signs the digest and
-    # the deploy verifies the attestation (require_provenance gate).
+    # the deploy verifies the attestation (require_attestation gate).
     if [[ "$name" == "node-deploy-signed" ]]; then
         E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/gitlab-cd-channel-signed.sh"
         return $?
