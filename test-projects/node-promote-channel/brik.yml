@@ -1,0 +1,41 @@
+version: 1
+project:
+  name: node-promote-channel
+  stack: node
+  stack_version: "22"
+pipeline:
+  selection:
+    # safe = context-only selection. balanced impact-gates promote (its impact
+    # patterns are **/Dockerfile + **/docker-compose*.yml) and skips it on a
+    # tag when no such file is in the diff range -- which would silently
+    # defeat the promote validation. safe runs every context-applicable stage
+    # on the tag, so promote actually executes on this release pipeline.
+    mode: safe
+release:
+  strategy: semver
+  tag_prefix: v
+test:
+  framework: npm
+package:
+  docker:
+    image: nexus.briklab.test:8082/brik/node-promote-channel
+    dockerfile: Dockerfile
+publish:
+  docker:
+    registry: nexus.briklab.test:8082
+    username_var: BRIK_PUBLISH_DOCKER_USER
+    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
+
+# Channel-model promotion (P2-A). package publishes the candidate image and
+# container-scan attaches signed SBOM/provenance attestations to its digest
+# (referential Signing endpoint, no evidence state-repo needed). On the tag,
+# brik-promote copies candidate -> release through the evidence-carrying
+# primitive (oras cp -r): same digest at destination, referrers transported,
+# attestations verified on the destination fail-closed, release channel
+# immutable. Declaring BOTH channels is the promotion opt-in.
+artifacts:
+  channels:
+    candidate:
+      registry: nexus.briklab.test:8082/brik/node-promote-channel
+    release:
+      registry: nexus.briklab.test:8082/brik/node-promote-channel-released

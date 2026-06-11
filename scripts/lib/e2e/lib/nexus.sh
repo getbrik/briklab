@@ -97,6 +97,34 @@ e2e.nexus.nuget_package_exists() {
 # Cleanup
 # ---------------------------------------------------------------------------
 
+# Resolve the manifest digest of a Docker image tag on the Nexus registry
+# (OCI distribution API; the digest comes back in Docker-Content-Digest).
+# Args: $1 = image name (e.g. "brik/node-promote-channel"), $2 = tag
+# Output: "sha256:<hex>" on stdout (empty when the tag is absent)
+e2e.nexus.docker_digest() {
+    local name="$1" tag="$2"
+    curl -fsS -o /dev/null -D - --max-time 30 \
+        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" \
+        -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+        "${_E2E_NEXUS_DOCKER_URL}/v2/${name}/manifests/${tag}" 2>/dev/null \
+        | tr -d '\r' | grep -i '^Docker-Content-Digest:' | tail -1 | awk '{print $2}'
+}
+
+# Count the referrer manifests attached to a digest, via the cosign tag
+# fallback scheme (Nexus has no OCI 1.1 referrers API: cosign/oras maintain
+# an index tagged "sha256-<hex>" listing the referrers).
+# Args: $1 = image name, $2 = digest ("sha256:<hex>")
+# Output: number of referrer manifests (0 when the index is absent)
+e2e.nexus.docker_referrers_count() {
+    local name="$1" digest="$2"
+    local index_tag="sha256-${digest#sha256:}"
+    curl -fsS --max-time 30 \
+        -u "${_E2E_NEXUS_USER}:${_E2E_NEXUS_PASS}" \
+        -H "Accept: application/vnd.oci.image.index.v1+json" \
+        "${_E2E_NEXUS_DOCKER_URL}/v2/${name}/manifests/${index_tag}" 2>/dev/null \
+        | jq -r '.manifests | length' 2>/dev/null || echo 0
+}
+
 # Delete Docker images matching a prefix.
 # Args: $1 = image path prefix (e.g. "brik/")
 e2e.nexus.delete_docker_images() {
