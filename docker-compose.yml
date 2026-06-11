@@ -243,7 +243,9 @@ services:
         ipv4_address: 172.20.0.50
     mem_limit: 256m
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8200/v1/sys/health"]
+      # 127.0.0.1 explicitly: the dev server listens on IPv4 only and the
+      # busybox wget resolves localhost to ::1 first.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8200/v1/sys/health"]
       interval: 10s
       timeout: 5s
       retries: 5
