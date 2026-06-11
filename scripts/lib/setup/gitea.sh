@@ -159,6 +159,37 @@ create_config_deploy_repo() {
     log_ok "Repo '${org}/${repo}' created"
 }
 
+# Protect the main branch of a state-repo (idempotent). Normal pushes stay
+# allowed (the CI robot appends evidence/journal commits); force-push and
+# deletion are refused, which is the append-only guarantee brik's
+# state_repo.check_protection looks for. The E2E reset drops and restores
+# the rule around its baseline force-push (e2e.reset.gitops_config_repo).
+# Args: $1 = repo name
+protect_state_repo_branch() {
+    local org="brik" repo="$1" branch="main"
+
+    local protected
+    protected=$(curl -s --max-time 10 \
+        -H "Authorization: token ${GITEA_PAT}" \
+        "${GITEA_URL}/api/v1/repos/${org}/${repo}/branch_protections" \
+        | jq -e --arg b "$branch" 'any(.[]; (.branch_name // .rule_name // "") == $b)' 2>/dev/null) || protected="false"
+    if [[ "$protected" == "true" ]]; then
+        log_info "Branch '${branch}' of '${org}/${repo}' already protected"
+        return 0
+    fi
+
+    log_info "Protecting branch '${branch}' of '${org}/${repo}'..."
+    curl -sf --max-time 10 \
+        -H "Authorization: token ${GITEA_PAT}" \
+        -H "Content-Type: application/json" \
+        -d "{\"branch_name\":\"${branch}\",\"enable_push\":true}" \
+        "${GITEA_URL}/api/v1/repos/${org}/${repo}/branch_protections" -o /dev/null || {
+        log_error "Failed to protect '${org}/${repo}:${branch}'"
+        return 1
+    }
+    log_ok "Branch '${branch}' of '${org}/${repo}' protected"
+}
+
 # === Main ===
 wait_for_gitea
 create_admin_user
@@ -169,6 +200,7 @@ create_config_deploy_repo "config-deploy-cd" "GitOps config repo for E2E CD chan
 create_config_deploy_repo "config-deploy-cd-dev" "GitOps config repo for E2E CD channel deploy (dev)"
 create_config_deploy_repo "config-deploy-signed" "GitOps config repo for the signed deploy E2E (provenance gate)"
 create_config_deploy_repo "evidence-signed" "BuildEvidence state-repo for the signed deploy E2E (append-only)"
+protect_state_repo_branch "evidence-signed"
 
 log_ok "Gitea configuration complete"
 echo ""
