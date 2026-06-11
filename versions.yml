@@ -19,6 +19,7 @@ infra:
   gitlab_runner_helper: "gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding"
   gitea:                "gitea/gitea:1.26.2"
   nexus:                "sonatype/nexus3:3.92.2-alpine"
+  openbao:              "openbao/openbao:2.5.4"
   jenkins_base:         "jenkins/jenkins:2.541.3-lts-jdk21"
   ssh_target_base:      "alpine:3.23"
 

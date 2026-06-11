@@ -79,6 +79,11 @@ SCENARIOS=(
     "node-deploy-rollback|node-deploy-gitops-rollback|v0.1.0|||900|||node-deploy-gitops"
     "node-deploy-channel|node-deploy-channel|v0.1.0|||900|||"
     "node-deploy-signed|node-deploy-signed|v0.1.0|||900|||"
+    # KMS variant of the signed keystone: same project and flow, but the
+    # pipelines run against the infra-kms instance (Signing backend kms via
+    # OpenBAO Transit). Depends on node-deploy-signed: the two share the
+    # ArgoCD app and the evidence state-repo, so they must not overlap.
+    "cd-signed-kms|node-deploy-signed|v0.1.0|||900|||node-deploy-signed"
     # Channel-model promotion (P2-A): two tagged pipelines (positive copy with
     # referrers + negative immutability refusal), hence the doubled timeout.
     "cd-promote|node-promote-channel|v0.1.0|||1800|||"
@@ -142,7 +147,7 @@ _suite_get_group() {
     IFS='|' read -r name _ <<< "$1"
     case "$name" in
         *-cve)               echo "D" ;;   # scan/CVE gating
-        *-deploy-gitops|*-deploy-rollback|node-deploy-channel|node-deploy-signed) echo "F" ;;
+        *-deploy-gitops|*-deploy-rollback|node-deploy-channel|node-deploy-signed|cd-signed-kms) echo "F" ;;
         workflow-*)          echo "G" ;;
         node-plan-*|cd-promote) echo "I" ;;
         *-full)              echo "B" ;;
@@ -210,6 +215,13 @@ _suite_run_scenario() {
     # the deploy verifies the attestation (require_provenance gate).
     if [[ "$name" == "node-deploy-signed" ]]; then
         E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/gitlab-cd-channel-signed.sh"
+        return $?
+    fi
+
+    # KMS variant of the signed keystone: signature and verification go
+    # through the lab OpenBAO (infra-kms instance selected at trigger time).
+    if [[ "$name" == "cd-signed-kms" ]]; then
+        E2E_TIMEOUT="${timeout:-900}" bash "${SCRIPT_DIR}/gitlab-cd-signed-kms.sh"
         return $?
     fi
 

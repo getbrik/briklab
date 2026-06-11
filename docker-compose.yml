@@ -167,6 +167,9 @@ services:
       # brikDockerArgs discovers this mount and forwards it to every stage
       # container; BRIK_INFRA_DIR points jobs at it.
       - ./data/infra:/etc/brik/infra:ro
+      # KMS variant of the referential (Signing backend kms via OpenBAO);
+      # signed-KMS scenarios select it through BRIK_INFRA_DIR.
+      - ./data/infra-kms:/etc/brik/infra-kms:ro
       # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -177,6 +180,7 @@ services:
       - "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20"
       - "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30"
       - "ssh-target.briklab.test:172.20.0.41"
+      - "${OPENBAO_HOSTNAME:-openbao.briklab.test}:172.20.0.50"
     mem_limit: 6g
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${JENKINS_HTTP_PORT:-9090}/login"]
@@ -212,6 +216,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+
+  # --- OpenBAO (lab KMS for cosign openbao:// signing) ---
+  # Dev-mode server: in-memory storage, auto-unsealed, root token pinned
+  # from .env. Key material does NOT survive a container restart; the
+  # setup script (scripts/lib/setup/openbao.sh) is idempotent and
+  # re-creates the Transit signing key, then infra-referential.sh
+  # re-exports the public key. P-lab posture: the root token doubles as
+  # the job credential (a scoped Transit token is the P-entreprise
+  # refinement).
+  openbao:
+    image: ${OPENBAO_IMAGE}
+    container_name: brik-openbao
+    hostname: ${OPENBAO_HOSTNAME:-openbao.briklab.test}
+    restart: unless-stopped
+    command: server -dev
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - BAO_DEV_ROOT_TOKEN_ID=${OPENBAO_ROOT_TOKEN:-brik-bao-root-2026}
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    ports:
+      - "${OPENBAO_HTTP_PORT:-8200}:8200"
+    networks:
+      brik-net:
+        ipv4_address: 172.20.0.50
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8200/v1/sys/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # --- Sonatype Nexus 3 CE ---
   nexus:

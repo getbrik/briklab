@@ -202,3 +202,87 @@ url: file:///etc/brik/policy/brik-policy.yml
 YAML
 
 log_ok "P-lab referential generated in ${INFRA_DIR}"
+
+# --- KMS variant (data/infra-kms) -------------------------------------------
+
+# Same lab posture, but artifact signing goes through OpenBAO Transit
+# (Signing backend kms + SecretManager endpoint) instead of a file key.
+# The signed-KMS scenarios select this instance with a project-level
+# BRIK_INFRA_DIR=/etc/brik/infra-kms; everything else (registry, git host,
+# evidence ssh signing, policy) is identical to the main instance.
+#
+# trust/cosign-kms.pub is exported by setup/openbao.sh AFTER this script
+# runs (setup order), so this generation must never delete the directory.
+INFRA_KMS_DIR="${ROOT_DIR}/data/infra-kms"
+mkdir -p "${INFRA_KMS_DIR}/endpoints" "${INFRA_KMS_DIR}/credentials" \
+         "${INFRA_KMS_DIR}/bindings" "${INFRA_KMS_DIR}/policies" \
+         "${INFRA_KMS_DIR}/trust"
+
+# Shared documents: every endpoint, credential and policy except Signing.
+cp "${INFRA_DIR}/endpoints/registry-candidate.yml" \
+   "${INFRA_DIR}/endpoints/git-host.yml" \
+   "${INFRA_DIR}/endpoints/argocd.yml" \
+   "${INFRA_DIR}/endpoints/ssh-target.yml" \
+   "${INFRA_KMS_DIR}/endpoints/"
+cp "${INFRA_DIR}/credentials/"*.yml "${INFRA_KMS_DIR}/credentials/"
+cp "${INFRA_DIR}/policies/org.yml" "${INFRA_KMS_DIR}/policies/"
+
+# Same evidence-signing key pair: state-repo commits verify against the
+# same allowed_signers regardless of the artifact-signing backend.
+cp "${INFRA_DIR}/trust/evidence_signing_key" \
+   "${INFRA_DIR}/trust/evidence_signing_key.pub" \
+   "${INFRA_DIR}/trust/allowed_signers" \
+   "${INFRA_KMS_DIR}/trust/"
+chmod 600 "${INFRA_KMS_DIR}/trust/evidence_signing_key"
+
+cat > "${INFRA_KMS_DIR}/referential.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Referential
+profile: p-lab
+description: Briklab KMS posture - identical to the main instance except artifact signing, which uses an OpenBAO Transit key through cosign openbao://.
+YAML
+
+# The key never leaves OpenBAO; cosign signs through the Transit API. The
+# exported public key is for consumers that verify without OpenBAO access.
+cat > "${INFRA_KMS_DIR}/endpoints/signing.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Signing
+name: signing
+backend: kms
+kms_uri: openbao://brik-signing
+transparency: none
+YAML
+
+# Connection material for the cosign KMS driver: BAO_ADDR from url,
+# BAO_TOKEN resolved from the job environment, TRANSIT_SECRET_ENGINE_PATH
+# from transit_mount. P-lab posture: the dev root token is the credential.
+cat > "${INFRA_KMS_DIR}/endpoints/secret-manager.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: SecretManager
+name: secret-manager
+url: http://${OPENBAO_HOSTNAME:-openbao.briklab.test}:8200
+transit_mount: brik-transit
+auth:
+  method: token
+  ref: env://BRIK_BAO_TOKEN
+tls:
+  trust: insecure
+YAML
+
+write_kms_binding() {
+    cat > "${INFRA_KMS_DIR}/bindings/$1.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: Binding
+name: $1
+endpoints:
+  registry-candidate: registry-push
+  git-host: git-api
+capabilities:
+  artifact-attestation: cosign-kms-openbao
+  evidence-commit-signing: ssh-signing
+YAML
+}
+write_kms_binding staging
+write_kms_binding production
+
+log_ok "P-lab KMS referential generated in ${INFRA_KMS_DIR}"
