@@ -40,6 +40,7 @@ _briklab_versions_render_env() {
     echo "GITLAB_RUNNER_HELPER_IMAGE=$(yq -r '.infra.gitlab_runner_helper' "$src")"
     echo "GITEA_IMAGE=$(yq -r '.infra.gitea' "$src")"
     echo "NEXUS_IMAGE=$(yq -r '.infra.nexus' "$src")"
+    echo "OPENBAO_IMAGE=$(yq -r '.infra.openbao' "$src")"
     echo "JENKINS_BASE_IMAGE=$(yq -r '.infra.jenkins_base' "$src")"
     echo "SSH_TARGET_BASE_IMAGE=$(yq -r '.infra.ssh_target_base' "$src")"
     echo "K3S_IMAGE=$(yq -r '.kubernetes.k3s' "$src")"

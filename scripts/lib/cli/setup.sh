@@ -54,7 +54,14 @@ cmd_setup() {
         briklab.verify.env_set "NEXUS_NPM_TOKEN" || ((errors++)) || true
     }
 
-    # 6. SSH target
+    # 6. OpenBAO (Transit KMS backing the cosign openbao:// scenarios).
+    # Dev-mode server: this step re-creates the Transit key after any
+    # container restart, so it must run on every setup pass.
+    _run_setup "OpenBAO" "openbao.sh" "brik-openbao" && {
+        briklab.verify.http "OpenBAO health" "http://127.0.0.1:${OPENBAO_HTTP_PORT:-8200}/v1/sys/health" || ((errors++)) || true
+    }
+
+    # 7. SSH target
     _run_setup "SSH target" "ssh-target.sh" "brik-ssh-target" && {
         briklab.verify.ssh_connection || ((errors++)) || true
     }

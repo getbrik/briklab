@@ -46,10 +46,12 @@ else
         --docker-volumes "${BRIKLAB_DIR}/data/k3d/kubeconfig:/root/.kube/config:ro" \
         --docker-volumes "${BRIKLAB_DIR}/policy:/etc/brik/policy:ro" \
         --docker-volumes "${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro" \
+        --docker-volumes "${BRIKLAB_DIR}/data/infra-kms:/etc/brik/infra-kms:ro" \
         --docker-extra-hosts "${GITLAB_HOSTNAME:-gitlab.briklab.test}:172.20.0.10" \
         --docker-extra-hosts "${NEXUS_HOSTNAME:-nexus.briklab.test}:172.20.0.30" \
         --docker-extra-hosts "ssh-target.briklab.test:172.20.0.41" \
         --docker-extra-hosts "${GITEA_HOSTNAME:-gitea.briklab.test}:172.20.0.20" \
+        --docker-extra-hosts "${OPENBAO_HOSTNAME:-openbao.briklab.test}:172.20.0.50" \
         --description "brik-docker-runner" \
         --tag-list "docker,brik" \
         --run-untagged=true \
@@ -112,6 +114,25 @@ log_info "Ensuring the referential volume on job containers..."
 if ! docker exec brik-runner grep -q "/etc/brik/infra" /etc/gitlab-runner/config.toml 2>/dev/null; then
     docker exec brik-runner sed -i \
         "s|\"${BRIKLAB_DIR}/policy:/etc/brik/policy:ro\"|\"${BRIKLAB_DIR}/policy:/etc/brik/policy:ro\", \"${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro\"|" \
+        /etc/gitlab-runner/config.toml
+fi
+
+# Same self-heal for the KMS variant of the referential (signed-KMS
+# scenarios select it through a project-level BRIK_INFRA_DIR).
+log_info "Ensuring the infra-kms volume on job containers..."
+if ! docker exec brik-runner grep -q "/etc/brik/infra-kms" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s|\"${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro\"|\"${BRIKLAB_DIR}/data/infra:/etc/brik/infra:ro\", \"${BRIKLAB_DIR}/data/infra-kms:/etc/brik/infra-kms:ro\"|" \
+        /etc/gitlab-runner/config.toml
+fi
+
+# Job containers resolve OpenBAO by name (cosign reads BAO_ADDR with this
+# hostname); self-heal the extra_hosts of a runner registered before the
+# KMS service existed.
+log_info "Ensuring the OpenBAO host entry on job containers..."
+if ! docker exec brik-runner grep -q "openbao" /etc/gitlab-runner/config.toml 2>/dev/null; then
+    docker exec brik-runner sed -i \
+        "s|extra_hosts = \[\(.*\)\]|extra_hosts = [\1, \"${OPENBAO_HOSTNAME:-openbao.briklab.test}:172.20.0.50\"]|" \
         /etc/gitlab-runner/config.toml
 fi
 
