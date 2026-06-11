@@ -88,6 +88,47 @@ e2e.gitea.delete_repo() {
     e2e.gitea.api_delete "repos/${owner}/${repo_name}"
 }
 
+# ---------------------------------------------------------------------------
+# Branch protection (state-repos)
+# ---------------------------------------------------------------------------
+
+# Return 0 when a protection rule exists for the branch.
+# Args: $1 = repo name, $2 = branch
+e2e.gitea.branch_protected() {
+    local repo_name="$1" branch="$2"
+    e2e.gitea.api_get "repos/brik/${repo_name}/branch_protections" \
+        | jq -e --arg b "$branch" 'any(.[]; (.branch_name // .rule_name // "") == $b)' >/dev/null 2>&1
+}
+
+# Protect a branch (idempotent): normal pushes stay allowed so the CI robot
+# can append state commits, but force-push and deletion are refused - the
+# append-only guarantee brik's check_protection relies on.
+# Args: $1 = repo name, $2 = branch
+e2e.gitea.protect_branch() {
+    local repo_name="$1" branch="$2"
+    if e2e.gitea.branch_protected "$repo_name" "$branch"; then
+        return 0
+    fi
+    local http_code
+    http_code=$(briklab.http.code "${_E2E_GITEA_URL}/api/v1/repos/brik/${repo_name}/branch_protections" \
+        --max-time 10 \
+        -H "Authorization: token ${GITEA_PAT}" \
+        -H "Content-Type: application/json" \
+        -X POST \
+        -d "{\"branch_name\":\"${branch}\",\"enable_push\":true}")
+    case "$http_code" in
+        201) log_ok "Branch '${branch}' of '${repo_name}' protected" ;;
+        *)   log_warn "Branch protection on '${repo_name}' returned HTTP ${http_code}"; return 1 ;;
+    esac
+}
+
+# Drop the protection rule of a branch (tolerates an absent rule).
+# Args: $1 = repo name, $2 = branch
+e2e.gitea.unprotect_branch() {
+    local repo_name="$1" branch="$2"
+    e2e.gitea.api_delete "repos/brik/${repo_name}/branch_protections/${branch}"
+}
+
 # Get commits for a repo.
 # Args: $1 = owner, $2 = repo name, $3 = branch (optional)
 # Output: commits JSON on stdout
