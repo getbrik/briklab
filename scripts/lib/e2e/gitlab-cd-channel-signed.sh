@@ -130,6 +130,7 @@ _cd_channel_pre_deploy() {
     local log_dir
     log_dir="$(mktemp -d)"
     if ! BRIK_INFRA_DIR="${BRIKLAB_ROOT}/data/infra" BRIK_LOG_DIR="$log_dir" \
+            BRIK_REGISTRY_USER=admin BRIK_REGISTRY_PASSWORD="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}" \
             "$brik_bin" authorize --version "$version" --for "$environment" \
             --workspace "$project_dir"; then
         rm -rf "$log_dir"
