@@ -370,3 +370,68 @@ fi
 log_ok "journal carries ${LE_REF_COUNT} distinct env_config_ref for deployed(staging)"
 
 log_ok "=== GITLAB LAYER E PASSED (config change redeployed ${DEPLOY_VERSION} without a new version) ==="
+
+# --- Status (P3-B): the three layers agree after the redeploy; a config ---
+# --- change pushed WITHOUT a redeploy surfaces as DEFINITION drift.     ---
+echo ""
+log_info "=== Status phase: brik status reports journal + desired + live ==="
+
+SP_BRIK_BIN="${BRIKLAB_ROOT}/../brik/bin/brik"
+SP_TMP="$(mktemp -d)"
+SP_LOG="${SP_TMP}/logs"
+
+# Fresh clone each call: the desired layer re-derives at the CURRENT tip of
+# the env's config_ref, which the host-side copy would not carry.
+_sp_run_status() {
+    rm -rf "${SP_TMP}/app" "$SP_LOG"
+    mkdir -p "$SP_LOG"
+    if ! e2e.git.clone "$GITLAB_REPO_URL" "${SP_TMP}/app" "root" "$GITLAB_PAT"; then
+        log_error "cannot clone the app repo for brik status"
+        return 1
+    fi
+    BRIK_INFRA_DIR="${BRIKLAB_ROOT}/data/infra" BRIK_LOG_DIR="$SP_LOG" \
+        BRIK_GIT_TOKEN="${GITEA_PAT}" ARGOCD_AUTH_TOKEN="${ARGOCD_AUTH_TOKEN}" \
+        "$SP_BRIK_BIN" status --environment staging --workspace "${SP_TMP}/app"
+}
+
+log_info "--- Status: the three layers agree (no drift) ---"
+SP_OUT="$(_sp_run_status)" || { rm -rf "$SP_TMP"; log_error "brik status failed"; exit 1; }
+printf '%s\n' "$SP_OUT" | sed 's/^/    /'
+if ! grep -q "journal:.*${DEPLOY_VERSION} @ ${STAGING_DIGEST}" <<< "$SP_OUT" \
+        || ! grep -q "live:.*${STAGING_DIGEST}" <<< "$SP_OUT" \
+        || ! grep -q "drift:.*none detected" <<< "$SP_OUT"; then
+    rm -rf "$SP_TMP"
+    log_error "brik status does not show the three layers in agreement"
+    exit 1
+fi
+log_ok "status shows journal + desired + live in agreement"
+
+log_info "--- Status: a config change without a redeploy is DEFINITION drift ---"
+SP_PUSH="$(mktemp -d)"
+if ! e2e.git.clone "$GITLAB_REPO_URL" "${SP_PUSH}/app" "root" "$GITLAB_PAT"; then
+    rm -rf "$SP_TMP" "$SP_PUSH"
+    log_error "cannot clone the app repo for the drift bump"
+    exit 1
+fi
+SP_OLD_REPLICAS="$(grep -oE 'replicas: [0-9]+' "${SP_PUSH}/app/k8s/deployment.yaml" | awk '{print $2}')"
+sed -i.bak "s/replicas: ${SP_OLD_REPLICAS}/replicas: $((SP_OLD_REPLICAS + 1))/" \
+    "${SP_PUSH}/app/k8s/deployment.yaml" && rm -f "${SP_PUSH}/app/k8s/deployment.yaml.bak"
+if ! e2e.git.commit "${SP_PUSH}/app" "chore: bump staging replicas (status drift probe)" \
+        || ! e2e.git.push "${SP_PUSH}/app" "$GITLAB_REPO_URL" "root" "$GITLAB_PAT" "-o ci.skip"; then
+    rm -rf "$SP_TMP" "$SP_PUSH"
+    log_error "cannot push the drift probe config change"
+    exit 1
+fi
+rm -rf "$SP_PUSH"
+
+SP_OUT="$(_sp_run_status)" || { rm -rf "$SP_TMP"; log_error "brik status failed after the drift probe"; exit 1; }
+printf '%s\n' "$SP_OUT" | sed 's/^/    /'
+if ! grep -q "DEFINITION drift" <<< "$SP_OUT"; then
+    rm -rf "$SP_TMP"
+    log_error "brik status does not surface the definition drift"
+    exit 1
+fi
+rm -rf "$SP_TMP"
+log_ok "status surfaces the definition drift (config moved, no redeploy)"
+
+log_ok "=== GITLAB STATUS PASSED (three layers + drift detection) ==="
