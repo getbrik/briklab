@@ -285,19 +285,25 @@ description: Briklab KMS posture - identical to the main instance except artifac
 YAML
 
 # The key never leaves OpenBAO; cosign signs through the Transit API. The
-# exported public key is for consumers that verify without OpenBAO access.
+# exported public key (verification_key) lets every verifying consumer --
+# the CD deploy first -- check signatures WITHOUT OpenBAO access, so the
+# KMS token stays confined to the signing phase (SLSA L2 credential leg).
 cat > "${INFRA_KMS_DIR}/endpoints/signing.yml" <<'YAML'
 apiVersion: brik.dev/referential/v1
 kind: Signing
 name: signing
 backend: kms
 kms_uri: openbao://brik-signing
+verification_key: file://trust/cosign-kms.pub
 transparency: none
 YAML
 
 # Connection material for the cosign KMS driver: BAO_ADDR from url,
 # BAO_TOKEN resolved from the job environment, TRANSIT_SECRET_ENGINE_PATH
 # from transit_mount. P-lab posture: the dev root token is the credential.
+# The BRIK_SIGNING_ prefix is the reserved signing-phase scope: the GitLab
+# template delivers it via the brik/signing environment and the Jenkins
+# shared-lib injects it only into the container-scan container.
 cat > "${INFRA_KMS_DIR}/endpoints/secret-manager.yml" <<YAML
 apiVersion: brik.dev/referential/v1
 kind: SecretManager
@@ -306,7 +312,7 @@ url: http://${OPENBAO_HOSTNAME:-openbao.briklab.test}:8200
 transit_mount: brik-transit
 auth:
   method: token
-  ref: env://BRIK_BAO_TOKEN
+  ref: env://BRIK_SIGNING_BAO_TOKEN
 tls:
   trust: insecure
 YAML

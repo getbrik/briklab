@@ -493,3 +493,33 @@ e2e.gitlab.set_group_variable() {
         --data-urlencode "value=${value}" \
         -d "key=${key}&masked=${masked}&protected=false" >/dev/null 2>&1 || true
 }
+
+# Set a project CI variable scoped to one environment, so it reaches only
+# the jobs declaring that environment (e.g. a signing credential scoped to
+# brik/signing reaches brik-container-scan and never the build/test jobs).
+# Args: $1 = project ID, $2 = key, $3 = value, $4 = environment scope
+e2e.gitlab.set_project_variable_scoped() {
+    local project_id="$1" key="$2" value="$3" scope="$4"
+
+    # Try update first (the scope filter selects the right variable when the
+    # same key exists under several scopes), then create.
+    local http_code
+    http_code=$(briklab.http.code "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/variables/${key}" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+        -X PUT \
+        --data-urlencode "value=${value}" \
+        --data-urlencode "filter[environment_scope]=${scope}" \
+        --data-urlencode "environment_scope=${scope}" 2>/dev/null)
+
+    if [[ "$http_code" == "200" ]]; then
+        return 0
+    fi
+
+    briklab.http.code "${_E2E_GITLAB_URL}/api/v4/projects/${project_id}/variables" \
+        -H "PRIVATE-TOKEN: ${GITLAB_PAT}" \
+        -X POST \
+        -d "key=${key}" \
+        --data-urlencode "value=${value}" \
+        --data-urlencode "environment_scope=${scope}" \
+        -d "protected=false&masked=false" >/dev/null 2>&1 || true
+}
