@@ -23,6 +23,11 @@ cmd_start() {
     [[ -d "${BRIKLAB_DIR}/data/k3d/kubeconfig" ]] && rm -rf "${BRIKLAB_DIR}/data/k3d/kubeconfig"
     touch "${BRIKLAB_DIR}/data/k3d/kubeconfig"
 
+    # The TLS services mount their certificates at boot (Gitea crashes on a
+    # missing CERT_FILE), so the lab CA must exist BEFORE compose up -- the
+    # setup pass that follows init's start is too late on a fresh lab.
+    bash "${LIB_SETUP}/ca.sh"
+
     log_info "Starting containers..."
     docker compose -f "$COMPOSE_FILE" up -d
 
@@ -78,7 +83,7 @@ cmd_status() {
     echo ""
     echo -e "${BLUE}Access URLs:${NC}"
     echo "  GitLab   : http://${gitlab_host}:${gitlab_port}"
-    echo "  Gitea    : http://${gitea_host}:${gitea_port}"
+    echo "  Gitea    : https://${gitea_host}:${gitea_port}"
     echo "  Jenkins  : http://${jenkins_host}:${jenkins_port}"
     echo "  Nexus    : http://${nexus_host}:${nexus_port}"
     echo ""
@@ -174,8 +179,14 @@ cmd_init() {
         log_warn "Step 5 -- k3d not installed, skipping"
     fi
 
-    # 6. Smoke test
-    log_info "Step 6 -- Verification"
+    # 6. Token convergence: setup seeds the GitLab CI variables BEFORE Gitea
+    # regenerates its PAT and before k3d generates the ArgoCD token, so a
+    # fresh init must re-propagate the final values to the CI platforms.
+    log_info "Step 6 -- Token propagation"
+    bash "${SCRIPT_DIR}/lib/infra-refresh.sh"
+
+    # 7. Smoke test
+    log_info "Step 7 -- Verification"
     cmd_smoke_test
 
     cmd_status

@@ -193,7 +193,7 @@ JUNK_DIR="$(mktemp -d)"
 trap 'rm -rf "$JUNK_DIR"' EXIT
 printf 'unattested content\n' > "${JUNK_DIR}/junk.txt"
 NEXUS_DOCKER_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
-if ! (cd "$JUNK_DIR" && oras push --plain-http \
+if ! (cd "$JUNK_DIR" && oras push --ca-file "${BRIKLAB_ROOT}/data/ca/ca.crt" \
         -u admin -p "${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}" \
         "${NEXUS_DOCKER_HOST}/brik/node-deploy-signed:${UNATTESTED_VERSION}" \
         junk.txt:text/plain >/dev/null 2>&1); then

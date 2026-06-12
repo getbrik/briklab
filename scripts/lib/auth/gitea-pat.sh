@@ -19,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../checks.sh"
 # If invalid/missing, deletes stale token and creates a fresh one.
 briklab.auth.gitea_pat() {
     local token_name="${1:-brik-briklab}"
-    local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+    local gitea_url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
     local admin_user="${GITEA_ADMIN_USER:-brik}"
     local admin_pass="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
 

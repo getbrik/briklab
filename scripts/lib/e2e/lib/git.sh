@@ -293,7 +293,7 @@ e2e.git.trigger_via_push() {
             token="$GITLAB_PAT"
             ;;
         gitea)
-            local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+            local gitea_url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
             remote_url="${gitea_url}/brik/${project_name}.git"
             username="${GITEA_ADMIN_USER:-brik}"
             token="$GITEA_PAT"

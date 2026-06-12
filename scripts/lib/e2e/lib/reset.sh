@@ -115,7 +115,7 @@ e2e.reset.repo() {
             fi
             ;;
         gitea)
-            local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+            local gitea_url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
             local remote_url="${gitea_url}/brik/${project_name}.git"
             local gitea_user="${GITEA_ADMIN_USER:-brik}"
             e2e.git.push "$tmp_dir" "$remote_url" "$gitea_user" "$GITEA_PAT" "--force" || push_result=1
@@ -222,7 +222,7 @@ e2e.reset.gitops_config_repo() {
     local push_result=0
     case "$git_host" in
         gitea)
-            local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+            local gitea_url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
             local gitea_user="${GITEA_ADMIN_USER:-brik}"
             # State-repos carry a branch-protection rule that refuses
             # force-push (append-only posture); drop it for the baseline
@@ -271,8 +271,8 @@ e2e.reset.rollback_config_repo() {
     tmp_dir=$(mktemp -d)
     local gitea_user="${GITEA_ADMIN_USER:-brik}"
     local gitea_password="${GITEA_ADMIN_PASSWORD:-Brik-Gitea-2026}"
-    local gitea_url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
-    local remote_url="http://${gitea_user}:${gitea_password}@${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/${repo_name}.git"
+    local gitea_url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+    local remote_url="https://${gitea_user}:${gitea_password}@${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/${repo_name}.git"
 
     local result=0
     (

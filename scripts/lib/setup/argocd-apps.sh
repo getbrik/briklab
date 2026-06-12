@@ -27,7 +27,7 @@ _provision_argocd_app() {
     local app_name="$1"
     local namespace="$2"
     local config_repo="$3"
-    local repo_url="http://brik:${GITEA_PASSWORD}@gitea.briklab.test:3000/brik/${config_repo}.git"
+    local repo_url="https://brik:${GITEA_PASSWORD}@gitea.briklab.test:3000/brik/${config_repo}.git"
 
     kubectl apply -f - <<ARGOAPP
 apiVersion: argoproj.io/v1alpha1
@@ -55,6 +55,19 @@ ARGOAPP
 }
 
 # === Main ===
+
+# Trust the lab CA for the Gitea config repos: the repo-server resolves TLS
+# certificates by hostname from argocd-tls-certs-cm. Restart it so the trust
+# is effective immediately (the projected configmap refresh can lag ~1 min).
+log_info "Trusting the lab CA for the Gitea config repos..."
+_gitea_host="${GITEA_HOSTNAME:-gitea.briklab.test}"
+kubectl -n argocd patch configmap argocd-tls-certs-cm --type merge \
+    -p "$(jq -nc --arg host "$_gitea_host" \
+            --arg pem "$(cat "${BRIKLAB_ROOT}/data/ca/ca.crt")" \
+            '{data:{($host):$pem}}')"
+kubectl -n argocd rollout restart deployment argocd-repo-server
+kubectl -n argocd rollout status deployment argocd-repo-server --timeout=120s
+
 log_info "Creating ArgoCD applications for E2E..."
 
 # brik-e2e-gitops:   used by the node-deploy-gitops E2E scenario.

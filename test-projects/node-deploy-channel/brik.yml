@@ -30,7 +30,7 @@ artifacts:
   # credential in the URL: the token travels as BRIK_GIT_TOKEN (GitLab group
   # variable / Jenkins casc global env).
   evidence:
-    repo: http://gitea.briklab.test:3000/brik/evidence-cd.git
+    repo: https://gitea.briklab.test:3000/brik/evidence-cd.git
     branch: main
     sign: false
     token_var: BRIK_GIT_TOKEN
@@ -48,7 +48,7 @@ deploy:
       validates_for: production
       gates:
         require_digest: true
-      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd.git
+      repo: https://gitea.briklab.test:3000/brik/config-deploy-cd.git
       git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
@@ -60,7 +60,7 @@ deploy:
       gates:
         require_digest: true
         requires_eligibility: [artifact_validated_for]
-      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd-prod.git
+      repo: https://gitea.briklab.test:3000/brik/config-deploy-cd-prod.git
       git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
@@ -71,7 +71,7 @@ deploy:
       accepts_channel: release
       gates:
         require_digest: true
-      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
+      repo: https://gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
       git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s

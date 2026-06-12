@@ -30,8 +30,28 @@ GITEA_HOST="${GITEA_HOSTNAME:-gitea.briklab.test}"
 GITEA_PORT="${GITEA_HTTP_PORT:-3000}"
 ARGOCD_HOSTPORT="host.docker.internal:${ARGOCD_PORT:-9080}"
 
+CA_DIR="${ROOT_DIR}/data/ca"
+
 mkdir -p "${INFRA_DIR}/endpoints" "${INFRA_DIR}/credentials" \
          "${INFRA_DIR}/bindings" "${INFRA_DIR}/policies" "${INFRA_DIR}/trust"
+
+# --- lab CA bundle deposits --------------------------------------------------
+
+# Endpoints declared with tls.trust: custom-ca resolve their bundle by the
+# trust/ca/<hostname>/ca.crt convention; every TLS service of the lab is
+# issued by the single internal CA minted by setup/ca.sh.
+if [[ ! -f "${CA_DIR}/ca.crt" ]]; then
+    bash "${SCRIPT_DIR}/ca.sh"
+fi
+
+# deposit_ca <hostname> - install the lab CA as the trust bundle of one host.
+deposit_ca() {
+    mkdir -p "${INFRA_DIR}/trust/ca/$1"
+    cp "${CA_DIR}/ca.crt" "${INFRA_DIR}/trust/ca/$1/ca.crt"
+}
+# ArgoCD is reached at host.docker.internal from job containers and via the
+# localhost port-forward from the host; the certificate covers both names.
+deposit_ca "host.docker.internal"
 
 # --- trust material (generated once, reused) -------------------------------
 
@@ -83,28 +103,32 @@ YAML
 
 # --- endpoints --------------------------------------------------------------
 
-# The lab Nexus serves one Docker hosted registry over plain HTTP; candidate
-# and release channels share it. The declared http:// scheme is what lets
-# digest resolution and cosign reach it (no insecure escape-hatch variable).
+# The lab Nexus serves one Docker hosted registry over TLS issued by the
+# lab CA; candidate and release channels share it. Digest resolution, oras
+# and cosign all verify the chain against the deposited bundle.
+deposit_ca "${NEXUS_HOST}"
 cat > "${INFRA_DIR}/endpoints/registry-candidate.yml" <<YAML
 apiVersion: brik.dev/referential/v1
 kind: Registry
 name: registry-candidate
-url: http://${NEXUS_HOST}:8082
+url: https://${NEXUS_HOST}:8082
 tls:
-  trust: insecure
+  trust: custom-ca
 zone: candidate
 YAML
 
+# Gitea serves TLS issued by the lab CA; brik verifies API calls and git
+# operations against the deposited bundle (GIT_SSL_CAINFO / curl --cacert).
+deposit_ca "${GITEA_HOST}"
 cat > "${INFRA_DIR}/endpoints/git-host.yml" <<YAML
 apiVersion: brik.dev/referential/v1
 kind: GitHost
 name: git-host
 product: gitea
-api_url: http://${GITEA_HOST}:${GITEA_PORT}
-git_url: http://${GITEA_HOST}:${GITEA_PORT}
+api_url: https://${GITEA_HOST}:${GITEA_PORT}
+git_url: https://${GITEA_HOST}:${GITEA_PORT}
 tls:
-  trust: insecure
+  trust: custom-ca
 YAML
 
 # Air-gapped lab: no Fulcio/Rekor, attestation uses a local key pair shipped
@@ -120,15 +144,16 @@ verification_key: file://trust/cosign.pub
 transparency: none
 YAML
 
-# ArgoCD is reached from job containers through the host port-forward; the
-# certificate is self-signed, hence trust: insecure (maps to --insecure).
+# ArgoCD is reached from job containers through the host port-forward; its
+# certificate is issued by the lab CA (setup/ca.sh installs it as the
+# argocd-server-tls secret), so verification pins the deposited bundle.
 cat > "${INFRA_DIR}/endpoints/argocd.yml" <<YAML
 apiVersion: brik.dev/referential/v1
 kind: ArgoCD
 name: argocd
 url: https://${ARGOCD_HOSTPORT}
 tls:
-  trust: insecure
+  trust: custom-ca
 YAML
 
 # SSH deploy target: lab containers are rebuilt at will, so host keys are
@@ -246,6 +271,11 @@ cp "${INFRA_DIR}/trust/evidence_signing_key" \
    "${INFRA_DIR}/trust/allowed_signers" \
    "${INFRA_KMS_DIR}/trust/"
 chmod 600 "${INFRA_KMS_DIR}/trust/evidence_signing_key"
+
+# Same custom-ca trust bundles: the endpoints are shared documents, so the
+# bundles their tls.trust declarations resolve to must travel with them.
+rm -rf "${INFRA_KMS_DIR}/trust/ca"
+cp -R "${INFRA_DIR}/trust/ca" "${INFRA_KMS_DIR}/trust/ca"
 
 cat > "${INFRA_KMS_DIR}/referential.yml" <<'YAML'
 apiVersion: brik.dev/referential/v1

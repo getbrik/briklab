@@ -52,23 +52,34 @@ fi
 REGISTRIES_FILE=$(mktemp /tmp/k3d-registries-XXXXXX.yaml)
 trap 'rm -f "$REGISTRIES_FILE"' EXIT
 
+# The connector serves TLS issued by the lab CA: the mirror endpoint is
+# https and containerd verifies the chain against the CA mounted into the
+# nodes (see --volume below). Both hosts need the tls entry for the same
+# reason both need auth: containerd matches the host it actually contacts.
 nexus_registry_user="admin"
 nexus_registry_pass="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
 cat > "$REGISTRIES_FILE" <<YAML
 mirrors:
   "nexus.briklab.test:8082":
     endpoint:
-      - "http://brik-nexus:8082"
+      - "https://brik-nexus:8082"
 configs:
   "nexus.briklab.test:8082":
     auth:
       username: "${nexus_registry_user}"
       password: "${nexus_registry_pass}"
+    tls:
+      ca_file: "/etc/ssl/briklab/ca.crt"
   "brik-nexus:8082":
     auth:
       username: "${nexus_registry_user}"
       password: "${nexus_registry_pass}"
+    tls:
+      ca_file: "/etc/ssl/briklab/ca.crt"
 YAML
+
+# The CA must exist before the cluster mounts it.
+[[ -f "${BRIKLAB_ROOT}/data/ca/ca.crt" ]] || bash "${SCRIPT_DIR}/ca.sh"
 
 # Create the k3d cluster
 log_info "Creating k3d cluster '${CLUSTER_NAME}'..."
@@ -83,6 +94,7 @@ k3d cluster create "$CLUSTER_NAME" \
     --agents-memory "${K3D_AGENT_MEMORY:-4g}" \
     --network "brik-net" \
     --registry-config "$REGISTRIES_FILE" \
+    --volume "${BRIKLAB_ROOT}/data/ca/ca.crt:/etc/ssl/briklab/ca.crt@server:0;agent:*" \
     --wait
 
 log_ok "k3d cluster created"
@@ -124,6 +136,16 @@ kubectl wait --for=condition=ready --timeout=180s pod -l app.kubernetes.io/part-
 
 # Patch the service for NodePort
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
+
+# Serve the lab-CA-issued certificate (SAN host.docker.internal + localhost):
+# argocd-server watches the argocd-server-tls secret and reloads it live.
+# The referential declares the endpoint as tls.trust: custom-ca against this
+# chain, so the secret must exist before any brik deploy reaches ArgoCD.
+[[ -f "${BRIKLAB_ROOT}/data/ca/argocd/tls.crt" ]] || bash "${SCRIPT_DIR}/ca.sh"
+kubectl create secret tls argocd-server-tls -n argocd \
+    --cert="${BRIKLAB_ROOT}/data/ca/argocd/tls.crt" \
+    --key="${BRIKLAB_ROOT}/data/ca/argocd/tls.key" \
+    --dry-run=client -o yaml | kubectl apply -f -
 
 # Start and verify port-forward
 briklab.auth.argocd_portfwd

@@ -20,6 +20,16 @@
 [[ -n "${_BRIKLAB_CHECKS_LOADED:-}" ]] && return 0
 _BRIKLAB_CHECKS_LOADED=1
 
+# Lab CA trust for the TLS services probed here (Gitea, Nexus docker).
+# Callers normally inherit CURL_CA_BUNDLE from common.sh; this fallback keeps
+# the module usable standalone, as the usage above documents. Explicit -k
+# call sites (ArgoCD bootstrap probes) still win over the bundle.
+if [[ -z "${CURL_CA_BUNDLE:-}" ]]; then
+    _briklab_checks_ca="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/data/ca/ca.crt"
+    [[ -f "$_briklab_checks_ca" ]] && export CURL_CA_BUNDLE="$_briklab_checks_ca"
+    unset _briklab_checks_ca
+fi
+
 # ---------------------------------------------------------------------------
 # Internal helper: HTTP status code for a request, "000" on any failure.
 # Args: pass curl arguments (URL last). Never fails (returns code on stdout).
@@ -57,7 +67,7 @@ briklab.check.gitlab_pat() {
 # True if GITEA_PAT authenticates against the Gitea API.
 briklab.check.gitea_pat() {
     [[ -n "${GITEA_PAT:-}" ]] || return 1
-    local url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+    local url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
     [[ "$(_briklab_http_code -H "Authorization: token ${GITEA_PAT}" "${url}/api/v1/user")" == "200" ]]
 }
 
@@ -149,7 +159,7 @@ briklab.check.brik_source_reachable() {
         [[ "$(_briklab_http_code -H "PRIVATE-TOKEN: ${GITLAB_PAT:-}" \
             "${url}/api/v4/projects/brik%2Fbrik")" == "200" ]]
     else
-        local url="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+        local url="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
         [[ "$(_briklab_http_code -H "Authorization: token ${GITEA_PAT:-}" \
             "${url}/api/v1/repos/${GITEA_ADMIN_USER:-brik}/brik")" == "200" ]]
     fi

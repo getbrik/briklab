@@ -98,7 +98,12 @@ services:
       - USER_GID=1000
       - GITEA__server__DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.test}
       - GITEA__server__SSH_DOMAIN=${GITEA_HOSTNAME:-gitea.briklab.test}
-      - GITEA__server__ROOT_URL=http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/
+      # TLS issued by the lab CA (setup/ca.sh); consumers verify against the
+      # custom-ca bundle distributed through the brik referential.
+      - GITEA__server__PROTOCOL=https
+      - GITEA__server__CERT_FILE=/certs/tls.crt
+      - GITEA__server__KEY_FILE=/certs/tls.key
+      - GITEA__server__ROOT_URL=https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/
       - GITEA__server__HTTP_PORT=${GITEA_HTTP_PORT:-3000}
       - GITEA__server__SSH_PORT=${GITEA_SSH_PORT:-222}
       - GITEA__server__SSH_LISTEN_PORT=22
@@ -110,6 +115,7 @@ services:
       - "${GITEA_SSH_PORT:-222}:22"
     volumes:
       - ./data/gitea:/data
+      - ./data/ca/gitea:/certs:ro
     networks:
       brik-net:
         ipv4_address: 172.20.0.20
@@ -118,7 +124,8 @@ services:
       # /api/healthz is the liveness endpoint: 200 as soon as the web server is
       # up, before the install wizard runs. /api/v1/version returns 404 pre-install
       # on gitea 1.26+, which would deadlock the depends_on: service_healthy gate.
-      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_HTTP_PORT:-3000}/api/healthz"]
+      # -k: the lab CA bundle is not mounted here; this is a liveness probe.
+      test: ["CMD", "curl", "-fk", "https://localhost:${GITEA_HTTP_PORT:-3000}/api/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -170,6 +177,10 @@ services:
       # KMS variant of the referential (Signing backend kms via OpenBAO);
       # signed-KMS scenarios select it through BRIK_INFRA_DIR.
       - ./data/infra-kms:/etc/brik/infra-kms:ro
+      # Lab CA: imported into the JVM truststore and the system git config by
+      # setup/jenkins.sh so the Gitea plugin and SCM checkouts verify the
+      # lab's TLS services.
+      - ./data/ca/ca.crt:/etc/briklab/ca.crt:ro
       # Docker socket for pipeline builds (local lab only -- not for production)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

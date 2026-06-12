@@ -84,7 +84,7 @@ unclassified:
   giteaServers:
     servers:
       - displayName: briklab
-        serverUrl: "http://gitea.briklab.test:3000"
+        serverUrl: "https://gitea.briklab.test:3000"
         manageHooks: true
         credentialsId: gitea-admin-pat
   globalLibraries:
@@ -103,7 +103,7 @@ unclassified:
           modernSCM:
             scm:
               git:
-                remote: "http://gitea.briklab.test:3000/brik/brik.git"
+                remote: "https://gitea.briklab.test:3000/brik/brik.git"
 
 tool:
   git:
@@ -135,7 +135,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-complete.git')
+                  url('https://gitea.briklab.test:3000/brik/node-complete.git')
                 }
                 branches('*/main')
               }
@@ -155,7 +155,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-full.git')
+                  url('https://gitea.briklab.test:3000/brik/node-full.git')
                 }
                 branches('*/main')
               }
@@ -175,7 +175,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-deploy-gitops.git')
+                  url('https://gitea.briklab.test:3000/brik/node-deploy-gitops.git')
                 }
                 branches('*/main')
               }
@@ -195,7 +195,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-deploy-gitops-rollback.git')
+                  url('https://gitea.briklab.test:3000/brik/node-deploy-gitops-rollback.git')
                 }
                 branches('*/main')
               }
@@ -211,7 +211,7 @@ jobs:
             source {
               giteaSCMSource {
                 id('gitea-node-workflow-trunk')
-                serverUrl('http://gitea.briklab.test:3000')
+                serverUrl('https://gitea.briklab.test:3000')
                 repoOwner('brik')
                 repository('node-workflow-trunk')
                 credentialsId('gitea-admin-pat')
@@ -247,7 +247,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-plan-tag.git')
+                  url('https://gitea.briklab.test:3000/brik/node-plan-tag.git')
                 }
                 branches('*/main')
               }
@@ -267,7 +267,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-full-cve.git')
+                  url('https://gitea.briklab.test:3000/brik/node-full-cve.git')
                 }
                 branches('*/main')
               }
@@ -287,7 +287,7 @@ jobs:
             source {
               giteaSCMSource {
                 id('gitea-node-deploy-channel')
-                serverUrl('http://gitea.briklab.test:3000')
+                serverUrl('https://gitea.briklab.test:3000')
                 repoOwner('brik')
                 repository('node-deploy-channel')
                 credentialsId('gitea-admin-pat')
@@ -319,7 +319,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('http://gitea.briklab.test:3000/brik/node-deploy-channel.git')
+                  url('https://gitea.briklab.test:3000/brik/node-deploy-channel.git')
                 }
                 branches('*/main')
               }

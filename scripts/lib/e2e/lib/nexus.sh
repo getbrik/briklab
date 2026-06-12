@@ -19,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../common.sh"
 # ---------------------------------------------------------------------------
 
 _E2E_NEXUS_URL="http://${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_HTTP_PORT:-8081}"
-_E2E_NEXUS_DOCKER_URL="http://${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
+_E2E_NEXUS_DOCKER_URL="https://${NEXUS_HOSTNAME:-nexus.briklab.test}:${NEXUS_DOCKER_PORT:-8082}"
 _E2E_NEXUS_USER="admin"
 _E2E_NEXUS_PASS="${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}"
 

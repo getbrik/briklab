@@ -80,7 +80,7 @@ echo -e "${BLUE}Nexus Docker Registry:${NC}"
 if briklab.verify.smoke_running "brik-nexus"; then
     NEXUS_DOCKER_PORT="${NEXUS_DOCKER_PORT:-8082}"
     NEXUS_HOST="${NEXUS_HOSTNAME:-nexus.briklab.test}"
-    briklab.verify.smoke_check "Nexus Docker v2 API" "curl -sf -u admin:${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026} http://${NEXUS_HOST}:${NEXUS_DOCKER_PORT}/v2/"
+    briklab.verify.smoke_check "Nexus Docker v2 API" "curl -sf -u admin:${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026} https://${NEXUS_HOST}:${NEXUS_DOCKER_PORT}/v2/"
 else
     briklab.verify.smoke_skip "Nexus Docker Registry"
 fi
@@ -91,8 +91,8 @@ echo -e "${BLUE}Gitea:${NC}"
 if briklab.verify.smoke_running "brik-gitea"; then
     GITEA_PORT="${GITEA_HTTP_PORT:-3000}"
     GITEA_HOST="${GITEA_HOSTNAME:-gitea.briklab.test}"
-    briklab.verify.smoke_check "Gitea HTTP" "curl -sf http://${GITEA_HOST}:${GITEA_PORT}/"
-    briklab.verify.smoke_check "Gitea API" "curl -sf http://${GITEA_HOST}:${GITEA_PORT}/api/v1/version"
+    briklab.verify.smoke_check "Gitea HTTPS" "curl -sf https://${GITEA_HOST}:${GITEA_PORT}/"
+    briklab.verify.smoke_check "Gitea API" "curl -sf https://${GITEA_HOST}:${GITEA_PORT}/api/v1/version"
 else
     briklab.verify.smoke_skip "Gitea"
 fi

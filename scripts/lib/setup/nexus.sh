@@ -71,6 +71,52 @@ change_admin_password() {
     fi
 }
 
+# Configure jetty SSL with the lab-CA-issued certificate. The docker
+# connector (httpsPort 8082) shares this SSL context; consumers verify the
+# chain through the custom-ca bundle of the brik referential. Conventions
+# from jetty-https.xml: ${ssl.etc}/keystore.jks, store and key passwords
+# both the literal "password".
+setup_ssl() {
+    local ssl_dir="${BRIKLAB_ROOT}/data/nexus/etc/ssl"
+    local props="${BRIKLAB_ROOT}/data/nexus/etc/nexus.properties"
+    local ca_dir="${BRIKLAB_ROOT}/data/ca"
+
+    [[ -f "${ca_dir}/nexus/tls.crt" ]] || bash "${SCRIPT_DIR}/ca.sh"
+
+    if [[ -f "${ssl_dir}/keystore.jks" && "${ssl_dir}/keystore.jks" -nt "${ca_dir}/nexus/tls.crt" ]] \
+        && grep -q "^application-port-ssl=" "$props" 2>/dev/null; then
+        log_info "Nexus SSL already configured"
+        return 0
+    fi
+
+    log_info "Configuring Nexus SSL (lab CA keystore + jetty-https)..."
+    mkdir -p "$ssl_dir"
+    openssl pkcs12 -export -name nexus \
+        -in "${ca_dir}/nexus/tls.crt" -inkey "${ca_dir}/nexus/tls.key" \
+        -certfile "${ca_dir}/ca.crt" \
+        -passout pass:password -out "${ssl_dir}/keystore.p12"
+    rm -f "${ssl_dir}/keystore.jks"
+    docker exec brik-nexus keytool -importkeystore -noprompt \
+        -srckeystore /nexus-data/etc/ssl/keystore.p12 -srcstoretype PKCS12 \
+        -srcstorepass password \
+        -destkeystore /nexus-data/etc/ssl/keystore.jks -deststoretype JKS \
+        -deststorepass password -destkeypass password 2>/dev/null
+    rm -f "${ssl_dir}/keystore.p12"
+
+    for line in \
+        'application-port-ssl=8443' \
+        'ssl.etc=${karaf.data}/etc/ssl' \
+        'nexus-args=${jetty.etc}/jetty.xml,${jetty.etc}/jetty-http.xml,${jetty.etc}/jetty-https.xml,${jetty.etc}/jetty-requestlog.xml'
+    do
+        grep -qF "$line" "$props" 2>/dev/null || printf '%s\n' "$line" >> "$props"
+    done
+
+    log_info "Restarting Nexus to load the SSL configuration..."
+    docker restart brik-nexus >/dev/null
+    wait_for_nexus
+    log_ok "Nexus SSL configured (docker connector serves TLS on 8082)"
+}
+
 # Enable Docker and npm Bearer Token Realms
 enable_token_realms() {
     log_info "Enabling Docker + npm + NuGet Token Realms..."
@@ -240,21 +286,8 @@ create_repositories() {
         }
     }'
 
-    # docker hosted (HTTP connector on port 8082)
-    create_repo "docker" "brik-docker" '{
-        "name": "brik-docker",
-        "online": true,
-        "storage": {
-            "blobStoreName": "default",
-            "strictContentTypeValidation": true,
-            "writePolicy": "ALLOW"
-        },
-        "docker": {
-            "v1Enabled": false,
-            "forceBasicAuth": true,
-            "httpPort": 8082
-        }
-    }'
+    # docker hosted (TLS connector on port 8082, jetty SSL context)
+    create_repo "docker" "brik-docker" "$_DOCKER_REPO_BODY"
 
     # cargo hosted (Nexus 3.73+ supports native Cargo sparse protocol)
     create_repo "cargo" "brik-cargo" '{
@@ -268,13 +301,70 @@ create_repositories() {
     }'
 }
 
+# Shared by creation (fresh init) and enforcement (existing repo): the
+# docker hosted repo serves its connector over TLS on 8082.
+_DOCKER_REPO_BODY='{
+    "name": "brik-docker",
+    "online": true,
+    "storage": {
+        "blobStoreName": "default",
+        "strictContentTypeValidation": true,
+        "writePolicy": "ALLOW"
+    },
+    "docker": {
+        "v1Enabled": false,
+        "forceBasicAuth": true,
+        "httpsPort": 8082
+    }
+}'
+
+# Migrate a pre-existing brik-docker repo from the plain-HTTP connector to
+# the TLS one (same port). No-op when the connector already serves TLS.
+ensure_docker_https_connector() {
+    local current
+    current=$(curl -sf -u "admin:${NEXUS_NEW_PASSWORD}" \
+        "${NEXUS_URL}/service/rest/v1/repositories/docker/hosted/brik-docker" \
+        2>/dev/null | jq -r '.docker.httpsPort // empty')
+    if [[ "$current" == "8082" ]]; then
+        log_info "Docker connector already serves TLS on 8082"
+        return 0
+    fi
+
+    # Two-step: the old plain-HTTP connector still binds 8082, and Nexus
+    # validates the new connector against ports in use. Release the port
+    # first (no connector), then bind the TLS one.
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+        -X PUT \
+        -H "Content-Type: application/json" \
+        -d "$(jq -c 'del(.docker.httpsPort)' <<<"$_DOCKER_REPO_BODY")" \
+        "${NEXUS_URL}/service/rest/v1/repositories/docker/hosted/brik-docker")
+    if [[ "$http_code" != "204" ]]; then
+        log_error "Failed to release the docker connector port (HTTP ${http_code})"
+        return 1
+    fi
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+        -X PUT \
+        -H "Content-Type: application/json" \
+        -d "$_DOCKER_REPO_BODY" \
+        "${NEXUS_URL}/service/rest/v1/repositories/docker/hosted/brik-docker")
+    if [[ "$http_code" == "204" ]]; then
+        log_ok "Docker connector migrated to TLS on 8082"
+    else
+        log_error "Failed to migrate the docker connector (HTTP ${http_code})"
+        return 1
+    fi
+}
+
 # === Main ===
 wait_for_nexus
 change_admin_password
+setup_ssl
 enable_token_realms
 enable_anonymous_access
 accept_eula
 create_repositories
+ensure_docker_https_connector
 
 # Save config to .env
 save_to_env "NEXUS_HOSTNAME" "${NEXUS_HOSTNAME:-nexus.briklab.test}"
