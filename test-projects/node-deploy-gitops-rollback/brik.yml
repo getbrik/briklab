@@ -28,7 +28,8 @@ deploy:
       target: gitops
       when: "tag =~ 'v*'"
       strategy: rolling
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-rollback.git
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-rollback.git
+      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd

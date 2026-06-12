@@ -22,7 +22,8 @@ deploy:
   environments:
     staging:
       target: gitops
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-gitops.git
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-gitops.git
+      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd
