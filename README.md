@@ -90,27 +90,39 @@ make init
 
 > GitLab takes 3-5 minutes on first start. Jenkins builds a custom Docker image on first start. Nexus takes 2-3 minutes. The script waits automatically.
 
-## Services
+## Services and Security
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| GitLab UI | http://gitlab.briklab.test:8929 | `root` / `Brik-Gtlb-2026` |
-| GitLab SSH | `ssh://git@gitlab.briklab.test:2222` | - |
-| GitLab Runner | - | - |
-| Gitea UI | https://gitea.briklab.test:3000 | `brik` / `Brik-Gitea-2026` |
-| Jenkins UI | http://jenkins.briklab.test:9090 | `admin` / `Brik-Jenkins-2026` |
-| Nexus UI | http://nexus.briklab.test:8081 | `admin` / `Brik-Nexus-2026` |
-| Nexus Docker | https://nexus.briklab.test:8082 | - |
-| ArgoCD UI | https://argocd.briklab.test:9080 | `admin` / (dynamic, see `k3d-start` output) |
-| k3d (k3s) | localhost:6443 | - |
-| SSH Target | internal only | `deploy` / SSH key |
+| Service | URL | Credentials | Transport |
+|---------|-----|-------------|-----------|
+| GitLab UI | http://gitlab.briklab.test:8929 | `root` / `Brik-Gtlb-2026` | HTTP |
+| GitLab SSH | `ssh://git@gitlab.briklab.test:2222` | - | SSH |
+| GitLab Runner | - | - | Docker socket |
+| Gitea UI | https://gitea.briklab.test:3000 | `brik` / `Brik-Gitea-2026` | TLS (custom-ca) |
+| Jenkins UI | http://jenkins.briklab.test:9090 | `admin` / `Brik-Jenkins-2026` | HTTP |
+| Nexus UI | http://nexus.briklab.test:8081 | `admin` / `Brik-Nexus-2026` | HTTP |
+| Nexus Docker | https://nexus.briklab.test:8082 | read: `brik-cd` / write: `admin` | TLS (custom-ca) |
+| ArgoCD UI | https://argocd.briklab.test:9080 | `admin` / (dynamic, see `k3d-start` output) | TLS (custom-ca) |
+| OpenBAO | http://openbao.briklab.test:8200 | root token from `.env` | HTTP (dev-mode) |
+| k3d (k3s) | localhost:6443 | - | - |
+| SSH Target | internal only | `deploy` / SSH key | SSH |
 
 Default credentials are defined in `.env`. Modify them **before** the first `init`.
 
-HTTPS services (Gitea, the Nexus docker connector, ArgoCD) serve certificates
-issued by the lab internal CA (`data/ca/ca.crt`, minted by setup). Trust that
-file in your browser or pass it to curl (`--cacert data/ca/ca.crt`); the brik
-referential distributes it to CI jobs as the `custom-ca` bundle.
+**TLS & Certificate Trust:**
+Gitea, the Nexus docker connector (port 8082), and ArgoCD serve TLS certificates
+issued by the lab internal CA (`data/ca/ca.crt`, minted by `scripts/lib/setup/ca.sh`).
+Trust that file in your browser or pass it to curl (`--cacert data/ca/ca.crt`).
+The brik referential instance (generated at `data/infra/`) distributes the CA bundle
+to all CI jobs as the `custom-ca` trust material, and the lab CLI imports it into
+the Jenkins JVM truststore and system git config.
+
+**Registry Access Control:**
+The Docker registry (Nexus port 8082) uses least-privilege identities per
+context. The CD pipelines resolve, verify and pull with the read-only
+`brik-cd` account: on GitLab the keystones scope `BRIK_REGISTRY_*` to brik-cd
+on the deploy environments (the CI jobs keep the group-level write identity),
+and on Jenkins brik-cd is the CasC default with the write identity carried as
+`BRIK_SIGNING_REGISTRY_*` and delivered to the signing stage only.
 
 ### Nexus Repositories
 
