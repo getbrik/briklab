@@ -57,15 +57,15 @@ jenkins_plugins:
 # so a job's `pull_policy: if-not-present` resolves the tag to the pinned image.
 runner_images:
   - { ref: "ghcr.io/getbrik/brik-runner-base",     tag: "latest", digest: "sha256:8f10758303246c2dc8cb69b838d25463f09306f3199e18d8004286d5006d42c9" }
-  - { ref: "ghcr.io/getbrik/brik-runner-node",     tag: "22",   digest: "sha256:474d6d7e3133a482a35014c0dfe974edce147c7d10aeb0648a8e52246dff5408" }
-  - { ref: "ghcr.io/getbrik/brik-runner-node",     tag: "24",   digest: "sha256:b43d5362fbd373868f11d107194b3197ceb864056e7ade8d5588694b4d90b861" }
-  - { ref: "ghcr.io/getbrik/brik-runner-python",   tag: "3.13", digest: "sha256:c9a3da24a0bf43465f9df3ca5f04aac9bdf1264b54f5ddbc5b6a5ab1b4f2547f" }
-  - { ref: "ghcr.io/getbrik/brik-runner-python",   tag: "3.14", digest: "sha256:eb94fb82ed16bfa39b1621847bc7d013a2eb2c3c657d4e3cde1c79782305e5ac" }
-  - { ref: "ghcr.io/getbrik/brik-runner-java",     tag: "21",   digest: "sha256:65f2bbe06c506fcaaa771584e8154f4bab4e365664ba29f026a952d17e1f935a" }
-  - { ref: "ghcr.io/getbrik/brik-runner-java",     tag: "25",   digest: "sha256:f09ee480340c37ebc7e941ddc8362ce09e7099ba1392567da5aaf34f2be55a9d" }
-  - { ref: "ghcr.io/getbrik/brik-runner-rust",     tag: "1",    digest: "sha256:f0fba76b99bc739f29c12cf01609189ca17e088057e2f3122758ec996ade064d" }
-  - { ref: "ghcr.io/getbrik/brik-runner-dotnet",   tag: "9.0",  digest: "sha256:42c463ef20b02f91c9d9bc47a1d5136fee8b623d958dfdab546b06aa9d473305" }
-  - { ref: "ghcr.io/getbrik/brik-runner-dotnet",   tag: "10.0", digest: "sha256:a4cba8ce859a358a12242ea06c989eb7baf4a9b243ce4f39e377c238bf2bf20a" }
-  - { ref: "ghcr.io/getbrik/brik-runner-analysis", tag: "latest", digest: "sha256:8d066965df1cdc01ab55204f1f84a5c3721a524f78d94a77a7eb950b8bbd6745" }
+  - { ref: "ghcr.io/getbrik/brik-runner-node",     tag: "22",   digest: "sha256:d78310225aaf22450d79298f2f7fd58df3fe27d8859cc5ad6487e6e5805de98c" }
+  - { ref: "ghcr.io/getbrik/brik-runner-node",     tag: "24",   digest: "sha256:c89532e4791a73a449e5be2f0858c452f6ed16665c77890b33f9c39af810965e" }
+  - { ref: "ghcr.io/getbrik/brik-runner-python",   tag: "3.13", digest: "sha256:c606df75f6dd939636d937e6f5f8590eb6cd33d431a4337f6adef7ed934eb121" }
+  - { ref: "ghcr.io/getbrik/brik-runner-python",   tag: "3.14", digest: "sha256:8ee9c6fcd837952ce7d755281f9e9c9a985b4d5447c24d43aa2d4d22125a00a7" }
+  - { ref: "ghcr.io/getbrik/brik-runner-java",     tag: "21",   digest: "sha256:f61bd3f4945ec004afb110f965b1c6150ed2b075ee684d3139cff60a9c617054" }
+  - { ref: "ghcr.io/getbrik/brik-runner-java",     tag: "25",   digest: "sha256:ad76f85f082c686ed9a22369fc2a87ce5b1eb1a861422e35d20e9d630512fdd4" }
+  - { ref: "ghcr.io/getbrik/brik-runner-rust",     tag: "1",    digest: "sha256:2e4f7a0c7461303a8d8187e073595aa21f68a3296167ab511932619be573f96c" }
+  - { ref: "ghcr.io/getbrik/brik-runner-dotnet",   tag: "9.0",  digest: "sha256:f45342fba7db5efc9c55b6f05c5352de9c70524b0397ee4eeafc75e98280dcde" }
+  - { ref: "ghcr.io/getbrik/brik-runner-dotnet",   tag: "10.0", digest: "sha256:5214d303690e56070702fac0900634f6f165b2d5c0977e5ba562157b7253877d" }
+  - { ref: "ghcr.io/getbrik/brik-runner-analysis", tag: "latest", digest: "sha256:f649fb9fb8489b82b03a12c89a21b45eabe986b289708b8fbf71ca5f03a6014f" }
   - { ref: "ghcr.io/getbrik/brik-runner-scanner",  tag: "latest", digest: "sha256:d1fde251c1c0c89726054b9c23ac26428fcecd3caa92a2b4496a8b1dde8e9d63" }
-  - { ref: "ghcr.io/getbrik/brik-runner-deploy",   tag: "latest", digest: "sha256:f6ea36bcbf81b7bcd6646f95af1ac9fd3ed86dece7babc21fb3ef0ccef996d5a" }
+  - { ref: "ghcr.io/getbrik/brik-runner-deploy",   tag: "latest", digest: "sha256:57762581fb2113ae928a1431780b4c3f534a2f79064b2af0d1f40683f04c4c13" }
