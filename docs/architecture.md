@@ -84,11 +84,27 @@ All services are defined in a single `docker-compose.yml`. This simplifies the C
 
 The GitLab Runner spawns CI jobs as sibling Docker containers on the host. These containers must resolve `gitlab.briklab.test` to clone repositories. A static IP network (`brik-net`, 172.20.0.0/16) with `extra_hosts` entries ensures hostname resolution works consistently, regardless of container start order.
 
-### 3. Automated setup via Rails runner
+### 3. Infrastructure referential (P-lab posture)
+
+Brik requires an infrastructure referential instance at init time (`BRIK_INFRA_DIR`), describing where lab services live, with which transport posture, and how to access them. The lab generates this instance at `data/infra/` via `scripts/lib/setup/infra-referential.sh` and mounts it read-only at `/etc/brik/infra` in all job containers. The referential is the single source of truth for endpoint declarations (Nexus docker registry, Gitea, ArgoCD), TLS trust bundles (lab CA certificate), credentials (ssh signing key, cosign key pair, allowed_signers for commit verification), and organizational policy files. This replaces the former ad-hoc environment variables (BRIK_COSIGN_*, BRIK_SSH_STRICT_HOST_KEY, BRIK_KUBECTL_OPTS, BRIK_POLICY_URL, ARGOCD_SERVER/ARGOCD_INSECURE).
+
+### 4. Internal CA and end-to-end TLS
+
+`scripts/lib/setup/ca.sh` mints an EC-based root CA and per-service leaf certificates valid for 825 days. The CA stays stable across lab lifecycle restarts (only rotated on explicit deletion), so principals pinned in allowed_signers and the cosign public key remain fixed. ArgoCD, Gitea, and the Nexus docker connector serve TLS issued by this CA; all consumers verify the chain against the lab CA bundle distributed through the referential's `trust/ca/<hostname>/ca.crt` convention. The Jenkins JVM truststore and system git config are imported once by `scripts/lib/auth/jenkins-trust.sh` and must be refreshed if the CA or its leaves are recreated.
+
+### 5. Least-privilege registry identities
+
+The Docker registry (Nexus, port 8082) carries a read-only identity `brik-cd` (role `brik-cd-read`, created by `setup/nexus.sh`) for digest resolution, attestation verification and image pull, next to the admin write identity (publish, referrer attach, channel promotion). Delivery differs per orchestrator. On GitLab the group-level `BRIK_REGISTRY_*` variables carry the write identity for the CI jobs (attest attaches referrers, promote copies channels), and the keystone scenarios scope `BRIK_REGISTRY_*` to brik-cd on the deploy environments as project environment-scoped variables, so the CD jobs (which declare their environment) resolve and pull read-only. On Jenkins, CasC defaults `BRIK_REGISTRY_*` to brik-cd for every container and carries the write identity as `BRIK_SIGNING_REGISTRY_*`, which the brik shared library remaps onto `BRIK_REGISTRY_*` for the container-scan stage only. The referential's per-environment bindings declare the `registry-read` credential, recording that the CD identity cannot push.
+
+### 6. Signing credential isolation
+
+For scenarios that sign artifacts through OpenBAO (cd-signed-kms), the signing token travels as a GitLab project variable scoped to the brik/signing environment, which only the brik-container-scan job declares: the build and test jobs never receive it. CD pipelines carry no signing credential at all; verification uses the exported public key (`verification_key`) from the referential's trust material. Note the Jenkins caveat documented in the brik attestation guide: `docker.inside()` re-broadcasts controller globals to every container, so an isolated signing secret on Jenkins must be delivered per stage, never as a CasC global.
+
+### 7. Automated setup via Rails runner
 
 GitLab's REST API requires authentication, but authentication tokens don't exist until after the first boot. The setup scripts bootstrap GitLab by piping Ruby code into `gitlab-rails runner` via stdin. This avoids the chicken-and-egg problem and sidesteps shell escaping issues (notably with Ruby's `create!` method).
 
-### 4. Bleeding edge runner
+### 8. Bleeding edge runner
 
 The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest CI features. The trade-off: the matching helper image tag may not be published yet. The setup script explicitly injects a compatible `helper_image` into `config.toml` to prevent `image_pull_failure` errors.
 
@@ -98,39 +114,75 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 
 ```
  brik-net (172.20.0.0/16)
-+-----------------------------------------------------------------+
-|                                                                  |
-|  +------------------+   +------------------+                     |
-|  |   GitLab CE      |   |  GitLab Runner   |                     |
-|  |   172.20.0.10    |   |  172.20.0.11     |                     |
-|  |   :8929, :2222   |   |  (no port)       |                     |
-|  +------------------+   +------------------+                     |
-|                                                                  |
-|  +------------------+   +------------------+   +--------------+  |
-|  |   Gitea          |   |  Jenkins         |   |  Nexus 3 CE  |  |
-|  |   172.20.0.20    |   |  172.20.0.21     |   | 172.20.0.30  |  |
-|  |   :3000, :222    |   |  :9090, :50000   |   | :8081, :8082 |  |
-|  +------------------+   +------------------+   +--------------+  |
-|                                                                  |
-|  +------------------+                                            |
-|  |   SSH Target     |                                            |
-|  |   172.20.0.41    |                                            |
-|  |   :22 (internal) |                                            |
-|  +------------------+                                            |
-|                                                                  |
-+-----------------------------------------------------------------+
++---------------------------------------------------------------------------+
+|                                                                           |
+|  +------------------+   +------------------+                             |
+|  |   GitLab CE      |   |  GitLab Runner   |                             |
+|  |   172.20.0.10    |   |  172.20.0.11     |                             |
+|  |   :8929, :2222   |   |  (no port)       |                             |
+|  +------------------+   +------------------+                             |
+|                                                                           |
+|  +------------------+   +------------------+   +--------------+         |
+|  |   Gitea (TLS)    |   |  Jenkins         |   |  Nexus 3 CE  |         |
+|  |   172.20.0.20    |   |  172.20.0.21     |   | 172.20.0.30  |         |
+|  |   :3000, :222    |   |  :9090, :50000   |   | :8081, :8082 |         |
+|  +------------------+   +------------------+   +--------------+         |
+|                                                                           |
+|  +------------------+  +-----------------+   +------------------+      |
+|  |   SSH Target     |  |  OpenBAO (KMS)  |   |  ArgoCD (TLS)    |      |
+|  |   172.20.0.41    |  |  172.20.0.50     |   |  (k3d cluster)   |      |
+|  |   :22 (internal) |  |  :8200           |   |  :9080           |      |
+|  +------------------+  +-----------------+   +------------------+      |
+|                                                                           |
+|  Infrastructure Referential Instance (generated + mounted at setup):     |
+|  data/infra/ (P-lab) or data/infra-kms/ (KMS variant)                  |
+|  -> Endpoints, TLS bundles, signing keys, allowed_signers, policy      |
++---------------------------------------------------------------------------+
 ```
 
-| Service | Image | IP | Ports |
-|---------|-------|----|-------|
-| GitLab CE | `gitlab/gitlab-ce` | 172.20.0.10 | 8929, 2222 |
-| GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | - |
-| Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 |
-| Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 |
-| SSH Target | `briklab-ssh-target` (custom) | 172.20.0.41 | 22 (internal) |
-| Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 |
+| Service | Image | IP | Ports | TLS |
+|---------|-------|----|-------|-----|
+| GitLab CE | `gitlab/gitlab-ce` | 172.20.0.10 | 8929, 2222 | no |
+| GitLab Runner | `gitlab/gitlab-runner:alpine3.21-bleeding` | 172.20.0.11 | - | docker socket |
+| Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 | lab CA |
+| Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 | no |
+| SSH Target | `briklab-ssh-target` (custom) | 172.20.0.41 | 22 (internal) | no |
+| Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 | lab CA (8082) |
+| OpenBAO | `ghcr.io/openbao/openbao` | 172.20.0.50 | 8200 | no (dev-mode) |
+| k3d cluster | `rancher/k3s` | on-host | 6443 | - |
+| ArgoCD | helm-installed | k3d | 9080 | lab CA |
 
-The Runner uses `extra_hosts` to map `gitlab.briklab.test` and `nexus.briklab.test` to their static IPs. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve hostnames to clone repositories and push artifacts.
+The Runner uses `extra_hosts` to map `gitlab.briklab.test`, `nexus.briklab.test`, and `ssh-target.briklab.test` to their static IPs. This is required because CI job containers (spawned by the Runner as sibling containers) need to resolve hostnames to clone repositories, push artifacts, and verify TLS chains.
+
+---
+
+## Infrastructure Referential (P-lab Posture)
+
+The brik referential instance (`data/infra/`) is the single source of truth for the lab's infrastructure posture, generated once by `scripts/lib/setup/infra-referential.sh` and mounted read-only at `/etc/brik/infra` in all CI job containers (and forwarded to stage containers on Jenkins). It contains:
+
+### Endpoints (apiVersion: brik.dev/referential/v1)
+
+- **registry-candidate**: `https://nexus.briklab.test:8082` with `tls.trust: custom-ca` (zone: candidate)
+- **git-host**: `https://gitea.briklab.test:3000` with `tls.trust: custom-ca` (product: gitea)
+- **signing**: backend: `key` or `kms` (OpenBAO Transit on infra-kms), with `verification_key: file://trust/cosign.pub`
+- **argocd**: `https://host.docker.internal:9080` with `tls.trust: custom-ca` (reached via host port-forward from job containers)
+- **policy**: `file:///etc/brik/policy/brik-policy.yml` (org-wide release gates, branch protection rules for evidence repos)
+
+### Trust Material (generated once, reused across lifecycle restarts)
+
+- **Lab CA certificate** (`trust/ca/<hostname>/ca.crt`): root CA + per-service leaves (valid 825 days), issued by `ca.sh`
+- **Signing keys** (`trust/evidence_signing_key*`): ed25519 key pair for commit signing (CI identity: `brik-ci@noreply` in the git namespace)
+- **Cosign key pair** (`trust/cosign.key`, `trust/cosign.pub`): for container image attestation; private key encrypted with `COSIGN_PASSWORD` (empty in P-lab)
+- **allowed_signers**: principals matrix for git commit/tag verification, used by `git verify-commit` in CD jobs
+
+### Credentials (via env:// or file:// references)
+
+- **Registry identity** (brik-cd): read-only Nexus account for digest resolution and pull
+- **Git token** (BRIK_GIT_TOKEN): Gitea PAT for branch protection checks and state-repo operations
+- **ArgoCD token** (ARGOCD_AUTH_TOKEN): rotates on each lab lifecycle event; propagated by `infra-refresh`
+- **Signing credential** (scoped to brik/signing environment on GitLab, or the signing stage on Jenkins): OpenBAO transit token or local key file path + password
+
+This architecture eliminates scattered infrastructure variables and makes the security posture explicit and auditable: every endpoint, every TLS relationship, every credential source, and every policy gate is declared in one place.
 
 ---
 
