@@ -19,8 +19,12 @@ cmd_setup() {
 
     local errors=0
 
-    # 0. Infrastructure referential (no container needed: generates the
-    # P-lab instance under data/infra/, mounted read-only into CI jobs).
+    # 0. Lab CA + infrastructure referential (no container needed). The CA
+    # runs first: the referential deposits data/ca/ca.crt as the custom-ca
+    # trust bundle of the TLS endpoints, and the service setups install the
+    # leaf certificates it issues.
+    log_info "Configuring lab CA..."
+    bash "${LIB_SETUP}/ca.sh" || ((errors++)) || true
     log_info "Configuring Infra referential..."
     bash "${LIB_SETUP}/infra-referential.sh" || ((errors++)) || true
 

@@ -21,7 +21,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../common.sh"
 # Configuration
 # ---------------------------------------------------------------------------
 
-_E2E_GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+_E2E_GITEA_URL="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 
 # ---------------------------------------------------------------------------
 # Low-level API

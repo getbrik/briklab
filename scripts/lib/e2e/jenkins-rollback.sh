@@ -31,7 +31,7 @@ source "${SCRIPT_DIR}/lib/gitea-api.sh"
 source "${SCRIPT_DIR}/lib/git.sh"
 reload_env
 
-GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+GITEA_URL="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 TIMEOUT_SECONDS="${E2E_JENKINS_TIMEOUT:-300}"
 JOB_NAME="node-deploy-gitops-rollback"
 TEMPLATE_DIR="${PROJECT_ROOT}/test-projects/node-deploy-gitops-rollback"

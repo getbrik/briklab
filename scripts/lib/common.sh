@@ -50,6 +50,26 @@ source "${_BRIKLAB_LIB_DIR}/transverse/http.sh"
 source "${_BRIKLAB_LIB_DIR}/transverse/wait.sh"
 
 # ---------------------------------------------------------------------------
+# Lab CA trust (TLS services signed by the internal CA minted by setup/ca.sh)
+# ---------------------------------------------------------------------------
+
+# Host-side curl and git verify the lab services (Gitea, Nexus) against the
+# internal CA. No briklab script reaches public HTTPS with curl/git, so the
+# narrowed bundle is safe; explicit -k call sites (ArgoCD probes) still win.
+# Re-evaluated by reload_env/load_env: on a fresh init the dispatcher sources
+# this file BEFORE setup/ca.sh mints the CA, and the in-process verifications
+# that follow still need the bundle. The root is snapshotted at source time:
+# briklab.sh passes BRIKLAB_ROOT as a command-scoped assignment, so the name
+# is gone from the shell by the time load_env calls this function.
+_BRIKLAB_CA_FILE="${BRIKLAB_ROOT}/data/ca/ca.crt"
+_briklab_trust_lab_ca() {
+    [[ -f "$_BRIKLAB_CA_FILE" ]] || return 0
+    export CURL_CA_BUNDLE="$_BRIKLAB_CA_FILE"
+    export GIT_SSL_CAINFO="$_BRIKLAB_CA_FILE"
+}
+_briklab_trust_lab_ca
+
+# ---------------------------------------------------------------------------
 # Legacy aliases (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
@@ -59,8 +79,8 @@ log_warn()  { briklab.log.warn  "$@"; }
 log_error() { briklab.log.error "$@"; }
 
 save_to_env()   { briklab.env.save "$@"; }
-reload_env()    { briklab.env.reload "$@"; }
-load_env()      { briklab.env.reload "$@"; }
+reload_env()    { briklab.env.reload "$@"; _briklab_trust_lab_ca; }
+load_env()      { briklab.env.reload "$@"; _briklab_trust_lab_ca; }
 load_versions() { briklab.env.load_versions "$@"; }
 
 # Check an HTTP endpoint returns the expected status code (default 200).

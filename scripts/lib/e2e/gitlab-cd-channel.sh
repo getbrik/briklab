@@ -164,7 +164,7 @@ log_info "--- Chain: the journal carries the digest-bound grant ---"
 JOURNAL_TMP="$(mktemp -d)"
 JOURNAL_DIR="${JOURNAL_TMP}/evidence-cd"
 if ! e2e.git.clone \
-        "http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/evidence-cd.git" \
+        "https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/evidence-cd.git" \
         "$JOURNAL_DIR" "${GITEA_ADMIN_USER:-brik}" "$GITEA_PAT"; then
     rm -rf "$JOURNAL_TMP"
     log_error "cannot clone the evidence-cd state-repo"

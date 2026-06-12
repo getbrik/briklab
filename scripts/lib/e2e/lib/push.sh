@@ -25,7 +25,7 @@ _PUSH_PROJECT_ROOT="$(cd "${_E2E_PUSH_DIR}/../../../.." && pwd)"
 _PUSH_BRIK_ROOT="$(cd "${_PUSH_PROJECT_ROOT}/../brik" && pwd)"
 
 _PUSH_GITLAB_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}"
-_PUSH_GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+_PUSH_GITEA_URL="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 _PUSH_TAG_NAME="v0.1.0"
 
 # ---------------------------------------------------------------------------

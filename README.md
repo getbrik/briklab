@@ -97,15 +97,20 @@ make init
 | GitLab UI | http://gitlab.briklab.test:8929 | `root` / `Brik-Gtlb-2026` |
 | GitLab SSH | `ssh://git@gitlab.briklab.test:2222` | - |
 | GitLab Runner | - | - |
-| Gitea UI | http://gitea.briklab.test:3000 | `brik` / `Brik-Gitea-2026` |
+| Gitea UI | https://gitea.briklab.test:3000 | `brik` / `Brik-Gitea-2026` |
 | Jenkins UI | http://jenkins.briklab.test:9090 | `admin` / `Brik-Jenkins-2026` |
 | Nexus UI | http://nexus.briklab.test:8081 | `admin` / `Brik-Nexus-2026` |
-| Nexus Docker | http://nexus.briklab.test:8082 | - |
+| Nexus Docker | https://nexus.briklab.test:8082 | - |
 | ArgoCD UI | https://argocd.briklab.test:9080 | `admin` / (dynamic, see `k3d-start` output) |
 | k3d (k3s) | localhost:6443 | - |
 | SSH Target | internal only | `deploy` / SSH key |
 
 Default credentials are defined in `.env`. Modify them **before** the first `init`.
+
+HTTPS services (Gitea, the Nexus docker connector, ArgoCD) serve certificates
+issued by the lab internal CA (`data/ca/ca.crt`, minted by setup). Trust that
+file in your browser or pass it to curl (`--cacert data/ca/ca.crt`); the brik
+referential distributes it to CI jobs as the `custom-ca` bundle.
 
 ### Nexus Repositories
 

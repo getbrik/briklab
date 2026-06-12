@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=../common.sh
 source "${SCRIPT_DIR}/../common.sh"
+# shellcheck source=../auth/jenkins-trust.sh
+source "${SCRIPT_DIR}/../auth/jenkins-trust.sh"
 
 JENKINS_URL="http://${JENKINS_HOSTNAME:-jenkins.briklab.test}:${JENKINS_HTTP_PORT:-9090}"
 
@@ -39,6 +41,8 @@ install_plugins() {
 # === Main ===
 wait_for_jenkins
 install_plugins
+# cmd_setup restarts Jenkins right after this script, which loads the store.
+briklab.auth.jenkins_trust_ca
 
 log_ok "Jenkins configuration complete"
 echo ""

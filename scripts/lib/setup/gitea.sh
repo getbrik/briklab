@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/../common.sh"
 source "${SCRIPT_DIR}/../auth/gitea-pat.sh"
 reload_env
 
-GITEA_URL="http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+GITEA_URL="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
 GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-brik}"
 GITEA_ADMIN_PASSWORD="${GITEA_ADMIN_PASSWORD:-}"
 GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-brik@briklab.test}"
@@ -42,7 +42,7 @@ run_initial_install() {
         -d "domain=${GITEA_HOSTNAME:-gitea.briklab.test}" \
         -d "ssh_port=22" \
         -d "http_port=${GITEA_HTTP_PORT:-3000}" \
-        -d "app_url=http://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/" \
+        -d "app_url=https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/" \
         -d "log_root_path=/data/gitea/log" \
         -d "smtp_addr=" \
         -d "smtp_port=" \
