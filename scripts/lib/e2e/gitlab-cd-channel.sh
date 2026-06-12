@@ -148,6 +148,22 @@ _cd_channel_pre_deploy() {
     _trigger_cd_expect_failure "$DEPLOY_VERSION" "production" "refusing to deploy"
 }
 
+# _cd_journal_events <subtree> - clone the evidence-cd state-repo and emit
+# the events under the given journal subtree (promotions|deployments) as a
+# JSON stream on stdout. Empty subtree -> empty stream.
+_cd_journal_events() {
+    local subtree="$1" tmp
+    tmp="$(mktemp -d)"
+    if ! e2e.git.clone \
+            "https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/evidence-cd.git" \
+            "${tmp}/evidence-cd" "${GITEA_ADMIN_USER:-brik}" "$GITEA_PAT"; then
+        rm -rf "$tmp"
+        return 1
+    fi
+    find "${tmp}/evidence-cd/${subtree}" -type f -name '*.json' -exec cat {} + 2>/dev/null || true
+    rm -rf "$tmp"
+}
+
 e2e.cd_channel.run "gitlab" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"
 
 # --- Promotion chain (validates_for): staging validated the artifact for ---
@@ -163,30 +179,52 @@ if ! grep -q "journaled artifact_validated_for" <<< "$STAGING_TRACE"; then
 fi
 log_ok "staging journaled the validation for production"
 
+if ! grep -q "journaled deployed" <<< "$STAGING_TRACE"; then
+    log_error "staging brik-cd-deploy trace does not show 'journaled deployed'"
+    exit 1
+fi
+log_ok "staging journaled its deployed event"
+
 STAGING_IMAGE="$(e2e.argocd.get_app_image "$APP")"
 STAGING_DIGEST="${STAGING_IMAGE#*@}"
 
 log_info "--- Chain: the journal carries the digest-bound grant ---"
-JOURNAL_TMP="$(mktemp -d)"
-JOURNAL_DIR="${JOURNAL_TMP}/evidence-cd"
-if ! e2e.git.clone \
-        "https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}/brik/evidence-cd.git" \
-        "$JOURNAL_DIR" "${GITEA_ADMIN_USER:-brik}" "$GITEA_PAT"; then
-    rm -rf "$JOURNAL_TMP"
+if ! GRANT_EVENTS="$(_cd_journal_events promotions)"; then
     log_error "cannot clone the evidence-cd state-repo"
     exit 1
 fi
-GRANT_COUNT="$( (find "$JOURNAL_DIR/promotions" -type f -name '*.json' -exec cat {} + 2>/dev/null || true) \
-    | jq -s --arg d "$STAGING_DIGEST" \
+GRANT_COUNT="$(jq -s --arg d "$STAGING_DIGEST" \
     '[.[] | select(.type == "artifact_validated_for"
                    and .environment == "production"
-                   and .digest == $d)] | length')"
-rm -rf "$JOURNAL_TMP"
+                   and .digest == $d)] | length' <<< "$GRANT_EVENTS")"
 if [[ -z "$GRANT_COUNT" || "$GRANT_COUNT" -lt 1 ]]; then
     log_error "no artifact_validated_for(production) event bound to ${STAGING_DIGEST} in the journal"
     exit 1
 fi
 log_ok "journal carries artifact_validated_for(production) bound to ${STAGING_DIGEST}"
+
+# DeploymentJournal (P3-A): the staging deploy recorded a deployed event
+# bound to the digest, anchored by the definition_hash and carrying both
+# definition layers (version_ref = the tag commit, env_config_ref = the
+# config_ref commit) plus the orchestrator run id.
+log_info "--- Journal: deployed(staging) is recorded with its definition refs ---"
+if ! DEPLOYED_EVENTS="$(_cd_journal_events deployments)"; then
+    log_error "cannot clone the evidence-cd state-repo"
+    exit 1
+fi
+DEP_COUNT="$(jq -s --arg d "$STAGING_DIGEST" \
+    '[.[] | select(.type == "deployed"
+                   and .environment == "staging"
+                   and .digest == $d
+                   and (.definition_hash | startswith("sha256:"))
+                   and has("version_ref")
+                   and has("env_config_ref")
+                   and has("run_id"))] | length' <<< "$DEPLOYED_EVENTS")"
+if [[ -z "$DEP_COUNT" || "$DEP_COUNT" -lt 1 ]]; then
+    log_error "no deployed(staging) event bound to ${STAGING_DIGEST} with definition_hash + version_ref + env_config_ref + run_id"
+    exit 1
+fi
+log_ok "journal carries deployed(staging) bound to ${STAGING_DIGEST} (definition_hash + layers + run_id)"
 
 log_info "--- Chain: CD deploy ${DEPLOY_VERSION} -> production ---"
 if ! _cd_channel_deploy "$DEPLOY_VERSION" "production"; then
@@ -205,6 +243,24 @@ if [[ "$PROD_IMAGE" != *"@${STAGING_DIGEST}" ]]; then
     log_error "production does not run the validated digest (staging=${STAGING_DIGEST} production=${PROD_IMAGE:-<empty>})"
     exit 1
 fi
+
+log_info "--- Journal: deployed(production) is recorded on the same digest ---"
+if ! DEPLOYED_EVENTS="$(_cd_journal_events deployments)"; then
+    log_error "cannot clone the evidence-cd state-repo"
+    exit 1
+fi
+PROD_DEP_COUNT="$(jq -s --arg d "$STAGING_DIGEST" \
+    '[.[] | select(.type == "deployed"
+                   and .environment == "production"
+                   and .digest == $d
+                   and (.definition_hash | startswith("sha256:"))
+                   and has("version_ref"))] | length' <<< "$DEPLOYED_EVENTS")"
+if [[ -z "$PROD_DEP_COUNT" || "$PROD_DEP_COUNT" -lt 1 ]]; then
+    log_error "no deployed(production) event bound to ${STAGING_DIGEST} in the journal"
+    exit 1
+fi
+log_ok "journal carries deployed(production) bound to ${STAGING_DIGEST}"
+
 log_ok "=== GITLAB CD CHAIN PASSED (refused -> validated by staging -> deployed) ==="
 
 # --- Independent Layer E (config_ref, A3): an env config change redeploys ---
@@ -293,4 +349,24 @@ if ! e2e.argocd.assert_synced "$APP" "$TIMEOUT_SECONDS"; then
     log_error "ArgoCD app '${APP}' did not reach Synced+Healthy after the Layer E redeploy"
     exit 1
 fi
+
+# The redeploy resolved the env config at a NEW main commit: the journal
+# must now carry two deployed(staging) events on the same digest with
+# DISTINCT env_config_ref values -- the Layer E history of the environment.
+log_info "--- Journal: the Layer E redeploy recorded a new env_config_ref ---"
+if ! DEPLOYED_EVENTS="$(_cd_journal_events deployments)"; then
+    log_error "cannot clone the evidence-cd state-repo"
+    exit 1
+fi
+LE_REF_COUNT="$(jq -s --arg d "$STAGING_DIGEST" \
+    '[.[] | select(.type == "deployed"
+                   and .environment == "staging"
+                   and .digest == $d)
+          | .env_config_ref] | unique | length' <<< "$DEPLOYED_EVENTS")"
+if [[ -z "$LE_REF_COUNT" || "$LE_REF_COUNT" -lt 2 ]]; then
+    log_error "expected 2 distinct env_config_ref on deployed(staging) for ${STAGING_DIGEST}, got ${LE_REF_COUNT:-0}"
+    exit 1
+fi
+log_ok "journal carries ${LE_REF_COUNT} distinct env_config_ref for deployed(staging)"
+
 log_ok "=== GITLAB LAYER E PASSED (config change redeployed ${DEPLOY_VERSION} without a new version) ==="
