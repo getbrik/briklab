@@ -119,6 +119,7 @@ docs). The 3 KEEP-pending projects were retained and now back a live scenario.
 | node-full-cve | GitLab | CVE must fail brik-scan (live scan gating) -- gap 2 |
 | workflow-trunk-{main,tag} | GitLab | `workflow:` filter: default branch + tag each create a pipeline -- gap 4 |
 | cd-promote | GitLab | Channel-model promotion (P2-A): tagged run copies candidate -> release WITH its signed referrers (`oras cp -r`) and verifies them on the destination; second phase proves the immutability refusal on a divergent release digest. Host-side registry asserts (digest equality + referrer index), not job colors. |
+| node-deploy-channel | GitLab | CD channel keystone + promotion chain (decision #2): CI publishes once, CD deploys the digest-pinned staging env. The chain phase proves production is refused before any validation (requires_eligibility on a fresh digest), that the green staging run journals artifact_validated_for (producer trace + digest-bound event read from the evidence-cd state-repo), and that production then deploys the SAME digest (ArgoCD Synced+Healthy). |
 | any scenario `--stub` | GitLab + Jenkins | Full workflow on the single stub image (replaces the old node-full-stub row) |
 
 ## Test validity audit (2026-06-04)

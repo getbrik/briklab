@@ -61,8 +61,10 @@ log_info "Creating ArgoCD applications for E2E..."
 # brik-e2e-rollback: used by the node-deploy-gitops-rollback E2E scenario.
 _provision_argocd_app "brik-e2e-gitops"   "brik-e2e-gitops"   "config-deploy-gitops"
 _provision_argocd_app "brik-e2e-rollback" "brik-e2e-rollback" "config-deploy-rollback"
-_provision_argocd_app "brik-e2e-cd"     "brik-e2e-cd"     "config-deploy-cd"
-_provision_argocd_app "brik-e2e-cd-dev" "brik-e2e-cd-dev" "config-deploy-cd-dev"
+_provision_argocd_app "brik-e2e-cd"      "brik-e2e-cd"      "config-deploy-cd"
+_provision_argocd_app "brik-e2e-cd-dev"  "brik-e2e-cd-dev"  "config-deploy-cd-dev"
+# brik-e2e-cd-prod: chain-gated target of the validates_for producer E2E.
+_provision_argocd_app "brik-e2e-cd-prod" "brik-e2e-cd-prod" "config-deploy-cd-prod"
 # brik-e2e-signed: used by the node-deploy-signed E2E scenario (provenance gate).
 _provision_argocd_app "brik-e2e-signed" "brik-e2e-signed" "config-deploy-signed"
 

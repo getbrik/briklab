@@ -200,6 +200,7 @@ YAML
 }
 write_binding staging
 write_binding production
+write_binding dev
 
 # --- policies ----------------------------------------------------------------
 
