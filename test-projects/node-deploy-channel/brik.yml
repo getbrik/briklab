@@ -25,28 +25,54 @@ artifacts:
   channels:
     release:
       registry: nexus.briklab.test:8082/brik/node-deploy-channel
+  # PromotionJournal state-repo (unsigned posture): the staging deploy appends
+  # the artifact_validated_for grant the production gate consumes. No
+  # credential in the URL: the token travels as BRIK_GIT_TOKEN (GitLab group
+  # variable / Jenkins casc global env).
+  evidence:
+    repo: http://gitea.briklab.test:3000/brik/evidence-cd.git
+    branch: main
+    sign: false
+    token_var: BRIK_GIT_TOKEN
 
 # Explicit environments (no workflow preset): the CD flow targets one env per
 # `brik deploy --environment`. staging and dev share the same channel to prove
-# the same digest deploys N times across environments.
+# the same digest deploys N times across environments. staging additionally
+# heads a promotion chain: a green staging deploy validates the artifact for
+# production, whose eligibility gate refuses an unvalidated digest.
 deploy:
   environments:
     staging:
       target: gitops
       accepts_channel: release
+      validates_for: production
       gates:
         require_digest: true
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-cd.git
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd.git
+      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd
       app_name: brik-e2e-cd
+    production:
+      target: gitops
+      accepts_channel: release
+      gates:
+        require_digest: true
+        requires_eligibility: [artifact_validated_for]
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd-prod.git
+      git_token_var: BRIK_GIT_TOKEN
+      path: k8s
+      source: k8s
+      controller: argocd
+      app_name: brik-e2e-cd-prod
     dev:
       target: gitops
       accepts_channel: release
       gates:
         require_digest: true
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
+      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd

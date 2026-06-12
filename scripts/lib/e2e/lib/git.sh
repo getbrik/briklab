@@ -119,6 +119,28 @@ e2e.git.push() {
     return "$push_result"
 }
 
+# Clone a remote URL into a local dir using GIT_ASKPASS.
+# The PAT is never embedded in the URL, the process list or the clone's
+# .git/config (parity with e2e.git.push).
+# Args: $1 = remote URL, $2 = destination dir, $3 = username, $4 = token/PAT
+e2e.git.clone() {
+    local remote_url="$1"
+    local dest_dir="$2"
+    local username="$3"
+    local token="$4"
+
+    local askpass_script
+    askpass_script=$(e2e.git._askpass_file "$token")
+
+    local clone_result=0
+    GIT_ASKPASS="$askpass_script" GIT_TERMINAL_PROMPT=0 \
+        git -c "credential.helper=" -c "credential.username=${username}" \
+        clone -q "$remote_url" "$dest_dir" >/dev/null 2>&1 || clone_result=1
+
+    rm -f "$askpass_script"
+    return "$clone_result"
+}
+
 # Create a commit in a repo.
 # Args: $1 = repo dir, $2 = message, $3 = flags (optional, e.g. "--allow-empty")
 e2e.git.commit() {

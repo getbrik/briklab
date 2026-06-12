@@ -198,9 +198,12 @@ create_config_deploy_repo "config-deploy-gitops" "GitOps config repo for E2E git
 create_config_deploy_repo "config-deploy-rollback" "GitOps config repo for E2E rollback deploy tests"
 create_config_deploy_repo "config-deploy-cd" "GitOps config repo for E2E CD channel deploy (staging)"
 create_config_deploy_repo "config-deploy-cd-dev" "GitOps config repo for E2E CD channel deploy (dev)"
+create_config_deploy_repo "config-deploy-cd-prod" "GitOps config repo for E2E CD channel deploy (production, chain-gated)"
 create_config_deploy_repo "config-deploy-signed" "GitOps config repo for the signed deploy E2E (provenance gate)"
 create_config_deploy_repo "evidence-signed" "BuildEvidence state-repo for the signed deploy E2E (append-only)"
 protect_state_repo_branch "evidence-signed"
+create_config_deploy_repo "evidence-cd" "PromotionJournal state-repo for the CD chain E2E (append-only)"
+protect_state_repo_branch "evidence-cd"
 
 log_ok "Gitea configuration complete"
 echo ""

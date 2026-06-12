@@ -21,6 +21,8 @@ source "${SCRIPT_DIR}/../common.sh"
 source "${SCRIPT_DIR}/lib/auth.sh"
 # shellcheck source=lib/jenkins-api.sh
 source "${SCRIPT_DIR}/lib/jenkins-api.sh"
+# shellcheck source=lib/reset.sh
+source "${SCRIPT_DIR}/lib/reset.sh"
 # shellcheck source=lib/cd-channel.sh
 source "${SCRIPT_DIR}/lib/cd-channel.sh"
 reload_env
@@ -45,6 +47,15 @@ if ! e2e.jenkins.wait_job_exists "$CD_JOB" 60; then
     log_error "CD job '${CD_JOB}' not found (JCasC not applied?)"
     exit 1
 fi
+
+# The scenario owns its state-repo: each platform pushes its own git history
+# for the same project, so the reproducible image keeps ONE digest while the
+# evidencing commit differs per platform -- a stale record from the other
+# platform's run would conflict fail-closed. Start from a clean journal.
+e2e.reset.gitops_config_repo "gitea" "evidence-cd" || {
+    log_error "cannot reset the evidence-cd state-repo"
+    exit 1
+}
 
 # CI seed via the v0.1.0 TAG sub-job (release context -> release + package ->
 # publish), mirroring the GitLab seed. The tag is a sub-job distinct from main,
