@@ -65,6 +65,10 @@ e2e.gitlab.set_project_variable_scoped "$PROJECT_ID" \
     "BRIK_SIGNING_BAO_TOKEN" "${OPENBAO_ROOT_TOKEN:-brik-bao-root-2026}" "brik/signing"
 log_ok "BRIK_SIGNING_BAO_TOKEN scoped to the brik/signing environment"
 
+# Least-privilege CD: the deploy job resolves and verifies with the
+# read-only brik-cd account (environment-scoped values of BRIK_REGISTRY_*).
+e2e.gitlab.scope_cd_registry_creds "$PROJECT_ID" staging
+
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
 

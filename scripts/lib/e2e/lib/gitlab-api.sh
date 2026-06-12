@@ -523,3 +523,22 @@ e2e.gitlab.set_project_variable_scoped() {
         --data-urlencode "environment_scope=${scope}" \
         -d "protected=false&masked=false" >/dev/null 2>&1 || true
 }
+
+# Scope the read-only CD registry identity (the lab's brik-cd Nexus account)
+# to the given deploy environments of a project. The CD jobs declare their
+# environment, so these values shadow the group-level admin credential there
+# (project scoped variables take precedence): the CD resolves digests,
+# verifies attestations and pulls with an account that CANNOT push, while the
+# CI jobs keep the group-level write identity.
+# Args: $1 = project ID, $2.. = environment names
+e2e.gitlab.scope_cd_registry_creds() {
+    local project_id="$1"; shift
+    local cd_password="${NEXUS_CD_PASSWORD:-Brik-NexusCD-2026}"
+    local env
+    for env in "$@"; do
+        e2e.gitlab.set_project_variable_scoped "$project_id" \
+            "BRIK_REGISTRY_USER" "brik-cd" "$env"
+        e2e.gitlab.set_project_variable_scoped "$project_id" \
+            "BRIK_REGISTRY_PASSWORD" "$cd_password" "$env"
+    done
+}

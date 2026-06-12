@@ -51,6 +51,10 @@ log_ok "Project ID: ${PROJECT_ID}"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
 
+# Least-privilege CD: the deploy job resolves and verifies with the
+# read-only brik-cd account (environment-scoped values of BRIK_REGISTRY_*).
+e2e.gitlab.scope_cd_registry_creds "$PROJECT_ID" staging
+
 # The evidence store is append-only: re-running the scenario on the same
 # (version, digest) would collide with the previous run's event. Force-push
 # a clean baseline so the scenario is idempotent (same mechanism as the
