@@ -46,6 +46,10 @@ deploy:
       target: gitops
       accepts_channel: release
       validates_for: production
+      # Independent Layer E (A3): staging's deployment definition follows
+      # main, so an env config change redeploys WITHOUT a new version while
+      # production (no config_ref) keeps the definition frozen at the tag.
+      config_ref: main
       gates:
         require_digest: true
       repo: https://gitea.briklab.test:3000/brik/config-deploy-cd.git

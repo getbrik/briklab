@@ -200,3 +200,91 @@ if [[ "$PROD_IMAGE" != *"@${STAGING_DIGEST}" ]]; then
     exit 1
 fi
 log_ok "=== GITLAB CD CHAIN PASSED (refused -> validated by staging -> deployed) ==="
+
+# --- Independent Layer E (config_ref, A3): an env config change redeploys ---
+# --- the SAME version; production keeps the definition frozen at the tag. ---
+echo ""
+log_info "=== Layer E phase: env config change redeploys without a new version (config_ref) ==="
+
+GITLAB_REPO_URL="http://${GITLAB_HOSTNAME:-gitlab.briklab.test}:${GITLAB_HTTP_PORT:-8929}/brik/node-deploy-channel.git"
+GITEA_BASE_URL="https://${GITEA_HOSTNAME:-gitea.briklab.test}:${GITEA_HTTP_PORT:-3000}"
+
+log_info "--- Layer E: push an env config change on main (no new version) ---"
+LE_TMP="$(mktemp -d)"
+APP_DIR="${LE_TMP}/node-deploy-channel"
+if ! e2e.git.clone "$GITLAB_REPO_URL" "$APP_DIR" "root" "$GITLAB_PAT"; then
+    rm -rf "$LE_TMP"
+    log_error "cannot clone the app repo from GitLab"
+    exit 1
+fi
+# Idempotent across re-runs: bump replicas from whatever main carries now.
+LE_OLD_REPLICAS="$(grep -oE 'replicas: [0-9]+' "${APP_DIR}/k8s/deployment.yaml" | awk '{print $2}')"
+LE_NEW_REPLICAS=$((LE_OLD_REPLICAS + 1))
+sed -i.bak "s/replicas: ${LE_OLD_REPLICAS}/replicas: ${LE_NEW_REPLICAS}/" \
+    "${APP_DIR}/k8s/deployment.yaml" && rm -f "${APP_DIR}/k8s/deployment.yaml.bak"
+if ! e2e.git.commit "$APP_DIR" "chore: bump staging replicas to ${LE_NEW_REPLICAS} (env config change)"; then
+    rm -rf "$LE_TMP"
+    log_error "cannot commit the env config change"
+    exit 1
+fi
+# ci.skip: this push must not fire a CI pipeline -- the point is precisely
+# that NO new version is produced for the config change.
+if ! e2e.git.push "$APP_DIR" "$GITLAB_REPO_URL" "root" "$GITLAB_PAT" "-o ci.skip"; then
+    rm -rf "$LE_TMP"
+    log_error "cannot push the env config change"
+    exit 1
+fi
+rm -rf "$LE_TMP"
+log_ok "main now carries replicas: ${LE_NEW_REPLICAS} (tag ${SEED_TAG} still carries ${LE_OLD_REPLICAS})"
+
+log_info "--- Layer E: redeploy ${DEPLOY_VERSION} -> staging (same version, new config) ---"
+if ! _cd_channel_deploy "$DEPLOY_VERSION" "staging"; then
+    log_error "staging CD redeploy failed after the env config change"
+    exit 1
+fi
+
+log_info "--- Layer E: the deploy resolved the env config at config_ref ---"
+LE_TRACE="$(_cd_deploy_trace "$_CD_LAST_PIPELINE_ID")"
+if ! grep -q "resolving environment config for 'staging' at main" <<< "$LE_TRACE"; then
+    log_error "brik-cd-deploy trace does not show the Layer E resolution (config_ref)"
+    exit 1
+fi
+log_ok "trace shows the env config resolved at main"
+
+log_info "--- Layer E: config repo carries the new config pinned to the SAME digest ---"
+LE_CFG_TMP="$(mktemp -d)"
+if ! e2e.git.clone "${GITEA_BASE_URL}/brik/config-deploy-cd.git" \
+        "${LE_CFG_TMP}/cfg" "${GITEA_ADMIN_USER:-brik}" "$GITEA_PAT"; then
+    rm -rf "$LE_CFG_TMP"
+    log_error "cannot clone config-deploy-cd"
+    exit 1
+fi
+if ! grep -q "replicas: ${LE_NEW_REPLICAS}" "${LE_CFG_TMP}/cfg/k8s/deployment.yaml"; then
+    rm -rf "$LE_CFG_TMP"
+    log_error "config-deploy-cd does not carry replicas: ${LE_NEW_REPLICAS} (Layer E not applied)"
+    exit 1
+fi
+if ! grep -q "@${STAGING_DIGEST}" "${LE_CFG_TMP}/cfg/k8s/deployment.yaml"; then
+    rm -rf "$LE_CFG_TMP"
+    log_error "config-deploy-cd is not pinned to the seeded digest ${STAGING_DIGEST} anymore"
+    exit 1
+fi
+log_ok "staging intent: replicas ${LE_NEW_REPLICAS} @ unchanged digest ${STAGING_DIGEST}"
+
+log_info "--- Layer E: production stays on the tag's definition (no config_ref) ---"
+if ! e2e.git.clone "${GITEA_BASE_URL}/brik/config-deploy-cd-prod.git" \
+        "${LE_CFG_TMP}/cfg-prod" "${GITEA_ADMIN_USER:-brik}" "$GITEA_PAT" \
+    || ! grep -q "replicas: ${LE_OLD_REPLICAS}" "${LE_CFG_TMP}/cfg-prod/k8s/deployment.yaml"; then
+    rm -rf "$LE_CFG_TMP"
+    log_error "config-deploy-cd-prod no longer carries replicas: ${LE_OLD_REPLICAS} (Layer V leaked)"
+    exit 1
+fi
+rm -rf "$LE_CFG_TMP"
+log_ok "production intent untouched (replicas ${LE_OLD_REPLICAS})"
+
+log_info "--- Layer E: ArgoCD reconciles staging to the new config ---"
+if ! e2e.argocd.assert_synced "$APP" "$TIMEOUT_SECONDS"; then
+    log_error "ArgoCD app '${APP}' did not reach Synced+Healthy after the Layer E redeploy"
+    exit 1
+fi
+log_ok "=== GITLAB LAYER E PASSED (config change redeployed ${DEPLOY_VERSION} without a new version) ==="
