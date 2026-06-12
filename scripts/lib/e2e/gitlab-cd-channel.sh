@@ -250,6 +250,30 @@ PY
 NP_PID=$!
 _np_cleanup() { kill "$NP_PID" 2>/dev/null || true; rm -rf "$NP_DIR"; }
 
+# Readiness gate: the sink must be listening on the host AND reachable from
+# a container (the same path the job's POST takes) before the deploy fires,
+# so an assert failure blames brik, never the sink infrastructure.
+NP_READY=0
+for _ in $(seq 1 20); do
+    if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:${NP_PORT}/"; then
+        NP_READY=1
+        break
+    fi
+    sleep 0.5
+done
+if [[ "$NP_READY" -ne 1 ]]; then
+    _np_cleanup
+    log_error "the webhook sink did not come up on :${NP_PORT}"
+    exit 1
+fi
+if ! docker run --rm curlimages/curl:latest \
+        curl -s -o /dev/null --max-time 5 "http://host.docker.internal:${NP_PORT}/" 2>/dev/null; then
+    _np_cleanup
+    log_error "the webhook sink is not reachable from containers (host.docker.internal:${NP_PORT})"
+    exit 1
+fi
+log_ok "webhook sink up and container-reachable on :${NP_PORT}"
+
 log_info "--- Chain: CD deploy ${DEPLOY_VERSION} -> production ---"
 if ! _cd_channel_deploy "$DEPLOY_VERSION" "production" \
         "BRIK_NOTIFY_WEBHOOK_URL=http://host.docker.internal:${NP_PORT}/hook"; then
@@ -294,6 +318,13 @@ if ! grep -q '"event": "deploy"' "${NP_DIR}/hooks.log" 2>/dev/null \
         || ! grep -q '"environment": "production"' "${NP_DIR}/hooks.log" \
         || ! grep -q "$STAGING_DIGEST" "${NP_DIR}/hooks.log" \
         || ! grep -q "requires_eligibility" "${NP_DIR}/hooks.log"; then
+    if [[ -s "${NP_DIR}/hooks.log" ]]; then
+        log_error "the webhook sink received an unexpected payload:"
+        sed 's/^/    /' "${NP_DIR}/hooks.log"
+    else
+        log_error "the webhook sink received nothing (sink alive: $(kill -0 "$NP_PID" 2>/dev/null && echo yes || echo no)); brik-cd-deploy trace:"
+        _cd_deploy_trace "$_CD_LAST_PIPELINE_ID" 2>/dev/null | grep -i "webhook\|notif" | sed 's/^/    /' || true
+    fi
     _np_cleanup
     log_error "the webhook sink did not receive the CD outcome (event/status/env/digest/gates)"
     exit 1
