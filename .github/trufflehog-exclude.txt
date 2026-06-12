@@ -1,11 +1,16 @@
 # Paths excluded from the trufflehog secret scan (--exclude-paths).
 # One path regex per line.
 #
-# test-projects/ holds E2E fixtures whose brik.yml embeds the lab's documented
-# Gitea credentials as the userinfo of GitOps/evidence repo URLs. These are
-# local-lab fixtures published in the README, not real secrets. Setup scripts
-# and the rest of the repo are still scanned.
+# test-projects/ holds E2E fixtures. Their brik.yml files no longer embed
+# credentials (bare URLs + token_var since the token_var campaign), but the
+# scan walks every blob of the pushed range and the pre-campaign revisions
+# carried the lab's documented Gitea credentials as URL userinfo. Local-lab
+# fixtures published in the README, not real secrets.
 ^test-projects/
 # README documents lab service URLs (e.g. the GitLab SSH endpoint) that the scan
 # reads as unverified URIs; they are published access docs, not secrets.
 ^README\.md$
+# A past revision of THIS file spelled out a lab URI it was excluding, and the
+# scan walks every blob of the pushed range: exclude the file itself so its
+# history cannot re-trip the URI detector. It documents patterns, never values.
+^\.github/trufflehog-exclude\.txt$
