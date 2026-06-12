@@ -114,6 +114,16 @@ _cd_channel_deploy() {
         e2e.jenkins.get_console_log "$CD_JOB" "$bn" 2>/dev/null | tail -30 || true
         return 1
     fi
+
+    # Projection (UX only, never source of truth): brikDeploy stamps the
+    # build page with the CD inputs and the resolved digest.
+    local desc
+    desc="$(e2e.jenkins.api_get "job/${CD_JOB}/${bn}/api/json" | jq -r '.description // ""')"
+    if [[ "$desc" != *"brik deploy ${version} -> ${environment}"* || "$desc" != *"@ sha256:"* ]]; then
+        log_error "CD build description does not carry the projection (got: '${desc}')"
+        return 1
+    fi
+    log_ok "build page carries the projection: ${desc}"
 }
 
 e2e.cd_channel.run "jenkins" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"
