@@ -30,7 +30,8 @@ artifacts:
   # commit with the referential's evidence-signing key; verification uses
   # trust/allowed_signers from the same referential.
   evidence:
-    repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/evidence-signed.git
+    repo: http://gitea.briklab.test:3000/brik/evidence-signed.git
+    token_var: BRIK_GIT_TOKEN
     branch: main
     sign: true
 
@@ -50,7 +51,8 @@ deploy:
         expected_builder: "^http://gitlab\\.briklab\\.test:8929/-/brik/"
         expected_source: "gitlab\\.briklab\\.test:8929/brik/node-deploy-signed$"
         requires_eligibility: [artifact_authorized_for]
-      repo: http://brik:Brik-Gitea-2026@gitea.briklab.test:3000/brik/config-deploy-signed.git
+      repo: http://gitea.briklab.test:3000/brik/config-deploy-signed.git
+      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd
