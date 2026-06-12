@@ -169,6 +169,17 @@ method: ssh-key
 private_key: file://trust/evidence_signing_key
 YAML
 
+# The CI orchestrators inject ARGOCD_AUTH_TOKEN as a pipeline variable;
+# declaring it here lets the local containerized runner forward it into the
+# deploy container by name (env:// refs are the forwarding contract).
+cat > "${INFRA_DIR}/credentials/argocd.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Credential
+name: argocd
+method: token
+token: env://ARGOCD_AUTH_TOKEN
+YAML
+
 # --- bindings ---------------------------------------------------------------
 
 # One binding per deploy environment name the test projects use. The
