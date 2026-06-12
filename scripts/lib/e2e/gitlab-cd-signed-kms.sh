@@ -9,8 +9,13 @@
 #
 # Trigger-time selection (GitLab CE cannot scope variables per instance):
 #   BRIK_INFRA_DIR=/etc/brik/infra-kms  - the runner mounts both instances
-#   BRIK_BAO_TOKEN=<dev root token>     - resolved by the SecretManager
-#                                         endpoint's env:// credential ref
+#
+# Signing-credential isolation (SLSA L2 credential leg): the OpenBAO token
+# travels as a project variable scoped to the brik/signing environment, which
+# only the brik-container-scan job declares (action: prepare) -- the
+# build/test jobs, where user-defined commands run, never receive it. The CD
+# deploy verifies through the Signing endpoint's verification_key (the
+# exported Transit public key), so the CD pipeline needs no token at all.
 #
 # True-positive guards: the scenario fails if the traces do not show the
 # kms backend doing the work ('attesting ... [kms]' in the CI signing job,
@@ -44,8 +49,7 @@ DEPLOY_VERSION="0.1.0"
 ENVIRONMENT="staging"
 APP="brik-e2e-signed"
 
-# The dev-mode root token doubles as the job credential (P-lab posture).
-KMS_VARS="BRIK_INFRA_DIR=/etc/brik/infra-kms,BRIK_BAO_TOKEN=${OPENBAO_ROOT_TOKEN:-brik-bao-root-2026}"
+KMS_VARS="BRIK_INFRA_DIR=/etc/brik/infra-kms"
 
 log_info "Looking up project ${PROJECT_NAME}..."
 PROJECT_ID="$(e2e.gitlab.get_project_id "$PROJECT_PATH")"
@@ -54,6 +58,12 @@ if [[ -z "$PROJECT_ID" ]]; then
     exit 1
 fi
 log_ok "Project ID: ${PROJECT_ID}"
+
+# The dev-mode root token doubles as the signing credential (P-lab posture),
+# delivered ONLY to the jobs declaring the brik/signing environment.
+e2e.gitlab.set_project_variable_scoped "$PROJECT_ID" \
+    "BRIK_SIGNING_BAO_TOKEN" "${OPENBAO_ROOT_TOKEN:-brik-bao-root-2026}" "brik/signing"
+log_ok "BRIK_SIGNING_BAO_TOKEN scoped to the brik/signing environment"
 
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
