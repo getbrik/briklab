@@ -85,9 +85,10 @@ _cd_channel_seed_ci() {
 # assert the producer trace of the staging run.
 _CD_LAST_PIPELINE_ID=""
 _cd_channel_deploy() {
-    local version="$1" environment="$2" id
-    id="$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "main" \
-        "BRIK_DEPLOY_VERSION=${version},BRIK_DEPLOY_ENVIRONMENT=${environment}")"
+    local version="$1" environment="$2" extra="${3:-}" id
+    local vars="BRIK_DEPLOY_VERSION=${version},BRIK_DEPLOY_ENVIRONMENT=${environment}"
+    [[ -n "$extra" ]] && vars="${vars},${extra}"
+    id="$(e2e.gitlab.trigger_pipeline "$PROJECT_ID" "main" "$vars")"
     if [[ -z "$id" ]]; then
         log_error "failed to trigger the CD pipeline"
         return 1
@@ -226,8 +227,33 @@ if [[ -z "$DEP_COUNT" || "$DEP_COUNT" -lt 1 ]]; then
 fi
 log_ok "journal carries deployed(staging) bound to ${STAGING_DIGEST} (definition_hash + layers + run_id)"
 
+# CD notification (best-effort on brik's side, asserted here): a sink on the
+# host receives the outcome of the production deploy. Job containers reach
+# the host via host.docker.internal.
+NP_DIR="$(mktemp -d)"
+NP_PORT=18765
+python3 - "$NP_PORT" "${NP_DIR}/hooks.log" <<'PY' &
+import sys, http.server
+port, out = int(sys.argv[1]), sys.argv[2]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(n).decode('utf-8', 'replace')
+        with open(out, 'a') as f:
+            f.write(body + "\n")
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+http.server.HTTPServer(('0.0.0.0', port), H).serve_forever()
+PY
+NP_PID=$!
+_np_cleanup() { kill "$NP_PID" 2>/dev/null || true; rm -rf "$NP_DIR"; }
+
 log_info "--- Chain: CD deploy ${DEPLOY_VERSION} -> production ---"
-if ! _cd_channel_deploy "$DEPLOY_VERSION" "production"; then
+if ! _cd_channel_deploy "$DEPLOY_VERSION" "production" \
+        "BRIK_NOTIFY_WEBHOOK_URL=http://host.docker.internal:${NP_PORT}/hook"; then
+    _np_cleanup
     log_error "production CD deploy failed despite the validation grant"
     exit 1
 fi
@@ -256,10 +282,32 @@ PROD_DEP_COUNT="$(jq -s --arg d "$STAGING_DIGEST" \
                    and (.definition_hash | startswith("sha256:"))
                    and has("version_ref"))] | length' <<< "$DEPLOYED_EVENTS")"
 if [[ -z "$PROD_DEP_COUNT" || "$PROD_DEP_COUNT" -lt 1 ]]; then
+    _np_cleanup
     log_error "no deployed(production) event bound to ${STAGING_DIGEST} in the journal"
     exit 1
 fi
 log_ok "journal carries deployed(production) bound to ${STAGING_DIGEST}"
+
+log_info "--- Notification: the webhook received the CD outcome ---"
+if ! grep -q '"event": "deploy"' "${NP_DIR}/hooks.log" 2>/dev/null \
+        || ! grep -q '"status": "success"' "${NP_DIR}/hooks.log" \
+        || ! grep -q '"environment": "production"' "${NP_DIR}/hooks.log" \
+        || ! grep -q "$STAGING_DIGEST" "${NP_DIR}/hooks.log" \
+        || ! grep -q "requires_eligibility" "${NP_DIR}/hooks.log"; then
+    _np_cleanup
+    log_error "the webhook sink did not receive the CD outcome (event/status/env/digest/gates)"
+    exit 1
+fi
+_np_cleanup
+log_ok "webhook notification received (event, status, environment, digest, gates)"
+
+log_info "--- Projection: GitLab records the deployment on the environment ---"
+NP_DEPLOYMENTS="$(e2e.gitlab.api_get "projects/${PROJECT_ID}/deployments?environment=production&status=success" | jq 'length')"
+if [[ -z "$NP_DEPLOYMENTS" || "$NP_DEPLOYMENTS" -lt 1 ]]; then
+    log_error "no GitLab deployment record for environment 'production'"
+    exit 1
+fi
+log_ok "GitLab shows ${NP_DEPLOYMENTS} deployment(s) on 'production' (projection, never source of truth)"
 
 log_ok "=== GITLAB CD CHAIN PASSED (refused -> validated by staging -> deployed) ==="
 
