@@ -47,6 +47,12 @@ log_ok "Project ID: ${PROJECT_ID}"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "running"
 e2e.gitlab.cancel_pipelines "$PROJECT_ID" "pending"
 
+# Least-privilege CD: the deploy jobs resolve and verify with the read-only
+# brik-cd account (environment-scoped values of BRIK_REGISTRY_*); the CI
+# seed keeps the group-level write identity.
+e2e.gitlab.scope_cd_registry_creds "$PROJECT_ID" staging production dev
+log_ok "read-only CD registry identity scoped to staging/production/dev"
+
 # The scenario owns its state-repo: each project push re-mints the commit
 # while the reproducible image keeps the SAME digest, so a stale evidence
 # record would conflict (another commit claiming the digest) and stale

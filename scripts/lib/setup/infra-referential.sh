@@ -167,15 +167,45 @@ hosts:
 strict_host_key: false
 YAML
 
+# Package registry (npm, the format the lab publishes): the publisher takes
+# the destination, transport posture (declared plain http: legal but noisy)
+# and credential from here instead of the BRIK_PUBLISH_NPM_* variables. The
+# Nexus UI port (8081) stayed plain http at lab tier 2; only the docker
+# connector (8082) moved to TLS.
+cat > "${INFRA_DIR}/endpoints/pkg-npm.yml" <<YAML
+apiVersion: brik.dev/referential/v1
+kind: PackageRegistry
+name: pkg-npm
+format: npm
+url: http://${NEXUS_HOST}:8081/repository/brik-npm/
+credential: npm-publish
+tls:
+  trust: system
+YAML
+
 # --- credentials ------------------------------------------------------------
 
-cat > "${INFRA_DIR}/credentials/registry-push.yml" <<'YAML'
+# The env bindings are CD-scope, and the CD registry identity is READ-ONLY
+# (the lab's brik-cd Nexus account, delivered as environment-scoped values of
+# BRIK_REGISTRY_*): digest resolution, attestation verification and pull need
+# no write. The CI write identity (publish, attest attach, promote copy) is
+# the same var names delivered with the admin account by the group-level CI
+# variables -- distinct accounts, one revocation never strands the other.
+cat > "${INFRA_DIR}/credentials/registry-read.yml" <<'YAML'
 apiVersion: brik.dev/referential/v1
 kind: Credential
-name: registry-push
+name: registry-read
 method: basic
 username: env://BRIK_REGISTRY_USER
 password: env://BRIK_REGISTRY_PASSWORD
+YAML
+
+cat > "${INFRA_DIR}/credentials/npm-publish.yml" <<'YAML'
+apiVersion: brik.dev/referential/v1
+kind: Credential
+name: npm-publish
+method: token
+token: env://BRIK_PUBLISH_NPM_TOKEN
 YAML
 
 cat > "${INFRA_DIR}/credentials/git-api.yml" <<'YAML'
@@ -216,7 +246,7 @@ apiVersion: brik.dev/referential/v1
 kind: Binding
 name: $1
 endpoints:
-  registry-candidate: registry-push
+  registry-candidate: registry-read
   git-host: git-api
 capabilities:
   artifact-attestation: cosign-key
@@ -260,6 +290,7 @@ cp "${INFRA_DIR}/endpoints/registry-candidate.yml" \
    "${INFRA_DIR}/endpoints/git-host.yml" \
    "${INFRA_DIR}/endpoints/argocd.yml" \
    "${INFRA_DIR}/endpoints/ssh-target.yml" \
+   "${INFRA_DIR}/endpoints/pkg-npm.yml" \
    "${INFRA_KMS_DIR}/endpoints/"
 cp "${INFRA_DIR}/credentials/"*.yml "${INFRA_KMS_DIR}/credentials/"
 cp "${INFRA_DIR}/policies/org.yml" "${INFRA_KMS_DIR}/policies/"
@@ -323,7 +354,7 @@ apiVersion: brik.dev/referential/v1
 kind: Binding
 name: $1
 endpoints:
-  registry-candidate: registry-push
+  registry-candidate: registry-read
   git-host: git-api
 capabilities:
   artifact-attestation: cosign-kms-openbao

@@ -24,9 +24,20 @@ jenkins:
             value: "admin:${NEXUS_ADMIN_PASSWORD}"
           - key: BRIK_REGISTRY_HOST
             value: "nexus.briklab.test:8082"
+          # Read-only registry identity (brik-cd) as the default: digest
+          # resolution, verification and pull need no write, and the
+          # build/test containers where user commands run must not hold a
+          # push credential. The signing phase (container-scan) attaches the
+          # signed referrers to the digest, so it alone receives the write
+          # identity: BRIK_SIGNING_REGISTRY_* is remapped onto
+          # BRIK_REGISTRY_* in the signing env-file by brikDockerArgs.
           - key: BRIK_REGISTRY_USER
-            value: "admin"
+            value: "brik-cd"
           - key: BRIK_REGISTRY_PASSWORD
+            value: "${NEXUS_CD_PASSWORD}"
+          - key: BRIK_SIGNING_REGISTRY_USER
+            value: "admin"
+          - key: BRIK_SIGNING_REGISTRY_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
           # Nexus 3 UI URL (port 8081) -- distinct from the docker push
           # endpoint (port 8082). Surfaced as business.registry.ui_url in

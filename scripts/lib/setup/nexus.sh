@@ -356,6 +356,66 @@ ensure_docker_https_connector() {
     fi
 }
 
+# Least-privilege CD identity: a read-only account for the CD-side registry
+# consumers (digest resolution, attestation verification, image pull). The
+# CI side keeps the admin push account (publish, attest attach, promote
+# copy), so revoking one identity never strands the other and the CD
+# credential cannot push. Idempotent: role and user updates overwrite.
+create_cd_reader() {
+    log_info "Creating the read-only CD registry account (brik-cd)..."
+    local cd_password="${NEXUS_CD_PASSWORD:-Brik-NexusCD-2026}"
+
+    local role_json http_code
+    role_json='{
+        "id": "brik-cd-read",
+        "name": "brik-cd-read",
+        "description": "Read-only access to the docker registry for the CD flow",
+        "privileges": ["nx-repository-view-docker-*-read", "nx-repository-view-docker-*-browse"],
+        "roles": []
+    }'
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+        -X PUT -H "Content-Type: application/json" -d "$role_json" \
+        "${NEXUS_URL}/service/rest/v1/security/roles/brik-cd-read")
+    if [[ "$http_code" == "404" ]]; then
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+            -X POST -H "Content-Type: application/json" -d "$role_json" \
+            "${NEXUS_URL}/service/rest/v1/security/roles")
+    fi
+    if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
+        log_error "Failed to create the brik-cd-read role (HTTP ${http_code})"
+        return 1
+    fi
+
+    local user_json
+    user_json=$(printf '{
+        "userId": "brik-cd",
+        "firstName": "Brik",
+        "lastName": "CD",
+        "emailAddress": "brik-cd@briklab.test",
+        "password": "%s",
+        "status": "active",
+        "roles": ["brik-cd-read"]
+    }' "$cd_password")
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+        -X POST -H "Content-Type: application/json" -d "$user_json" \
+        "${NEXUS_URL}/service/rest/v1/security/users")
+    if [[ "$http_code" == "200" ]]; then
+        log_ok "brik-cd user created (role brik-cd-read)"
+    else
+        # Already exists: converge the password (the account holds no state).
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${NEXUS_NEW_PASSWORD}" \
+            -X PUT -H "Content-Type: text/plain" --data-raw "${cd_password}" \
+            "${NEXUS_URL}/service/rest/v1/security/users/brik-cd/change-password")
+        if [[ "$http_code" == "204" ]]; then
+            log_ok "brik-cd user already present (password converged)"
+        else
+            log_error "Failed to converge the brik-cd user (HTTP ${http_code})"
+            return 1
+        fi
+    fi
+    save_to_env "NEXUS_CD_PASSWORD" "$cd_password"
+}
+
 # === Main ===
 wait_for_nexus
 change_admin_password
@@ -365,6 +425,7 @@ enable_anonymous_access
 accept_eula
 create_repositories
 ensure_docker_https_connector
+create_cd_reader
 
 # Save config to .env
 save_to_env "NEXUS_HOSTNAME" "${NEXUS_HOSTNAME:-nexus.briklab.test}"
