@@ -2,7 +2,8 @@
 
 This document explains how Briklab works internally. It is intended for contributors and anyone curious about the design decisions behind the infrastructure.
 
-For the user guide (installation, commands, workflows), see the [README](../README.md).
+For the user guide see the [README](../README.md); for the full CLI reference and
+runtime troubleshooting see [operations.md](operations.md).
 
 ---
 
@@ -114,30 +115,30 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 
 ```
  brik-net (172.20.0.0/16)
-+---------------------------------------------------------------------------+
-|                                                                           |
-|  +------------------+   +------------------+                             |
-|  |   GitLab CE      |   |  GitLab Runner   |                             |
-|  |   172.20.0.10    |   |  172.20.0.11     |                             |
-|  |   :8929, :2222   |   |  (no port)       |                             |
-|  +------------------+   +------------------+                             |
-|                                                                           |
++-------------------------------------------------------------------------+
+|                                                                         |
+|  +------------------+   +------------------+                            |
+|  |   GitLab CE      |   |  GitLab Runner   |                            |
+|  |   172.20.0.10    |   |  172.20.0.11     |                            |
+|  |   :8929, :2222   |   |  (no port)       |                            |
+|  +------------------+   +------------------+                            |
+|                                                                         |
 |  +------------------+   +------------------+   +--------------+         |
 |  |   Gitea (TLS)    |   |  Jenkins         |   |  Nexus 3 CE  |         |
 |  |   172.20.0.20    |   |  172.20.0.21     |   | 172.20.0.30  |         |
 |  |   :3000, :222    |   |  :9090, :50000   |   | :8081, :8082 |         |
 |  +------------------+   +------------------+   +--------------+         |
-|                                                                           |
-|  +------------------+  +-----------------+   +------------------+      |
-|  |   SSH Target     |  |  OpenBAO (KMS)  |   |  ArgoCD (TLS)    |      |
-|  |   172.20.0.41    |  |  172.20.0.50     |   |  (k3d cluster)   |      |
-|  |   :22 (internal) |  |  :8200           |   |  :9080           |      |
-|  +------------------+  +-----------------+   +------------------+      |
-|                                                                           |
-|  Infrastructure Referential Instance (generated + mounted at setup):     |
-|  data/infra/ (P-lab) or data/infra-kms/ (KMS variant)                  |
-|  -> Endpoints, TLS bundles, signing keys, allowed_signers, policy      |
-+---------------------------------------------------------------------------+
+|                                                                         |
+|  +------------------+  +-----------------+   +------------------+       |
+|  |   SSH Target     |  |  OpenBAO (KMS)  |   |  ArgoCD (TLS)    |       |
+|  |   172.20.0.41    |  |  172.20.0.50    |   |  (k3d cluster)   |       |
+|  |   :22 (internal) |  |  :8200          |   |  :9080           |       |
+|  +------------------+  +-----------------+   +------------------+       |
+|                                                                         |
+|  Infrastructure Referential Instance (generated + mounted at setup):    |
+|  data/infra/ (P-lab) or data/infra-kms/ (KMS variant)                   |
+|  -> Endpoints, TLS bundles, signing keys, allowed_signers, policy       |
++-------------------------------------------------------------------------+
 ```
 
 | Service | Image | IP | Ports | TLS |
@@ -190,17 +191,21 @@ This architecture eliminates scattered infrastructure variables and makes the se
 
 ```
 0. make init  (-> scripts/infra.sh init)
- |-- 1. check_prereqs         (docker, jq)
- |-- 2. prepare .env          (copy .env.example if missing)
- |-- 3. docker compose up -d  (wait for healthchecks)
+ |-- 1. check_prereqs              (docker, jq)
+ |-- 2. prepare .env               (copy .env.example if missing)
+ |-- 3. docker compose up -d       (wait for healthchecks)
  |-- 4. setup
- |    |-- 4.1. gitlab.sh      (GitLab configuration)
- |    |-- 4.2. runner.sh      (Runner registration)
- |    |-- 4.3. gitea.sh       (Gitea configuration)
- |    |-- 4.4. jenkins.sh     (Jenkins plugins + CasC)
- |    |-- 4.5. nexus.sh       (Nexus admin + repositories)
- |    +-- 4.6. ssh-target.sh  (SSH target container setup)
- +-- 5. smoke-test.sh         (component verification)
+ |    |-- 4.1. ca.sh               (lab CA + per-service leaf certificates)
+ |    |-- 4.2. infra-referential.sh (generate the data/infra referential instance)
+ |    |-- 4.3. gitlab.sh           (GitLab configuration)
+ |    |-- 4.4. runner.sh           (Runner registration)
+ |    |-- 4.5. gitea.sh            (Gitea configuration)
+ |    |-- 4.6. jenkins.sh          (Jenkins plugins + CasC)
+ |    |-- 4.7. nexus.sh            (Nexus admin + repositories + read-only brik-cd account)
+ |    |-- 4.8. openbao.sh          (OpenBAO Transit KMS, cosign openbao:// scenarios)
+ |    +-- 4.9. ssh-target.sh       (SSH target container setup)
+ |-- 5. k3d + ArgoCD               (k3d cluster, ArgoCD install, port-forward)
+ +-- 6. smoke-test.sh              (component verification)
 ```
 
 ### gitlab.sh - GitLab configuration
@@ -244,7 +249,8 @@ Installs plugins from `config/jenkins/plugins.txt` via `jenkins-plugin-cli` and 
 2. **Admin password** -- reads the initial password from the container, changes it via REST API.
 3. **Docker Bearer Token Realm** -- enables the realm needed for `docker login`.
 4. **Anonymous access** -- enables anonymous reads (needed for `npm install`, `docker pull`).
-5. **Repositories** -- creates 6 hosted repositories: `brik-npm`, `brik-maven`, `brik-pypi`, `brik-nuget`, `brik-docker` (HTTP connector on port 8082), `brik-cargo` (sparse protocol).
+5. **Repositories** -- creates 6 hosted repositories: `brik-npm`, `brik-maven`, `brik-pypi`, `brik-nuget`, `brik-docker` (TLS connector on port 8082, lab CA), `brik-cargo` (sparse protocol).
+6. **Read-only identity** -- creates the `brik-cd` account (role `brik-cd-read`) used by CD jobs for digest resolution, attestation verification and image pull. Write stays with `admin`.
 
 ### k3d.sh - Kubernetes setup
 
@@ -315,7 +321,7 @@ runtime contract.
 
 ### Why drop OPTIONAL_JOBS
 
-Before chantier 20260510 sub-chantier 10, the harness carried an
+Earlier, the harness carried an
 `E2E_OPTIONAL_JOBS` list (column 5 of `SCENARIOS` in `gitlab-suite.sh`)
 to tolerate "warning" GitLab jobs painted yellow via
 `allow_failure: { exit_codes: [99] }`. With the Brik runtime now
@@ -379,17 +385,20 @@ briklab/
 |           |-- jenkins-test.sh   # Single Jenkins pipeline test
 |           |-- jenkins-suite.sh  # Jenkins scenario orchestrator
 |           |-- jenkins-rollback.sh # Jenkins rollback E2E
-|           +-- lib/              # Reusable E2E libraries (18 files)
-|               |-- assert.sh, auth.sh, suite.sh, push.sh, git.sh
-|               |-- reset.sh, rollback.sh
+|           +-- lib/              # Reusable E2E libraries (18 libs + 3 pattern files)
+|               |-- assert.sh, auth.sh, suite.sh, scenario.sh, scm.sh
+|               |-- push.sh, git.sh, reset.sh, rollback.sh, cd-channel.sh
 |               |-- gitlab-api.sh, jenkins-api.sh, gitea-api.sh
 |               |-- nexus.sh, k8s.sh, argocd.sh, compose.sh, ssh.sh
-|               +-- error-patterns.conf, error-ignore-patterns.conf
+|               +-- error-patterns.conf, error-ignore-patterns.conf, false-positive-patterns.conf
 |-- test-projects/                # E2E fixtures (live-only; per-stage/stack -> brik/spec)
 |   |-- node-full/                # Full happy path on the real orchestrator
 |   |-- node-complete/            # Full pipeline + real npm/Docker publish to Nexus
 |   |-- node-deploy-gitops/       # Deploy via GitOps + real ArgoCD sync
 |   |-- node-deploy-gitops-rollback/ # Real GitOps rollback (3-step commit chain)
+|   |-- node-deploy-channel/      # Digest-pinned CD + staging->production eligibility chain
+|   |-- node-deploy-signed/       # Signed BuildEvidence (ssh/KMS) verified by CD
+|   |-- node-promote-channel/     # Channel promotion + immutability enforcement
 |   |-- node-workflow-trunk/      # Trunk-based workflow (push+MR anti-dup filter)
 |   |-- node-plan-tag/            # Tagged-commit release/promote (registry retag)
 |   +-- node-full-cve/            # Container scan against a CVE-bearing image
@@ -440,7 +449,7 @@ briklab/
 | `JENKINS_HTTP_PORT` | `9090` | HTTP port |
 | `JENKINS_AGENT_PORT` | `50000` | Agent port |
 | `JENKINS_HOSTNAME` | `jenkins.briklab.test` | Hostname |
-| `JENKINS_ADMIN_PASSWORD` | `Brik-Jenkins-2026!` | Admin password |
+| `JENKINS_ADMIN_PASSWORD` | `Brik-Jenkins-2026` | Admin password (no `!` -- see Known Gotchas) |
 
 ### Nexus
 
@@ -471,6 +480,12 @@ briklab/
 
 ## Known Gotchas
 
+> [!NOTE]
+> Setup-time quirks the scripts handle by design (GitLab 18.x changes, bleeding-edge
+> runner, Nexus on Alpine). For runtime troubleshooting see
+> [operations.md](operations.md); for E2E test behaviours see
+> [e2e-known-issues.md](e2e-known-issues.md).
+
 | Problem | Cause | Solution |
 |---------|-------|----------|
 | `grafana['enable']` crashes GitLab | Option removed in GitLab 18.x | Removed from `GITLAB_OMNIBUS_CONFIG` |
@@ -485,7 +500,6 @@ briklab/
 | Gitea API 404 on org repos | `brik` is a user, not an organization | Use `/api/v1/user/repos` not `/api/v1/orgs/brik/repos` |
 | ArgoCD doesn't pick up new commits | Default polling interval ~3 minutes | Call `?refresh=hard` before sync |
 | GitLab can't mask variables with spaces | GitLab restriction on masked variable format | Avoid spaces in masked CI variable values |
-| `brik-deploy` fails: `token signature is invalid` | ArgoCD key rotated on lab reset; CI variable holds a stale token (`test` self-heal refreshes only `.env`, not CI) | Run `./scripts/briklab.sh infra-refresh` to propagate a fresh `ARGOCD_AUTH_TOKEN` to GitLab CI |
 | Jenkins push scenario: `No build found for SHA` | Multibranch job not indexed after a lab reset (no webhook for user-owned repos, no periodic scan) | The Jenkins suite scans after each push; see [e2e-known-issues.md](e2e-known-issues.md) |
 
 ---
@@ -513,10 +527,10 @@ To add a new E2E test scenario:
    Format: `name|project|ref|required_jobs|_legacy_optional|timeout|expect_fail|ci_vars|depends_on|error_pattern|success_jobs`
 
    - `_legacy_optional`: vestigial empty placeholder kept for the
-     positional parser. The "optional jobs" convention was dropped in
-     chantier 20260510 sub-chantier 10 alongside the SKIP_WITH_WARNING
-     code 99 plumbing; all jobs that the runtime produces are now
-     required. Always leave this column empty.
+     positional parser. The "optional jobs" convention was dropped
+     alongside the SKIP_WITH_WARNING code 99 plumbing; all jobs that
+     the runtime produces are now required. Always leave this column
+     empty.
    - `expect_fail`: job name that must fail (empty for success scenarios)
    - `ci_vars`: CI variables injected via API (e.g. `BRIK_DRY_RUN=true`)
    - `depends_on`: scenario name that must run first (sequential execution)
