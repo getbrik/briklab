@@ -3,16 +3,16 @@
 # Digest-pinned so a clean rebuild pulls the exact images the E2E suite was validated against.
 # Format: <ref>:<tag>@<digest>. The pull helper fetches the digest and tags it <ref>:<tag> locally.
 images:
-  - ghcr.io/getbrik/brik-runner-base:latest@sha256:8f10758303246c2dc8cb69b838d25463f09306f3199e18d8004286d5006d42c9
-  - ghcr.io/getbrik/brik-runner-node:22@sha256:d78310225aaf22450d79298f2f7fd58df3fe27d8859cc5ad6487e6e5805de98c
-  - ghcr.io/getbrik/brik-runner-node:24@sha256:c89532e4791a73a449e5be2f0858c452f6ed16665c77890b33f9c39af810965e
-  - ghcr.io/getbrik/brik-runner-python:3.13@sha256:c606df75f6dd939636d937e6f5f8590eb6cd33d431a4337f6adef7ed934eb121
-  - ghcr.io/getbrik/brik-runner-python:3.14@sha256:8ee9c6fcd837952ce7d755281f9e9c9a985b4d5447c24d43aa2d4d22125a00a7
-  - ghcr.io/getbrik/brik-runner-java:21@sha256:f61bd3f4945ec004afb110f965b1c6150ed2b075ee684d3139cff60a9c617054
-  - ghcr.io/getbrik/brik-runner-java:25@sha256:ad76f85f082c686ed9a22369fc2a87ce5b1eb1a861422e35d20e9d630512fdd4
-  - ghcr.io/getbrik/brik-runner-rust:1@sha256:2e4f7a0c7461303a8d8187e073595aa21f68a3296167ab511932619be573f96c
-  - ghcr.io/getbrik/brik-runner-dotnet:9.0@sha256:f45342fba7db5efc9c55b6f05c5352de9c70524b0397ee4eeafc75e98280dcde
-  - ghcr.io/getbrik/brik-runner-dotnet:10.0@sha256:5214d303690e56070702fac0900634f6f165b2d5c0977e5ba562157b7253877d
-  - ghcr.io/getbrik/brik-runner-analysis:latest@sha256:f649fb9fb8489b82b03a12c89a21b45eabe986b289708b8fbf71ca5f03a6014f
-  - ghcr.io/getbrik/brik-runner-scanner:latest@sha256:d1fde251c1c0c89726054b9c23ac26428fcecd3caa92a2b4496a8b1dde8e9d63
-  - ghcr.io/getbrik/brik-runner-deploy:latest@sha256:57762581fb2113ae928a1431780b4c3f534a2f79064b2af0d1f40683f04c4c13
+  - ghcr.io/getbrik/brik-runner-base:latest@sha256:4968126d82a405da17178b74ec2768d28f6fc07660647dea2d744b13e92034a4
+  - ghcr.io/getbrik/brik-runner-node:22@sha256:6c3f909205c6ad148acbce9551975212a468f951348855836e6f70d52cd4fe2d
+  - ghcr.io/getbrik/brik-runner-node:24@sha256:c7736fba1b9b0c17f95ce55e9d25da99cf701f7b6f23d635e8bc23ec1c3edb77
+  - ghcr.io/getbrik/brik-runner-python:3.13@sha256:c9ee144c3a501fcfbc6bc2d4131ed1341ac7f48d3c8f0fe3c4b8f2e26cb681fd
+  - ghcr.io/getbrik/brik-runner-python:3.14@sha256:69f08efc3456cbd711558c5d393667c4f1b1aeaf607b40e832be0f3ad8512518
+  - ghcr.io/getbrik/brik-runner-java:21@sha256:986b39f4463f874a73a2c885ce30b3d5af311dba1e48573adafefdb7f32898d2
+  - ghcr.io/getbrik/brik-runner-java:25@sha256:acb5a7a55c6b92f6d3ec14218c04ec13d06d08f2750e31b514f3eec1a9ca183d
+  - ghcr.io/getbrik/brik-runner-rust:1@sha256:9429f27c7c671b9cb20663b322fa450d4cc83f902edfc7a3d239d3f99eb03c95
+  - ghcr.io/getbrik/brik-runner-dotnet:9.0@sha256:461e38170fda9b11677b96590b4c08ec059b4e2126436e51700f03df6eb75bef
+  - ghcr.io/getbrik/brik-runner-dotnet:10.0@sha256:e981076d3e008916d4551055a1813ea327cb4076c424977de0c4fda9f5c7887a
+  - ghcr.io/getbrik/brik-runner-analysis:latest@sha256:c400c028af90ac9c303a36b2026db64cc78a21a34b5de78845e802b00f609a83
+  - ghcr.io/getbrik/brik-runner-scanner:latest@sha256:3ed9f1d25f19a3dae207aefc6adbba52e85fe460b9570864ed6809aa49ff2d7a
+  - ghcr.io/getbrik/brik-runner-deploy:latest@sha256:40ab1fdbf3ddc66595b56445c5f63d4470b42107da530d2ed3a987864a41c4e9
