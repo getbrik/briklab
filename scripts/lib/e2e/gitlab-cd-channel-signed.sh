@@ -27,6 +27,8 @@ source "${SCRIPT_DIR}/lib/auth.sh"
 source "${SCRIPT_DIR}/lib/gitlab-api.sh"
 # shellcheck source=lib/cd-channel.sh
 source "${SCRIPT_DIR}/lib/cd-channel.sh"
+# shellcheck source=lib/conformance.sh
+source "${SCRIPT_DIR}/lib/conformance.sh"
 # shellcheck source=lib/reset.sh
 source "${SCRIPT_DIR}/lib/reset.sh"
 reload_env
@@ -39,6 +41,23 @@ SEED_TAG="v0.1.0"
 DEPLOY_VERSION="0.1.0"
 ENVIRONMENT="staging"
 APP="brik-e2e-signed"
+
+# Captured job traces for the artifact-attestation/v1 conformance battery
+# (D12 stage 3), filled in as the keystone progresses.
+CI_SIGN_TRACE=""
+CD_DEPLOY_TRACE=""
+CD_REFUSAL_TRACE=""
+
+# _capture_job_trace <pipeline_id> <job_name> -- echo a job's trace text, or
+# nothing (rc 1) when the job is absent. Mirrors _assert_protection_trace's
+# job lookup.
+_capture_job_trace() {
+    local pipeline_id="$1" job_name="$2" jobs job_id
+    jobs="$(e2e.gitlab.get_jobs "$PROJECT_ID" "$pipeline_id")"
+    job_id="$(echo "$jobs" | jq -r --arg n "$job_name" '[.[] | select(.name == $n)][0].id // empty')"
+    [[ -z "$job_id" ]] && return 1
+    e2e.gitlab.get_job_log "$PROJECT_ID" "$job_id"
+}
 
 log_info "Looking up project ${PROJECT_NAME}..."
 PROJECT_ID="$(e2e.gitlab.get_project_id "$PROJECT_PATH")"
@@ -112,6 +131,8 @@ _trigger_cd_expect_failure() {
         return 1
     fi
     trace="$(e2e.gitlab.get_job_log "$PROJECT_ID" "$job_id")"
+    # Expose the refusal trace so the conformance battery can assert C2 on it.
+    CD_REFUSAL_TRACE="$trace"
     if ! grep -q "$pattern" <<< "$trace"; then
         log_error "brik-cd-deploy trace does not show '${pattern}' -- wrong refusal"
         return 1
@@ -160,6 +181,9 @@ _cd_channel_seed_ci() {
     st="$(e2e.gitlab.wait_pipeline "$PROJECT_ID" "$id" "$TIMEOUT_SECONDS")" || true
     echo ""
     [[ "$st" == "success" ]] || { log_error "CI seed status: ${st}"; return 1; }
+    # Capture the signing job trace (brik-container-scan attaches the signed
+    # attestation) for the C7 no-secret-argv conformance check.
+    CI_SIGN_TRACE="$(_capture_job_trace "$id" brik-container-scan || true)"
 }
 
 # CD: both CD inputs set -> brik-deploy.yml. The provenance gate verifies the
@@ -179,6 +203,9 @@ _cd_channel_deploy() {
     echo ""
     [[ "$st" == "success" ]] || { log_error "CD status: ${st}"; return 1; }
     _assert_protection_trace "$id"
+    # Capture the deploy job trace (require_attestation verifies the signature
+    # here) for the C3 round-trip and C5 confinement conformance checks.
+    CD_DEPLOY_TRACE="$(_capture_job_trace "$id" brik-cd-deploy || true)"
 }
 
 e2e.cd_channel.run "gitlab" "$APP" "$ENVIRONMENT" "$DEPLOY_VERSION" "$TIMEOUT_SECONDS"
@@ -207,3 +234,12 @@ fi
 log_ok "channel now holds an unattested digest at ${UNATTESTED_VERSION}"
 _trigger_cd_expect_failure "$UNATTESTED_VERSION" "$ENVIRONMENT" "did not verify" || exit 1
 log_ok "=== ATTESTATION + ELIGIBILITY GATES PROVEN ==="
+
+# --- artifact-attestation/v1 behavioural conformance (D12 stage 3) -----------
+# Replay the obligations `brik provider test` defers to real infra against the
+# evidence just produced: C3 (round-trip), C2 (fail-closed), C5 (confinement),
+# C7 (no-secret-argv). The registry password is passed as a secret literal so
+# C7 can prove it never reached an argv.
+e2e.conformance.attestation_v1.run \
+    "$CI_SIGN_TRACE" "$CD_DEPLOY_TRACE" "$CD_REFUSAL_TRACE" \
+    "${NEXUS_ADMIN_PASSWORD:-Brik-Nexus-2026}" || exit 1
