@@ -15,15 +15,12 @@ package:
 publish:
   docker:
     registry: nexus.briklab.test:8082
-    username_var: BRIK_PUBLISH_DOCKER_USER
-    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 deploy:
   workflow: trunk-based
   environments:
     staging:
       target: gitops
       repo: https://gitea.briklab.test:3000/brik/config-deploy-gitops.git
-      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd

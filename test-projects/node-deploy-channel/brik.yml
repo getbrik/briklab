@@ -15,8 +15,6 @@ package:
 publish:
   docker:
     registry: nexus.briklab.test:8082
-    username_var: BRIK_PUBLISH_DOCKER_USER
-    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 
 # CD flow -- named artifact channels (P0). The release channel registry must
 # match package.docker.image so a `brik run` publishes the version this
@@ -33,7 +31,6 @@ artifacts:
     repo: https://gitea.briklab.test:3000/brik/evidence-cd.git
     branch: main
     sign: false
-    token_var: BRIK_GIT_TOKEN
 
 # Explicit environments (no workflow preset): the CD flow targets one env per
 # `brik deploy --environment`. staging and dev share the same channel to prove
@@ -53,7 +50,6 @@ deploy:
       gates:
         require_digest: true
       repo: https://gitea.briklab.test:3000/brik/config-deploy-cd.git
-      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd
@@ -65,7 +61,6 @@ deploy:
         require_digest: true
         requires_eligibility: [artifact_validated_for]
       repo: https://gitea.briklab.test:3000/brik/config-deploy-cd-prod.git
-      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd
@@ -76,7 +71,6 @@ deploy:
       gates:
         require_digest: true
       repo: https://gitea.briklab.test:3000/brik/config-deploy-cd-dev.git
-      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd

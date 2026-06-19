@@ -39,6 +39,15 @@ jenkins:
             value: "admin"
           - key: BRIK_SIGNING_REGISTRY_PASSWORD
             value: "${NEXUS_ADMIN_PASSWORD}"
+          # The package/publish phase pushes the built image, so it also needs
+          # the registry WRITE identity. Like BRIK_SIGNING_REGISTRY_*, these are
+          # remapped onto BRIK_REGISTRY_* for the package container only
+          # (brikIntegrate withEnv), keeping the read-only brik-cd account the
+          # default in build/test/CD containers.
+          - key: BRIK_PUBLISH_REGISTRY_USER
+            value: "admin"
+          - key: BRIK_PUBLISH_REGISTRY_PASSWORD
+            value: "${NEXUS_ADMIN_PASSWORD}"
           # Nexus 3 UI URL (port 8081) -- distinct from the docker push
           # endpoint (port 8082). Surfaced as business.registry.ui_url in
           # the aggregate report so the HTML view links to the actual

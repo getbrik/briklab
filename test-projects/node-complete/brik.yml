@@ -31,8 +31,5 @@ package:
 publish:
   docker:
     registry: nexus.briklab.test:8082
-    username_var: BRIK_PUBLISH_DOCKER_USER
-    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   npm:
     registry: http://nexus.briklab.test:8081/repository/brik-npm/
-    token_var: BRIK_PUBLISH_NPM_TOKEN
