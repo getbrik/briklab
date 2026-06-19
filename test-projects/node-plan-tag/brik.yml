@@ -22,14 +22,10 @@ release:
     docker:
       registry: nexus.briklab.test:8082
       image: brik/node-plan-tag
-      username_var: BRIK_PUBLISH_DOCKER_USER
-      password_var: BRIK_PUBLISH_DOCKER_PASSWORD
   release:
     docker:
       registry: nexus.briklab.test:8082
       image: brik/node-plan-tag-released
-      username_var: BRIK_PUBLISH_DOCKER_USER
-      password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 test:
   framework: npm
 package:
@@ -39,5 +35,3 @@ package:
 publish:
   docker:
     registry: nexus.briklab.test:8082
-    username_var: BRIK_PUBLISH_DOCKER_USER
-    password_var: BRIK_PUBLISH_DOCKER_PASSWORD

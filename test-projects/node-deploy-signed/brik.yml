@@ -15,8 +15,6 @@ package:
 publish:
   docker:
     registry: nexus.briklab.test:8082
-    username_var: BRIK_PUBLISH_DOCKER_USER
-    password_var: BRIK_PUBLISH_DOCKER_PASSWORD
 
 # CD flow -- named artifact channels (P0). The release channel registry must
 # match package.docker.image so a `brik run` publishes the version this
@@ -31,7 +29,6 @@ artifacts:
   # trust/allowed_signers from the same referential.
   evidence:
     repo: https://gitea.briklab.test:3000/brik/evidence-signed.git
-    token_var: BRIK_GIT_TOKEN
     branch: main
     sign: true
 
@@ -52,7 +49,6 @@ deploy:
         expected_source: "gitlab\\.briklab\\.test:8929/brik/node-deploy-signed$"
         requires_eligibility: [artifact_authorized_for]
       repo: https://gitea.briklab.test:3000/brik/config-deploy-signed.git
-      git_token_var: BRIK_GIT_TOKEN
       path: k8s
       source: k8s
       controller: argocd

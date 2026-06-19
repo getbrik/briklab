@@ -114,7 +114,6 @@ name: registry-candidate
 url: https://${NEXUS_HOST}:8082
 tls:
   trust: custom-ca
-zone: candidate
 YAML
 
 # Gitea serves TLS issued by the lab CA; brik verifies API calls and git
