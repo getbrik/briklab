@@ -101,7 +101,7 @@ make init
 | Nexus UI | http://nexus.briklab.test:8081 | `admin` / `Brik-Nexus-2026` | HTTP |
 | Nexus Docker | https://nexus.briklab.test:8082 | read: `brik-cd` / write: `admin` | TLS (custom-ca) |
 | ArgoCD UI | https://argocd.briklab.test:9080 | `admin` / (dynamic, see `k3d-start` output) | TLS (custom-ca) |
-| OpenBAO | http://openbao.briklab.test:8200 | root token from `.env` | HTTP (dev-mode) |
+| OpenBAO | http://openbao.briklab.test:8200 | root token (default `brik-bao-root-2026`, override via `OPENBAO_ROOT_TOKEN`) | HTTP (dev-mode) |
 | k3d (k3s) | localhost:6443 | - | - |
 | SSH Target | internal only | `deploy` / SSH key | SSH |
 
@@ -160,8 +160,6 @@ trunk-based workflow filter (push / tag / MR).
 - The authoritative coverage map -- which spec proves what, which scenario is
   live-only, plus the test-validity audit -- is in
   [docs/e2e-coverage.md](docs/e2e-coverage.md).
-- E2E test-behaviour issues (multibranch scan after reset, token rotation, TLS
-  and referential setup) are in [docs/e2e-known-issues.md](docs/e2e-known-issues.md).
 
 ```bash
 ./scripts/briklab.sh test --gitlab --all                      # full GitLab suite
@@ -181,7 +179,7 @@ orchestrator** or **real external infrastructure**; see
 - ✅ **6** Nexus repository formats validated (npm, Maven, PyPI, NuGet, Docker, Cargo)
 - ✅ **GitOps via ArgoCD** validated live (sync + rollback, TLS against the lab CA); Kubernetes, Helm, SSH and Docker Compose dispatch are covered by `brik`'s integration suites
 - ✅ **Digest-pinned CD** with signed evidence: channel promotion (`oras cp -r`), ssh/KMS commit signing verified against allowed_signers, least-privilege registry identities
-- ✅ **18** reusable Bash libraries under `scripts/lib/e2e/lib/`
+- ✅ **19** reusable Bash libraries under `scripts/lib/e2e/lib/`
 - ✅ **1** rollback chain (3-step commit chain verifies ArgoCD rolls back to the previous image)
 - ✅ **Idempotent setup** -- every step under `scripts/lib/setup/` re-runs safely; `briklab.sh setup` reconciles without `clean`
 
@@ -192,7 +190,6 @@ orchestrator** or **real external infrastructure**; see
 | [docs/operations.md](docs/operations.md) | Full CLI reference, Nexus repositories, cleanup, runtime troubleshooting |
 | [docs/architecture.md](docs/architecture.md) | Internal design, components, referential, setup flow, directory structure, `.env` reference |
 | [docs/e2e-coverage.md](docs/e2e-coverage.md) | Coverage map: which spec proves what, the irreducible live scenario set, test-validity audit |
-| [docs/e2e-known-issues.md](docs/e2e-known-issues.md) | Living record of E2E behaviours rooted in lab state or third-party tooling |
 
 ## Related
 

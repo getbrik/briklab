@@ -148,7 +148,7 @@ The runner uses a pre-release image (`alpine3.21-bleeding`) to access the latest
 | Gitea | `gitea/gitea` | 172.20.0.20 | 3000, 222 | lab CA |
 | Jenkins | `jenkins/jenkins` | 172.20.0.21 | 9090, 50000 | no |
 | SSH Target | `briklab-ssh-target` (custom) | 172.20.0.41 | 22 (internal) | no |
-| Nexus 3 CE | `sonatype/nexus3:3.90.2-alpine` | 172.20.0.30 | 8081, 8082 | lab CA (8082) |
+| Nexus 3 CE | `sonatype/nexus3` | 172.20.0.30 | 8081, 8082 | lab CA (8082) |
 | OpenBAO | `ghcr.io/openbao/openbao` | 172.20.0.50 | 8200 | no (dev-mode) |
 | k3d cluster | `rancher/k3s` | on-host | 6443 | - |
 | ArgoCD | helm-installed | k3d | 9080 | lab CA |
@@ -233,7 +233,7 @@ This architecture eliminates scattered infrastructure variables and makes the se
 
 3. **Request concurrency** -- controls how many jobs the runner requests from GitLab simultaneously. Set via `GITLAB_RUNNER_REQUEST_CONCURRENCY` (defaults to `GITLAB_RUNNER_CONCURRENT`). Without this, the runner fetches one job at a time, delaying parallel execution even when `concurrent` allows it.
 
-4. **Job memory limit** -- each CI job container is capped at `GITLAB_RUNNER_JOB_MEMORY` (default: `512m`) to prevent OOM kills when running multiple jobs concurrently. Adjust based on available host RAM.
+4. **Job memory limit** -- each CI job container is capped at `GITLAB_RUNNER_JOB_MEMORY` (default: `1g`) to prevent OOM kills when running multiple jobs concurrently. Adjust based on available host RAM.
 
 5. **Helper image injection** -- the bleeding edge runner tries to pull an unpublished helper (`arm64-v18.11.0`). The script injects `helper_image = "gitlab/gitlab-runner-helper:alpine3.21-arm-bleeding"` into `config.toml` via `sed`.
 
@@ -368,12 +368,16 @@ briklab/
 |       |   |-- argocd-token.sh   # ArgoCD token retrieval
 |       |   +-- argocd-portfwd.sh # ArgoCD port-forward management
 |       |-- setup/                # Setup scripts
+|       |   |-- ca.sh             # lab CA + per-service leaf certificates
+|       |   |-- infra-referential.sh # generate the data/infra referential instance
 |       |   |-- gitlab.sh         # PAT + project + runner token
 |       |   |-- runner.sh         # Runner registration + helper_image
 |       |   |-- gitea.sh          # Gitea initial install + API token
 |       |   |-- jenkins.sh        # Jenkins plugins + CasC
 |       |   |-- nexus.sh          # Nexus admin + repositories
+|       |   |-- openbao.sh        # OpenBAO Transit KMS
 |       |   |-- k3d.sh            # k3d cluster + ArgoCD
+|       |   |-- argocd-apps.sh    # ArgoCD application provisioning
 |       |   |-- ssh-target.sh     # SSH target container setup
 |       |   +-- smoke-test.sh     # Component verification
 |       +-- e2e/                  # E2E test scripts
@@ -430,7 +434,7 @@ briklab/
 | `GITLAB_HOSTNAME` | `gitlab.briklab.test` | Hostname |
 | `GITLAB_RUNNER_CONCURRENT` | `4` | Max parallel jobs on the runner |
 | `GITLAB_RUNNER_REQUEST_CONCURRENCY` | *(same as concurrent)* | How many jobs the runner requests simultaneously |
-| `GITLAB_RUNNER_JOB_MEMORY` | `512m` | Memory limit per CI job container |
+| `GITLAB_RUNNER_JOB_MEMORY` | `1g` | Memory limit per CI job container |
 | `GITLAB_PAT` | *(auto-generated)* | Personal Access Token |
 | `GITLAB_RUNNER_TOKEN` | *(auto-generated)* | Runner registration token |
 
@@ -483,8 +487,7 @@ briklab/
 > [!NOTE]
 > Setup-time quirks the scripts handle by design (GitLab 18.x changes, bleeding-edge
 > runner, Nexus on Alpine). For runtime troubleshooting see
-> [operations.md](operations.md); for E2E test behaviours see
-> [e2e-known-issues.md](e2e-known-issues.md).
+> [operations.md](operations.md).
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
@@ -500,7 +503,7 @@ briklab/
 | Gitea API 404 on org repos | `brik` is a user, not an organization | Use `/api/v1/user/repos` not `/api/v1/orgs/brik/repos` |
 | ArgoCD doesn't pick up new commits | Default polling interval ~3 minutes | Call `?refresh=hard` before sync |
 | GitLab can't mask variables with spaces | GitLab restriction on masked variable format | Avoid spaces in masked CI variable values |
-| Jenkins push scenario: `No build found for SHA` | Multibranch job not indexed after a lab reset (no webhook for user-owned repos, no periodic scan) | The Jenkins suite scans after each push; see [e2e-known-issues.md](e2e-known-issues.md) |
+| Jenkins push scenario: `No build found for SHA` | Multibranch job not indexed after a lab reset (no webhook for user-owned repos, no periodic scan) | The Jenkins suite scans after each push |
 
 ---
 
