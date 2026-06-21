@@ -4,8 +4,7 @@ The complete command reference and runtime troubleshooting for Briklab.
 
 - New to the lab? Start with the [README](../README.md) (prerequisites, `make init`, daily commands).
 - Want the internal design? See [architecture.md](architecture.md).
-- Want the E2E coverage map or test-behaviour issues? See
-  [e2e-coverage.md](e2e-coverage.md) and [e2e-known-issues.md](e2e-known-issues.md).
+- Want the E2E coverage map? See [e2e-coverage.md](e2e-coverage.md).
 
 ---
 
@@ -50,6 +49,8 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 | `briklab.sh test --jenkins --project <name>` | Run a single Jenkins scenario by name |
 | `briklab.sh test --jenkins --list` | List available Jenkins scenarios |
 | `briklab.sh test --gitlab --batch-size N` | Execute scenarios in batches of N |
+| `briklab.sh test --gitlab --groups A,D,H` | Run only the scenarios in the named groups (comma-separated letters) |
+| `briklab.sh test --gitlab --parallel-groups` | Run the selected groups concurrently |
 | `briklab.sh test --gitlab --project <name> --stub` | Run any scenario on the single stub image (no heavy stack images) |
 
 > [!TIP]
@@ -90,7 +91,7 @@ Platform is required: `--gitlab` or `--jenkins`. All other flags are identical.
 | Command | Description |
 |---------|-------------|
 | `briklab.sh status` | Show container health and access URLs |
-| `briklab.sh logs <service>` | Tail logs (gitlab, runner, gitea, jenkins, nexus, ssh-target) |
+| `briklab.sh logs <service>` | Tail logs (gitlab, gitlab-runner, gitea, jenkins, nexus, ssh-target) |
 
 ### Kubernetes
 
@@ -131,11 +132,11 @@ make clean
 # Delete k3d cluster
 make k3d-stop
 
-# Full removal: after clean, remove Docker images manually
+# Full removal: after clean, remove Docker images manually (current tags pinned in versions.yml)
 docker rmi gitlab/gitlab-ce:18.10.1-ce.0 gitlab/gitlab-runner:alpine3.21-bleeding
-docker rmi gitea/gitea:1.25.5
+docker rmi gitea/gitea:1.26.2
 docker rmi briklab-jenkins  # custom-built Jenkins image
-docker rmi sonatype/nexus3:3.90.2-alpine
+docker rmi sonatype/nexus3:3.92.2-alpine
 docker network rm brik-net 2>/dev/null
 ```
 
@@ -148,12 +149,11 @@ docker network rm brik-net 2>/dev/null
 
 Runtime problems hit while running the lab. For the GitLab/Jenkins setup quirks the
 setup scripts handle by design, see
-[architecture.md - Known Gotchas](architecture.md#known-gotchas); for E2E
-test-behaviour deep dives, see [e2e-known-issues.md](e2e-known-issues.md).
+[architecture.md - Known Gotchas](architecture.md#known-gotchas).
 
 **GitLab won't start** -- Check Docker Desktop has at least 18 GB RAM allocated. First start takes 3-5 minutes. Check logs: `./scripts/briklab.sh logs gitlab`
 
-**Runner errors (`runner_system_failure` / `image_pull_failure`)** -- Verify `helper_image` is present in the runner's `config.toml`. Check logs: `./scripts/briklab.sh logs runner`. If needed, re-run `./scripts/briklab.sh setup`.
+**Runner errors (`runner_system_failure` / `image_pull_failure`)** -- Verify `helper_image` is present in the runner's `config.toml`. Check logs: `./scripts/briklab.sh logs gitlab-runner`. If needed, re-run `./scripts/briklab.sh setup`.
 
 **Jenkins CasC errors** -- Check `./scripts/briklab.sh logs jenkins` for Configuration-as-Code errors. Common issue: plugin not installed. Verify `config/jenkins/plugins.txt` includes all required plugins. To reload CasC without restarting Jenkins, use the `jenkins_reload_casc` helper in `briklab.sh` (only works for CasC YAML changes; env var changes require a full restart).
 
@@ -171,9 +171,9 @@ test-behaviour deep dives, see [e2e-known-issues.md](e2e-known-issues.md).
 
 **ArgoCD won't sync** -- ArgoCD default polling is ~3 minutes. Use `argocd app get <app> --refresh hard` to force, or run `./scripts/briklab.sh infra-refresh` to renew port-forwards and tokens.
 
-**`brik-deploy` fails with `token signature is invalid`** -- After a lab reset (`make clean` + `make init`) or any k3d/ArgoCD recreation, the ArgoCD signing key rotates and the `ARGOCD_AUTH_TOKEN` stored in GitLab CI variables goes stale. The `test` self-heal only refreshes the local token in `.env`; run `./scripts/briklab.sh infra-refresh` to propagate a fresh token to the GitLab CI variables (and Jenkins), then re-run the deploy/gitops scenarios. Full write-up in [e2e-known-issues.md](e2e-known-issues.md).
+**`brik-deploy` fails with `token signature is invalid`** -- After a lab reset (`make clean` + `make init`) or any k3d/ArgoCD recreation, the ArgoCD signing key rotates and the `ARGOCD_AUTH_TOKEN` stored in GitLab CI variables goes stale. The `test` self-heal only refreshes the local token in `.env`; run `./scripts/briklab.sh infra-refresh` to propagate a fresh token to the GitLab CI variables (and Jenkins), then re-run the deploy/gitops scenarios.
 
-**E2E timeout** -- Use `--batch-size 4` to limit concurrent pipelines. Check runner saturation with `./scripts/briklab.sh logs runner`. Run `./scripts/briklab.sh infra-refresh` if tokens expired.
+**E2E timeout** -- Use `--batch-size 4` to limit concurrent pipelines. Check runner saturation with `./scripts/briklab.sh logs gitlab-runner`. Run `./scripts/briklab.sh infra-refresh` if tokens expired.
 
 **Reset between E2E runs** -- `./scripts/briklab.sh reset --gitlab` cleans repos, k8s namespaces, ArgoCD apps, and Nexus artifacts.
 
